@@ -6,12 +6,16 @@ import { useMealsStore } from '../stores/meals.js';
 import { useSymptomsStore } from '../stores/symptoms.js';
 import { useNotesStore } from '../stores/notes.js';
 import { useWeightStore } from '../stores/weight.js';
+import { useCompoundsStore } from '../stores/compounds.js';
+import { useDosesStore } from '../stores/doses.js';
 import { useSettingsStore } from '../stores/settings.js';
+import { usePhotosStore } from '../stores/photos.js';
 import DateSelector from '../components/DateSelector.vue';
 import DailySummary from '../components/DailySummary.vue';
 import DatePickerModal from '../components/DatePickerModal.vue';
 import FoodItemEditModal from '../components/FoodItemEditModal.vue';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
+import PhotoCaptureCard from '../components/PhotoCaptureCard.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -20,7 +24,10 @@ const mealsStore = useMealsStore();
 const symptomsStore = useSymptomsStore();
 const notesStore = useNotesStore();
 const weightStore = useWeightStore();
+const compoundsStore = useCompoundsStore();
+const dosesStore = useDosesStore();
 const settingsStore = useSettingsStore();
+const photosStore = usePhotosStore();
 
 const date = ref(route.query.date || new Date().toISOString().slice(0, 10));
 const editingId = ref(null);
@@ -58,8 +65,9 @@ async function handleEditSaved() {
 // date so logging is implicit — no per-form date picker required.
 const newWeight = ref('');
 const savingWeight = ref(false);
-const newDoseMg = ref('');
-const savingDose = ref(false);
+// Dose inputs are keyed by compoundId since the user may have multiple compounds.
+const newDoseByCompound = reactive({});
+const savingDoseByCompound = reactive({});
 
 const mealTypes = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -83,8 +91,10 @@ onMounted(async () => {
     mealsStore.fetchMeals(),
     symptomsStore.fetchSymptoms(),
     weightStore.fetchEntries(),
-    weightStore.fetchDoses(),
     weightStore.fetchWaistEntries(),
+    compoundsStore.fetchAll(),
+    dosesStore.fetchEntries(),
+    photosStore.fetchAll(),
     settingsStore.loaded ? Promise.resolve() : settingsStore.fetchSettings(),
   ]);
 });
@@ -377,39 +387,39 @@ const todaysWeight = computed(() =>
 const todaysWaist = computed(() =>
   weightStore.waistEntries.find((e) => String(e.date).slice(0, 10) === date.value),
 );
-const todaysDose = computed(() =>
-  weightStore.doses.find((d) => String(d.date).slice(0, 10) === date.value),
-);
 
 const newWaist = ref('');
 const savingWaist = ref(false);
 
-// "Next dose" label based on most recent dose + interval from settings.
-const nextDoseLabel = computed(() => {
-  const interval = settingsStore.settings?.doseIntervalDays || 5;
-  const doses = weightStore.doses;
-  if (!doses.length) return null;
+// Compounds + per-compound dose state for the rendered cards.
+const enabledCompounds = computed(() => compoundsStore.enabled);
 
-  // doses are sorted newest-first from the store/backend.
-  const lastDoseDate = String(doses[0].date).slice(0, 10);
-  const [y, m, d] = lastDoseDate.split('-').map(Number);
-  const last = new Date(y, m - 1, d); // local midnight
+function todaysDoseFor(compoundId) {
+  return dosesStore.todaysDoseFor(compoundId, date.value);
+}
+
+// "Next dose" label for a single compound, anchored on its own intervalDays
+// and its own latest dose (regardless of selected page date).
+function nextDoseLabelFor(compound) {
+  const latest = dosesStore.latestDoseFor(compound._id);
+  if (!latest) return null;
+
+  const lastDateStr = String(latest.date).slice(0, 10);
+  const [y, m, d] = lastDateStr.split('-').map(Number);
+  const last = new Date(y, m - 1, d);
   const next = new Date(last);
-  next.setDate(next.getDate() + interval);
+  next.setDate(next.getDate() + compound.intervalDays);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const diffMs = next.getTime() - today.getTime();
-  const diffDays = Math.round(diffMs / 86400000);
-
+  const diffDays = Math.round((next.getTime() - today.getTime()) / 86400000);
   const dayName = next.toLocaleDateString(undefined, { weekday: 'long' });
 
   if (diffDays < 0) return { text: `Overdue by ${-diffDays} day${-diffDays === 1 ? '' : 's'}`, urgent: true };
   if (diffDays === 0) return { text: `Today — log now`, urgent: true };
   if (diffDays === 1) return { text: `Tomorrow (${dayName})`, urgent: true };
-  if (diffDays <= 3) return { text: `In ${diffDays} days (${dayName})`, urgent: false };
   return { text: `In ${diffDays} days (${dayName})`, urgent: false };
-});
+}
 
 async function handleAddWeight() {
   if (!newWeight.value) return;
@@ -422,14 +432,19 @@ async function handleAddWeight() {
   }
 }
 
-async function handleAddDose() {
-  if (!newDoseMg.value) return;
-  savingDose.value = true;
+async function handleAddDose(compound) {
+  const raw = newDoseByCompound[compound._id];
+  if (raw === '' || raw == null) return;
+  savingDoseByCompound[compound._id] = true;
   try {
-    await weightStore.addDose(Number(newDoseMg.value), date.value);
-    newDoseMg.value = '';
+    await dosesStore.addDose({
+      compoundId: compound._id,
+      value: Number(raw),
+      date: date.value,
+    });
+    newDoseByCompound[compound._id] = '';
   } finally {
-    savingDose.value = false;
+    savingDoseByCompound[compound._id] = false;
   }
 }
 
@@ -451,9 +466,9 @@ async function handleDeleteWaist() {
   if (!todaysWaist.value) return;
   await weightStore.deleteWaist(todaysWaist.value._id);
 }
-async function handleDeleteDose() {
-  if (!todaysDose.value) return;
-  await weightStore.deleteDose(todaysDose.value._id);
+async function handleDeleteDose(dose) {
+  if (!dose) return;
+  await dosesStore.deleteDose(dose._id);
 }
 
 // ---- Day note -----------------------------------------------------------
@@ -481,7 +496,7 @@ function onNoteBlur() {
 
 <template>
   <div class="log-page" @click="closeMenu">
-    <h2>Log</h2>
+    <h2>Daily Log</h2>
     <DateSelector v-model="date" />
 
     <!-- =========================================================== -->
@@ -498,20 +513,56 @@ function onNoteBlur() {
           <div class="body-metrics">
             <div class="metric-col">
               <div class="metric-label">Weight</div>
-              <form v-if="!todaysWeight" class="quick-form" @submit.prevent="handleAddWeight">
-                <input type="number" v-model.number="newWeight" step="0.1" placeholder="lbs" required />
-                <button class="btn-primary" type="submit" :disabled="savingWeight">Log</button>
+              <form
+                v-if="!todaysWeight"
+                class="quick-form"
+                @submit.prevent="handleAddWeight"
+              >
+                <input
+                  type="number"
+                  v-model.number="newWeight"
+                  step="0.1"
+                  placeholder="lbs"
+                  required
+                />
+                <button
+                  class="btn-primary"
+                  type="submit"
+                  :disabled="savingWeight"
+                >
+                  Log
+                </button>
               </form>
               <div v-else class="logged-row">
-                <span class="logged-value">{{ todaysWeight.weightLbs }} lbs</span>
-                <button class="delete-btn" @click="handleDeleteWeight">x</button>
+                <span class="logged-value"
+                  >{{ todaysWeight.weightLbs }} lbs</span
+                >
+                <button class="delete-btn" @click="handleDeleteWeight">
+                  x
+                </button>
               </div>
             </div>
             <div class="metric-col">
               <div class="metric-label">Waist</div>
-              <form v-if="!todaysWaist" class="quick-form" @submit.prevent="handleAddWaist">
-                <input type="number" v-model.number="newWaist" step="0.25" placeholder="in" required />
-                <button class="btn-primary" type="submit" :disabled="savingWaist">Log</button>
+              <form
+                v-if="!todaysWaist"
+                class="quick-form"
+                @submit.prevent="handleAddWaist"
+              >
+                <input
+                  type="number"
+                  v-model.number="newWaist"
+                  step="0.25"
+                  placeholder="in"
+                  required
+                />
+                <button
+                  class="btn-primary"
+                  type="submit"
+                  :disabled="savingWaist"
+                >
+                  Log
+                </button>
               </form>
               <div v-else class="logged-row">
                 <span class="logged-value">{{ todaysWaist.waistInches }}"</span>
@@ -521,25 +572,57 @@ function onNoteBlur() {
           </div>
         </div>
 
-        <div class="meal-card compact">
+        <div
+          v-for="compound in enabledCompounds"
+          :key="compound._id"
+          class="meal-card compact"
+        >
           <div class="meal-header">
-            <h3>Retatrutide</h3>
+            <h3>{{ compound.name }}</h3>
             <span class="card-sub">dose</span>
           </div>
-          <form v-if="!todaysDose" class="quick-form" @submit.prevent="handleAddDose">
-            <input type="number" v-model.number="newDoseMg" step="0.25" placeholder="mg" required />
-            <button class="btn-primary" type="submit" :disabled="savingDose">
-              {{ savingDose ? 'Saving...' : 'Log' }}
+          <form
+            v-if="!todaysDoseFor(compound._id)"
+            class="quick-form"
+            @submit.prevent="handleAddDose(compound)"
+          >
+            <input
+              type="number"
+              v-model.number="newDoseByCompound[compound._id]"
+              step="0.25"
+              :placeholder="compound.doseUnit"
+              required
+            />
+            <button
+              class="btn-primary"
+              type="submit"
+              :disabled="savingDoseByCompound[compound._id]"
+            >
+              {{ savingDoseByCompound[compound._id] ? 'Saving...' : 'Log' }}
             </button>
           </form>
           <div v-else class="logged-row">
-            <span class="logged-value">{{ todaysDose.doseMg }} mg</span>
-            <button class="delete-btn" @click="handleDeleteDose">x</button>
+            <span class="logged-value">
+              {{ todaysDoseFor(compound._id).value }} {{ compound.doseUnit }}
+            </span>
+            <button
+              class="delete-btn"
+              @click="handleDeleteDose(todaysDoseFor(compound._id))"
+            >
+              x
+            </button>
           </div>
-          <div v-if="nextDoseLabel" class="next-dose" :class="{ urgent: nextDoseLabel.urgent }">
-            <span class="next-dose-label">Next dose:</span> {{ nextDoseLabel.text }}
+          <div
+            v-if="nextDoseLabelFor(compound)"
+            class="next-dose"
+            :class="{ urgent: nextDoseLabelFor(compound).urgent }"
+          >
+            <span class="next-dose-label">Next dose:</span>
+            {{ nextDoseLabelFor(compound).text }}
           </div>
         </div>
+
+        <PhotoCaptureCard :date="date" />
       </div>
     </div>
 
@@ -555,172 +638,314 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <div class="meal-card food-card">
       <div class="meal-header"><h3>Food</h3></div>
-      <div v-for="meal in orderedMealTypes" :key="meal.key" class="meal-section">
+      <div
+        v-for="meal in orderedMealTypes"
+        :key="meal.key"
+        class="meal-section"
+      >
         <div class="meal-section-header">
           <h4>{{ meal.label }}</h4>
           <button class="add-btn" @click="addFood(meal.key)">+</button>
         </div>
         <table v-if="foodlogStore.entries[meal.key].length" class="meal-table">
-        <thead>
-          <tr>
-            <th class="col-check"></th>
-            <th class="col-name">Item</th>
-            <th class="col-srv">Servings</th>
-            <th class="col-num sortable" @click="toggleSort('cal')">Cal{{ sortIndicator('cal') }}</th>
-            <th class="col-num col-p sortable" @click="toggleSort('p')">Pro{{ sortIndicator('p') }}</th>
-            <th class="col-num col-f sortable" @click="toggleSort('f')">Fat{{ sortIndicator('f') }}</th>
-            <th class="col-num col-c sortable" @click="toggleSort('c')">Carbs{{ sortIndicator('c') }}</th>
-            <th class="col-del"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="(row, rowIdx) in groupedBySlot[meal.key]" :key="row.type === 'group' ? `g-${row.mealId}-${rowIdx}` : `e-${row.entry._id}`">
-            <tr v-if="row.type === 'entry'" class="entry-row" :class="{ unconsumed: row.entry.consumed === false }">
-              <td class="col-check">
-                <input
-                  type="checkbox"
-                  :checked="row.entry.consumed !== false"
-                  @click.stop
-                  @change="foodlogStore.toggleConsumed(row.entry._id, $event.target.checked)"
-                />
-              </td>
-              <td class="col-name">
-                <span v-if="row.entry.foodItemId?.emoji" class="entry-emoji">{{ row.entry.foodItemId.emoji }}</span>
-                <span class="entry-name">{{ row.entry.foodItemId?.name }}</span>
-              </td>
-              <td class="col-srv">
-                <template v-if="editingId === row.entry._id">
-                  <input
-                    type="number"
-                    v-model.number="editServings"
-                    min="0.25"
-                    step="0.25"
-                    class="edit-input"
-                    @click.stop
-                    @keyup.enter="saveEdit(row.entry._id)"
-                    @keyup.escape="cancelEdit"
-                  />
-                  <button class="save-btn" @click.stop="saveEdit(row.entry._id)">✓</button>
-                </template>
-                <span v-else class="servings" @click.stop="startEdit(row.entry)">
-                  {{ row.entry.servingCount }}
-                </span>
-              </td>
-              <td class="col-num">{{ entryNutrition(row.entry).cal }}</td>
-              <td class="col-num col-p">{{ entryNutrition(row.entry).p }}</td>
-              <td class="col-num col-f">{{ entryNutrition(row.entry).f }}</td>
-              <td class="col-num col-c">{{ entryNutrition(row.entry).c }}</td>
-              <td class="col-del">
-                <div class="menu-anchor">
-                  <button class="menu-btn" @click.stop="openMenu(row.entry._id, $event)">⋯</button>
-                  <div v-if="openMenuId === row.entry._id" class="menu" @click.stop>
-                    <button class="menu-item" @click="openEditModal(row.entry)">Edit item</button>
-                    <button class="menu-item" @click="handleDelete(row.entry)">Delete</button>
-                    <button class="menu-item" @click="startCopyEntry(row.entry)">Copy to...</button>
-                    <button class="menu-item" @click="startMoveEntry(row.entry)">Move to...</button>
-                    <button class="menu-item with-submenu" @click="openSubmenu = openSubmenu === 'addToMeal' ? null : 'addToMeal'">
-                      Add to meal ▸
-                    </button>
-                    <div v-if="openSubmenu === 'addToMeal'" class="submenu">
-                      <button class="menu-item" @click="addEntryToNewMeal(row.entry)">+ New meal...</button>
-                      <button
-                        v-for="m in mealsStore.meals"
-                        :key="m._id"
-                        class="menu-item"
-                        @click="addEntryToMeal(row.entry, m._id)"
-                      >
-                        {{ m.name }}
-                      </button>
-                      <p v-if="!mealsStore.meals.length" class="menu-empty">No meals yet</p>
-                    </div>
-                  </div>
-                </div>
-              </td>
+          <thead>
+            <tr>
+              <th class="col-check"></th>
+              <th class="col-name">Item</th>
+              <th class="col-srv">Servings</th>
+              <th class="col-num sortable" @click="toggleSort('cal')">
+                Cal{{ sortIndicator('cal') }}
+              </th>
+              <th class="col-num col-p sortable" @click="toggleSort('p')">
+                Pro{{ sortIndicator('p') }}
+              </th>
+              <th class="col-num col-f sortable" @click="toggleSort('f')">
+                Fat{{ sortIndicator('f') }}
+              </th>
+              <th class="col-num col-c sortable" @click="toggleSort('c')">
+                Carbs{{ sortIndicator('c') }}
+              </th>
+              <th class="col-del"></th>
             </tr>
-
-            <template v-else>
-              <tr class="meal-group-header" @click="toggleCollapsed(meal.key, row.mealId)">
-                <td class="col-check"></td>
-                <td class="col-name">
-                  <span class="caret">{{ isCollapsed(meal.key, row.mealId) ? '▸' : '▾' }}</span>
-                  <span v-if="row.mealEmoji" class="entry-emoji">{{ row.mealEmoji }}</span>
-                  <span class="group-name">{{ row.mealName }}</span>
-                  <span class="group-count">{{ row.entries.length }} item{{ row.entries.length === 1 ? '' : 's' }}</span>
+          </thead>
+          <tbody>
+            <template
+              v-for="(row, rowIdx) in groupedBySlot[meal.key]"
+              :key="row.type === 'group' ? `g-${row.mealId}-${rowIdx}` : `e-${row.entry._id}`"
+            >
+              <tr
+                v-if="row.type === 'entry'"
+                class="entry-row"
+                :class="{ unconsumed: row.entry.consumed === false }"
+              >
+                <td class="col-check">
+                  <input
+                    type="checkbox"
+                    :checked="row.entry.consumed !== false"
+                    @click.stop
+                    @change="foodlogStore.toggleConsumed(row.entry._id, $event.target.checked)"
+                  />
                 </td>
-                <td class="col-srv"></td>
-                <td class="col-num">{{ sumNutrition(row.entries).cal }}</td>
-                <td class="col-num col-p">{{ sumNutrition(row.entries).p }}</td>
-                <td class="col-num col-f">{{ sumNutrition(row.entries).f }}</td>
-                <td class="col-num col-c">{{ sumNutrition(row.entries).c }}</td>
+                <td class="col-name">
+                  <span
+                    v-if="row.entry.foodItemId?.emoji"
+                    class="entry-emoji"
+                    >{{ row.entry.foodItemId.emoji }}</span
+                  >
+                  <span
+                    class="entry-name"
+                    >{{ row.entry.foodItemId?.name }}</span
+                  >
+                </td>
+                <td class="col-srv">
+                  <template v-if="editingId === row.entry._id">
+                    <input
+                      type="number"
+                      v-model.number="editServings"
+                      min="0.25"
+                      step="0.25"
+                      class="edit-input"
+                      @click.stop
+                      @keyup.enter="saveEdit(row.entry._id)"
+                      @keyup.escape="cancelEdit"
+                    />
+                    <button
+                      class="save-btn"
+                      @click.stop="saveEdit(row.entry._id)"
+                    >
+                      ✓
+                    </button>
+                  </template>
+                  <span
+                    v-else
+                    class="servings"
+                    @click.stop="startEdit(row.entry)"
+                  >
+                    {{ row.entry.servingCount }}
+                  </span>
+                </td>
+                <td class="col-num">{{ entryNutrition(row.entry).cal }}</td>
+                <td class="col-num col-p">{{ entryNutrition(row.entry).p }}</td>
+                <td class="col-num col-f">{{ entryNutrition(row.entry).f }}</td>
+                <td class="col-num col-c">{{ entryNutrition(row.entry).c }}</td>
                 <td class="col-del">
                   <div class="menu-anchor">
-                    <button class="menu-btn" @click.stop="openMenu(`g:${meal.key}:${row.mealId}`, $event)">⋯</button>
-                    <div v-if="openMenuId === `g:${meal.key}:${row.mealId}`" class="menu" @click.stop>
-                      <button class="menu-item" @click="handleDeleteGroup(meal.key, row)">Delete group</button>
-                      <button class="menu-item" @click="startCopyGroup(row)">Copy to...</button>
-                      <button class="menu-item" @click="startMoveGroup(row)">Move to...</button>
+                    <button
+                      class="menu-btn"
+                      @click.stop="openMenu(row.entry._id, $event)"
+                    >
+                      ⋯
+                    </button>
+                    <div
+                      v-if="openMenuId === row.entry._id"
+                      class="menu"
+                      @click.stop
+                    >
+                      <button
+                        class="menu-item"
+                        @click="openEditModal(row.entry)"
+                      >
+                        Edit item
+                      </button>
+                      <button
+                        class="menu-item"
+                        @click="handleDelete(row.entry)"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        class="menu-item"
+                        @click="startCopyEntry(row.entry)"
+                      >
+                        Copy to...
+                      </button>
+                      <button
+                        class="menu-item"
+                        @click="startMoveEntry(row.entry)"
+                      >
+                        Move to...
+                      </button>
+                      <button
+                        class="menu-item with-submenu"
+                        @click="openSubmenu = openSubmenu === 'addToMeal' ? null : 'addToMeal'"
+                      >
+                        Add to meal ▸
+                      </button>
+                      <div v-if="openSubmenu === 'addToMeal'" class="submenu">
+                        <button
+                          class="menu-item"
+                          @click="addEntryToNewMeal(row.entry)"
+                        >
+                          + New meal...
+                        </button>
+                        <button
+                          v-for="m in mealsStore.meals"
+                          :key="m._id"
+                          class="menu-item"
+                          @click="addEntryToMeal(row.entry, m._id)"
+                        >
+                          {{ m.name }}
+                        </button>
+                        <p v-if="!mealsStore.meals.length" class="menu-empty">
+                          No meals yet
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </td>
               </tr>
-              <template v-if="!isCollapsed(meal.key, row.mealId)">
-                <tr v-for="child in sortEntries(row.entries)" :key="`gc-${child._id}`" class="entry-row group-child" :class="{ unconsumed: child.consumed === false }">
-                  <td class="col-check">
-                    <input
-                      type="checkbox"
-                      :checked="child.consumed !== false"
-                      @click.stop
-                      @change="foodlogStore.toggleConsumed(child._id, $event.target.checked)"
-                    />
-                  </td>
+
+              <template v-else>
+                <tr
+                  class="meal-group-header"
+                  @click="toggleCollapsed(meal.key, row.mealId)"
+                >
+                  <td class="col-check"></td>
                   <td class="col-name">
-                    <span class="entry-name indent">
-                      <span v-if="child.foodItemId?.emoji" class="entry-emoji">{{ child.foodItemId.emoji }}</span>
-                      {{ child.foodItemId?.name }}
-                    </span>
+                    <span
+                      class="caret"
+                      >{{ isCollapsed(meal.key, row.mealId) ? '▸' : '▾' }}</span
+                    >
+                    <span
+                      v-if="row.mealEmoji"
+                      class="entry-emoji"
+                      >{{ row.mealEmoji }}</span
+                    >
+                    <span class="group-name">{{ row.mealName }}</span>
+                    <span class="group-count"
+                      >{{ row.entries.length }}
+                      item{{ row.entries.length === 1 ? '' : 's' }}</span
+                    >
                   </td>
-                  <td class="col-srv">
-                    <template v-if="editingId === child._id">
-                      <input
-                        type="number"
-                        v-model.number="editServings"
-                        min="0.25"
-                        step="0.25"
-                        class="edit-input"
-                        @click.stop
-                        @keyup.enter="saveEdit(child._id)"
-                        @keyup.escape="cancelEdit"
-                      />
-                      <button class="save-btn" @click.stop="saveEdit(child._id)">✓</button>
-                    </template>
-                    <span v-else class="servings" @click.stop="startEdit(child)">
-                      {{ child.servingCount }}
-                    </span>
+                  <td class="col-srv"></td>
+                  <td class="col-num">{{ sumNutrition(row.entries).cal }}</td>
+                  <td class="col-num col-p">
+                    {{ sumNutrition(row.entries).p }}
                   </td>
-                  <td class="col-num">{{ entryNutrition(child).cal }}</td>
-                  <td class="col-num col-p">{{ entryNutrition(child).p }}</td>
-                  <td class="col-num col-f">{{ entryNutrition(child).f }}</td>
-                  <td class="col-num col-c">{{ entryNutrition(child).c }}</td>
+                  <td class="col-num col-f">
+                    {{ sumNutrition(row.entries).f }}
+                  </td>
+                  <td class="col-num col-c">
+                    {{ sumNutrition(row.entries).c }}
+                  </td>
                   <td class="col-del">
-                    <button class="delete-btn" @click.stop="foodlogStore.deleteEntry(child._id)">x</button>
+                    <div class="menu-anchor">
+                      <button
+                        class="menu-btn"
+                        @click.stop="openMenu(`g:${meal.key}:${row.mealId}`, $event)"
+                      >
+                        ⋯
+                      </button>
+                      <div
+                        v-if="openMenuId === `g:${meal.key}:${row.mealId}`"
+                        class="menu"
+                        @click.stop
+                      >
+                        <button
+                          class="menu-item"
+                          @click="handleDeleteGroup(meal.key, row)"
+                        >
+                          Delete group
+                        </button>
+                        <button class="menu-item" @click="startCopyGroup(row)">
+                          Copy to...
+                        </button>
+                        <button class="menu-item" @click="startMoveGroup(row)">
+                          Move to...
+                        </button>
+                      </div>
+                    </div>
                   </td>
                 </tr>
+                <template v-if="!isCollapsed(meal.key, row.mealId)">
+                  <tr
+                    v-for="child in sortEntries(row.entries)"
+                    :key="`gc-${child._id}`"
+                    class="entry-row group-child"
+                    :class="{ unconsumed: child.consumed === false }"
+                  >
+                    <td class="col-check">
+                      <input
+                        type="checkbox"
+                        :checked="child.consumed !== false"
+                        @click.stop
+                        @change="foodlogStore.toggleConsumed(child._id, $event.target.checked)"
+                      />
+                    </td>
+                    <td class="col-name">
+                      <span class="entry-name indent">
+                        <span
+                          v-if="child.foodItemId?.emoji"
+                          class="entry-emoji"
+                          >{{ child.foodItemId.emoji }}</span
+                        >
+                        {{ child.foodItemId?.name }}
+                      </span>
+                    </td>
+                    <td class="col-srv">
+                      <template v-if="editingId === child._id">
+                        <input
+                          type="number"
+                          v-model.number="editServings"
+                          min="0.25"
+                          step="0.25"
+                          class="edit-input"
+                          @click.stop
+                          @keyup.enter="saveEdit(child._id)"
+                          @keyup.escape="cancelEdit"
+                        />
+                        <button
+                          class="save-btn"
+                          @click.stop="saveEdit(child._id)"
+                        >
+                          ✓
+                        </button>
+                      </template>
+                      <span
+                        v-else
+                        class="servings"
+                        @click.stop="startEdit(child)"
+                      >
+                        {{ child.servingCount }}
+                      </span>
+                    </td>
+                    <td class="col-num">{{ entryNutrition(child).cal }}</td>
+                    <td class="col-num col-p">{{ entryNutrition(child).p }}</td>
+                    <td class="col-num col-f">{{ entryNutrition(child).f }}</td>
+                    <td class="col-num col-c">{{ entryNutrition(child).c }}</td>
+                    <td class="col-del">
+                      <button
+                        class="delete-btn"
+                        @click.stop="foodlogStore.deleteEntry(child._id)"
+                      >
+                        x
+                      </button>
+                    </td>
+                  </tr>
+                </template>
               </template>
             </template>
-          </template>
-        </tbody>
-        <tfoot>
-          <tr>
-            <td class="col-check"></td>
-            <td class="col-name">Total</td>
-            <td class="col-srv"></td>
-            <td class="col-num">{{ sumNutrition(foodlogStore.entries[meal.key]).cal }}</td>
-            <td class="col-num col-p">{{ sumNutrition(foodlogStore.entries[meal.key]).p }}</td>
-            <td class="col-num col-f">{{ sumNutrition(foodlogStore.entries[meal.key]).f }}</td>
-            <td class="col-num col-c">{{ sumNutrition(foodlogStore.entries[meal.key]).c }}</td>
-            <td class="col-del"></td>
-          </tr>
-        </tfoot>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="col-check"></td>
+              <td class="col-name">Total</td>
+              <td class="col-srv"></td>
+              <td class="col-num">
+                {{ sumNutrition(foodlogStore.entries[meal.key]).cal }}
+              </td>
+              <td class="col-num col-p">
+                {{ sumNutrition(foodlogStore.entries[meal.key]).p }}
+              </td>
+              <td class="col-num col-f">
+                {{ sumNutrition(foodlogStore.entries[meal.key]).f }}
+              </td>
+              <td class="col-num col-c">
+                {{ sumNutrition(foodlogStore.entries[meal.key]).c }}
+              </td>
+              <td class="col-del"></td>
+            </tr>
+          </tfoot>
         </table>
         <p v-else class="empty">No items.</p>
       </div>
@@ -733,13 +958,26 @@ function onNoteBlur() {
       <div class="meal-header">
         <h3>Symptoms</h3>
       </div>
-      <p class="hint">Tap a dot to log severity (0 = none, 1-10 = mild → severe). Tap again to clear.</p>
+      <p class="hint">
+        Tap a dot to log severity (0 = none, 1-10 = mild → severe). Tap again to
+        clear.
+      </p>
 
       <div class="symptoms-list">
-        <div v-for="symptom in symptomsStore.symptoms" :key="symptom._id" class="symptom-row">
+        <div
+          v-for="symptom in symptomsStore.symptoms"
+          :key="symptom._id"
+          class="symptom-row"
+        >
           <div class="symptom-header">
             <span class="symptom-name">{{ symptom.name }}</span>
-            <button v-if="!symptom.isDefault" class="delete-btn" @click="handleDeleteSymptom(symptom)">x</button>
+            <button
+              v-if="!symptom.isDefault"
+              class="delete-btn"
+              @click="handleDeleteSymptom(symptom)"
+            >
+              x
+            </button>
           </div>
           <div class="dots">
             <button
@@ -752,7 +990,9 @@ function onNoteBlur() {
               :style="isDotActive(symptomsStore.getSeverity(symptom._id), 0) ? { background: zeroColor, borderColor: zeroColor } : {}"
               title="None"
               @click="setSeverity(symptom._id, 0)"
-            >0</button>
+            >
+              0
+            </button>
             <button
               v-for="i in 10"
               :key="i"
@@ -765,13 +1005,21 @@ function onNoteBlur() {
               :style="isDotActive(symptomsStore.getSeverity(symptom._id), i) ? { background: dotColors[i - 1], borderColor: dotColors[i - 1] } : {}"
               :title="`${i}/10`"
               @click="setSeverity(symptom._id, i)"
-            >{{ i }}</button>
+            >
+              {{ i }}
+            </button>
           </div>
         </div>
       </div>
 
       <div class="add-symptom">
-        <button v-if="!addingSymptom" class="btn-secondary" @click="addingSymptom = true">+ Add custom symptom</button>
+        <button
+          v-if="!addingSymptom"
+          class="btn-secondary"
+          @click="addingSymptom = true"
+        >
+          + Add custom symptom
+        </button>
         <form v-else class="quick-form" @submit.prevent="handleAddSymptom">
           <input
             v-model="newSymptomName"
@@ -781,7 +1029,13 @@ function onNoteBlur() {
             @keyup.escape="addingSymptom = false; newSymptomName = ''"
           />
           <button class="btn-primary" type="submit">Add</button>
-          <button class="btn-text" type="button" @click="addingSymptom = false; newSymptomName = ''">Cancel</button>
+          <button
+            class="btn-text"
+            type="button"
+            @click="addingSymptom = false; newSymptomName = ''"
+          >
+            Cancel
+          </button>
         </form>
         <p v-if="symptomError" class="error">{{ symptomError }}</p>
       </div>

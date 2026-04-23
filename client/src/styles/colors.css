@@ -30,30 +30,43 @@
   /* Blue — calories */
   --palette-blue-300: #93c5fd;
   --palette-blue-400: #60a5fa;
-  --palette-blue-500: #3b82f6;
+  --palette-blue-500: #4ea3ff;
   --palette-blue-600: #2563eb;
   --palette-blue-700: #1d4ed8;
 
-  /* Green — protein / success */
-  --palette-green-300: #86efac;
-  --palette-green-400: #4ade80;
-  --palette-green-500: #22c55e;
-  --palette-green-600: #16a34a;
-  --palette-green-700: #15803d;
+  /* Green — protein / primary (terminal) */
+  --palette-green-300: #86fbad;
+  --palette-green-400: #5bf591;
+  --palette-green-500: #3fb26a;
+  --palette-green-600: #2d8a51;
+  --palette-green-700: #1f6b3e;
 
   /* Orange / amber — fat / warning */
-  --palette-amber-300: #fcd34d;
-  --palette-amber-400: #fbbf24;
-  --palette-amber-500: #f59e0b;
-  --palette-amber-600: #d97706;
+  --palette-amber-300: #f3d08a;
+  --palette-amber-400: #eac574;
+  --palette-amber-500: #e6b855;
+  --palette-amber-600: #c49840;
   --palette-orange-500: #f97316;
 
   /* Red — carbs / danger */
-  --palette-red-300: #fca5a5;
-  --palette-red-400: #f87171;
-  --palette-red-500: #ef4444;
-  --palette-red-600: #dc2626;
+  --palette-red-300: #ffb3b3;
+  --palette-red-400: #ff8a8a;
+  --palette-red-500: #ff5a5a;
+  --palette-red-600: #e04545;
   --palette-red-700: #b91c1c;
+
+  /* Slate — terminal neutrals (replaces blue-tinted gray for dark mode) */
+  --palette-slate-950: #05080a;
+  --palette-slate-900: #0a0f12;
+  --palette-slate-850: #0d1318;
+  --palette-slate-800: #111a20;
+  --palette-slate-700: #1a2630;
+  --palette-slate-600: #24333e;
+  --palette-slate-500: #2e3a43;
+  --palette-slate-400: #355046;
+  --palette-slate-300: #4f7266;
+  --palette-slate-200: #9ab9a8;
+  --palette-slate-100: #d8f5de;
 
   /* Accents (dashboard series) */
   --palette-sky-500: #0ea5e9;

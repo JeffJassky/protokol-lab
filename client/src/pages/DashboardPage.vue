@@ -18,8 +18,13 @@ import { useFoodLogStore } from '../stores/foodlog.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { useSymptomsStore } from '../stores/symptoms.js';
 import { useNotesStore } from '../stores/notes.js';
+import { useCompoundsStore } from '../stores/compounds.js';
+import { useDosesStore } from '../stores/doses.js';
+import { usePhotosStore } from '../stores/photos.js';
 import { computeNutritionScore } from '../utils/nutritionScore.js';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
+import OnboardingChecklist from '../components/OnboardingChecklist.vue';
+import PhotoTimelineCard from '../components/PhotoTimelineCard.vue';
 
 ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Filler, Legend);
 
@@ -29,6 +34,9 @@ const foodLogStore = useFoodLogStore();
 const settingsStore = useSettingsStore();
 const symptomsStore = useSymptomsStore();
 const notesStore = useNotesStore();
+const compoundsStore = useCompoundsStore();
+const dosesStore = useDosesStore();
+const photosStore = usePhotosStore();
 
 const bmr = computed(() => settingsStore.settings?.bmr || null);
 
@@ -60,9 +68,27 @@ const CORE_SERIES = computed(() => {
     { id: 'protein', label: 'Protein', unit: 'g', color: cssVar('--color-protein', '#16a34a'), cat: 'Nutrition', axis: 'yGrams', fill: false },
     { id: 'fat', label: 'Fat', unit: 'g', color: cssVar('--color-fat', '#f59e0b'), cat: 'Nutrition', axis: 'yGrams', fill: false, dash: [4, 3] },
     { id: 'carbs', label: 'Carbs', unit: 'g', color: cssVar('--color-carbs', '#ef4444'), cat: 'Nutrition', axis: 'yGrams', fill: false, dash: [4, 3] },
-    { id: 'dosage', label: 'Dosage', unit: 'mg', color: cssVar('--color-dose', '#f59e0b'), cat: 'Medication', axis: 'yDose', fill: true, dash: [4, 3] },
     { id: 'score', label: 'Score', unit: '/100', color: cssVar('--color-score', '#8b5cf6'), cat: 'Nutrition', axis: 'yScore', fill: false },
   ];
+});
+
+// One dashboard series per enabled compound. ID is `dosage:<compoundId>` so
+// the existing activeSeries Set + popover structure works unchanged.
+const DEFAULT_DOSE_COLOR = '#f59e0b';
+const compoundSeries = computed(() => {
+  themeTick.value; // reactive dep
+  return compoundsStore.enabled.map((c) => ({
+    id: `dosage:${c._id}`,
+    label: c.name,
+    unit: c.doseUnit,
+    color: c.color || DEFAULT_DOSE_COLOR,
+    cat: 'Compounds',
+    axis: 'yDose',
+    fill: true,
+    dash: [4, 3],
+    compoundId: c._id,
+    doseUnit: c.doseUnit,
+  }));
 });
 
 const SYMPTOM_COLOR_VARS = [
@@ -84,7 +110,11 @@ const symptomSeries = computed(() => {
   }));
 });
 
-const allSeries = computed(() => [...CORE_SERIES.value, ...symptomSeries.value]);
+const allSeries = computed(() => [
+  ...CORE_SERIES.value,
+  ...compoundSeries.value,
+  ...symptomSeries.value,
+]);
 
 // Group series by category for the popover.
 const seriesByCategory = computed(() => {
@@ -135,22 +165,26 @@ const pillLabelsPlugin = {
   afterDatasetsDraw(chart) {
     const ctx = chart.ctx;
 
-    // Dose pills (pinned to top of chart area).
-    if (activeSeries.has('dosage')) {
-      const injIdx = chart.data.datasets.findIndex((d) => d?.label === '_injection');
-      if (injIdx !== -1) {
-        const meta = chart.getDatasetMeta(injIdx);
-        const ds = chart.data.datasets[injIdx];
-        if (meta?.data?.length) {
-          const topY = chart.chartArea.top + 14;
-          meta.data.forEach((point, i) => {
-            const mg = ds.data[i]?.mg;
-            if (mg == null) return;
-            drawPill(ctx, `${mg} mg`, point.x, topY, cssVar('--color-dose', '#f59e0b'), true, chart.chartArea.bottom);
-          });
-        }
-      }
-    }
+    // Dose pills — one set per active compound, stacked vertically from the
+    // top of the chart area so rows don't overlap when multiple compounds are
+    // active at once.
+    const compoundDefs = activeSeriesDefs.value.filter((d) => d.compoundId);
+    const topBase = chart.chartArea.top + 14;
+    compoundDefs.forEach((def, row) => {
+      const injLabel = `_injection:${def.compoundId}`;
+      const injIdx = chart.data.datasets.findIndex((d) => d?.label === injLabel);
+      if (injIdx === -1) return;
+      const meta = chart.getDatasetMeta(injIdx);
+      const ds = chart.data.datasets[injIdx];
+      if (!meta?.data?.length) return;
+      const y = topBase + row * 18;
+      meta.data.forEach((point, i) => {
+        const v = ds.data[i]?.value;
+        const u = ds.data[i]?.unit;
+        if (v == null) return;
+        drawPill(ctx, `${v} ${u}`, point.x, y, def.color, true, chart.chartArea.bottom);
+      });
+    });
 
     // Waist pills (at data points).
     if (activeSeries.has('waist')) {
@@ -298,11 +332,13 @@ onMounted(async () => {
   await Promise.all([
     weightStore.fetchEntries(),
     weightStore.fetchStats(),
-    weightStore.fetchDoses(),
-    weightStore.fetchPkCurve(),
     weightStore.fetchWaistEntries(),
+    compoundsStore.fetchAll(),
+    dosesStore.fetchEntries(),
+    dosesStore.fetchPkCurves(),
     symptomsStore.fetchSymptoms(),
     symptomsStore.fetchLoggedDates(),
+    photosStore.fetchAll(),
     loadRangeData(),
     settingsStore.loaded ? Promise.resolve() : settingsStore.fetchSettings(),
   ]);
@@ -330,25 +366,28 @@ function filterByRange(arr, dateField = 'date') {
 const filteredWeight = computed(() => filterByRange(weightStore.entries));
 const filteredWaist = computed(() => filterByRange(weightStore.waistEntries));
 const filteredNutrition = computed(() => foodLogStore.dailyNutrition || []);
-const filteredDoses = computed(() => {
-  if (!selectedRange.value.days) return weightStore.doses;
+function filteredDosesFor(compoundId) {
+  const all = dosesStore.entries.filter((d) => d.compoundId === compoundId);
+  if (!selectedRange.value.days) return all;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - selectedRange.value.days);
-  return weightStore.doses.filter((d) => new Date(d.date) >= cutoff);
-});
-const filteredPk = computed(() => {
-  if (!weightStore.pkCurve.length) return [];
+  return all.filter((d) => new Date(d.date) >= cutoff);
+}
+
+function filteredPkFor(compoundId) {
+  const entry = dosesStore.curvesByCompound[compoundId];
+  if (!entry?.curve?.length) return [];
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const cutoff = selectedRange.value.days ? new Date() : null;
   if (cutoff) cutoff.setDate(cutoff.getDate() - selectedRange.value.days);
-  return weightStore.pkCurve.filter((p) => {
+  return entry.curve.filter((p) => {
     const t = new Date(p.date);
     if (t > todayStart) return false;
     if (cutoff && t < cutoff) return false;
     return true;
   });
-});
+}
 
 // Build per-symptom data: Map<symptomId, [{date, severity}]>
 const symptomDataById = computed(() => {
@@ -376,8 +415,6 @@ function getSeriesDataPoints(def) {
       return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.fat }));
     case 'carbs':
       return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.carbs }));
-    case 'dosage':
-      return filteredPk.value.map((p) => ({ x: new Date(p.date), y: p.activeMg }));
     case 'score': {
       const targets = settingsStore.settings?.targets;
       if (!targets) return [];
@@ -392,6 +429,12 @@ function getSeriesDataPoints(def) {
         .filter(Boolean);
     }
     default:
+      if (def.compoundId) {
+        return filteredPkFor(def.compoundId).map((p) => ({
+          x: new Date(p.date),
+          y: p.activeValue,
+        }));
+      }
       if (def.symptomId) {
         const logs = symptomDataById.value.get(def.symptomId) || [];
         return logs.map((l) => ({ x: parseLocalDate(l.date), y: l.severity }));
@@ -400,53 +443,6 @@ function getSeriesDataPoints(def) {
   }
 }
 
-const chartData = computed(() => {
-  const datasets = [];
-
-  for (const def of activeSeriesDefs.value) {
-    const data = getSeriesDataPoints(def);
-    if (!data.length) continue;
-
-    datasets.push({
-      label: def.label,
-      data,
-      borderColor: def.color,
-      backgroundColor: def.fill ? def.color.replace(')', ', 0.06)').replace('#', 'rgba(').replace(/^rgba\(/, () => {
-        // hex to rgba
-        const hex = def.color;
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r}, ${g}, ${b}, `;
-      }).replace(/rgba\(\d/, (m) => m) : 'transparent',
-      fill: def.fill || false,
-      tension: def.id === 'dosage' ? 0.4 : 0.3,
-      pointRadius: def.id === 'dosage' ? 0 : (def.pills ? 4 : 3),
-      pointBackgroundColor: def.color,
-      borderWidth: 2,
-      borderDash: def.dash || [],
-      yAxisID: def.axis,
-    });
-  }
-
-  // Injection markers (invisible points for the pill plugin to draw on).
-  if (activeSeries.has('dosage') && filteredDoses.value.length) {
-    datasets.push({
-      label: '_injection',
-      data: filteredDoses.value.map((d) => ({ x: parseLocalDate(d.date), y: 0, mg: d.doseMg })),
-      borderColor: 'transparent',
-      backgroundColor: 'transparent',
-      pointRadius: 0,
-      showLine: false,
-      yAxisID: 'yCal',
-    });
-  }
-
-  return { datasets };
-});
-
-// Fix the hex → rgba fill color helper (the inline replace above is fragile).
-// Override it cleanly:
 function hexToRgba(hex, alpha) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -462,14 +458,15 @@ const chartDataClean = computed(() => {
     const data = getSeriesDataPoints(def);
     if (!data.length) continue;
 
+    const isCompound = !!def.compoundId;
     datasets.push({
       label: def.label,
       data,
       borderColor: def.color,
       backgroundColor: def.fill ? hexToRgba(def.color, 0.06) : 'transparent',
       fill: def.fill || false,
-      tension: def.id === 'dosage' ? 0.4 : 0.3,
-      pointRadius: def.id === 'dosage' ? 0 : (def.pills ? 4 : 3),
+      tension: isCompound ? 0.4 : 0.3,
+      pointRadius: isCompound ? 0 : (def.pills ? 4 : 3),
       pointBackgroundColor: def.color,
       borderWidth: 2,
       borderDash: def.dash || [],
@@ -509,11 +506,20 @@ const chartDataClean = computed(() => {
     }
   }
 
-  // Injection markers.
-  if (activeSeries.has('dosage') && filteredDoses.value.length) {
+  // Injection markers — one hidden dataset per active compound so the pill
+  // plugin can draw the correct value/unit at each dose point.
+  for (const def of activeSeriesDefs.value) {
+    if (!def.compoundId) continue;
+    const doses = filteredDosesFor(def.compoundId);
+    if (!doses.length) continue;
     datasets.push({
-      label: '_injection',
-      data: filteredDoses.value.map((d) => ({ x: parseLocalDate(d.date), y: 0, mg: d.doseMg })),
+      label: `_injection:${def.compoundId}`,
+      data: doses.map((d) => ({
+        x: parseLocalDate(d.date),
+        y: 0,
+        value: d.value,
+        unit: def.doseUnit,
+      })),
       borderColor: 'transparent',
       backgroundColor: 'transparent',
       pointRadius: 0,
@@ -527,10 +533,19 @@ const chartDataClean = computed(() => {
 
 // ---- Dynamic chart options ----------------------------------------------
 
+const hasActiveCompound = computed(() =>
+  activeSeriesDefs.value.some((s) => s.compoundId),
+);
+
 const chartOptions = computed(() => {
   const usedAxes = new Set(activeSeriesDefs.value.map((s) => s.axis));
-  // Injection also needs yCal.
-  if (activeSeries.has('dosage')) usedAxes.add('yCal');
+  // Injection markers ride on yCal so they stay pinned at y=0 regardless of
+  // the dose curve's own y-scale.
+  if (hasActiveCompound.value) usedAxes.add('yCal');
+
+  // Reserve vertical headroom for one row of dose pills per active compound.
+  const compoundRows = activeSeriesDefs.value.filter((s) => s.compoundId).length;
+  const topPadding = compoundRows ? 24 + (compoundRows - 1) * 18 : 4;
 
   const opts = {
     responsive: true,
@@ -538,7 +553,7 @@ const chartOptions = computed(() => {
     interaction: { mode: 'index', intersect: false },
     layout: {
       padding: {
-        top: activeSeries.has('dosage') ? 24 : 4,
+        top: topPadding,
         bottom: notesStore.rangeNotes.length ? 28 : 4,
       },
     },
@@ -554,7 +569,7 @@ const chartOptions = computed(() => {
       tooltip: {
         mode: 'index',
         intersect: false,
-        filter: (item) => item.dataset?.label !== '_injection',
+        filter: (item) => !String(item.dataset?.label || '').startsWith('_injection'),
       },
     },
   };
@@ -607,10 +622,21 @@ const hasAnyData = computed(() => chartDataClean.value.datasets.length > 0);
 
 // ---- Combined history table ---------------------------------------------
 
+// The table shows one dose column per enabled compound. We track dose values
+// by (date, compoundId) in a nested map so a day with multiple compounds
+// logged doesn't collide on a single `dose` field.
+const tableCompounds = computed(() => compoundsStore.enabled);
+
 const logTableRows = computed(() => {
   const byDate = new Map();
   const ensure = (dateStr) => {
-    if (!byDate.has(dateStr)) byDate.set(dateStr, { date: dateStr, weight: null, waist: null, dose: null, cal: null, protein: null, fat: null, carbs: null, score: null, symptoms: false, note: null });
+    if (!byDate.has(dateStr)) byDate.set(dateStr, {
+      date: dateStr,
+      weight: null, waist: null,
+      doses: {}, // compoundId → value
+      cal: null, protein: null, fat: null, carbs: null, score: null,
+      symptoms: false, note: null,
+    });
     return byDate.get(dateStr);
   };
 
@@ -620,8 +646,8 @@ const logTableRows = computed(() => {
   for (const e of weightStore.waistEntries) {
     ensure(String(e.date).slice(0, 10)).waist = e.waistInches;
   }
-  for (const e of weightStore.doses) {
-    ensure(String(e.date).slice(0, 10)).dose = e.doseMg;
+  for (const e of dosesStore.entries) {
+    ensure(String(e.date).slice(0, 10)).doses[e.compoundId] = e.value;
   }
   const targets = settingsStore.settings?.targets;
   for (const d of filteredNutrition.value) {
@@ -671,6 +697,8 @@ function formatDate(dateStr) {
 <template>
   <div class="dashboard">
     <h2>Dashboard</h2>
+
+    <OnboardingChecklist />
 
     <!-- Weight stats grid -->
     <div v-if="weightStore.stats" class="stats-grid">
@@ -776,6 +804,9 @@ function formatDate(dateStr) {
       </div>
     </div>
 
+    <!-- Progress photos timeline -->
+    <PhotoTimelineCard />
+
     <!-- Combined log history -->
     <div class="card">
       <h3>Log History</h3>
@@ -786,7 +817,7 @@ function formatDate(dateStr) {
             <th class="lt-date">Date</th>
             <th class="lt-num">Weight</th>
             <th class="lt-num">Waist</th>
-            <th class="lt-num">Dose</th>
+            <th v-for="c in tableCompounds" :key="c._id" class="lt-num">{{ c.name }}</th>
             <th class="lt-num lt-cal">Cal</th>
             <th class="lt-num lt-pro">Pro</th>
             <th class="lt-num lt-fat">Fat</th>
@@ -809,7 +840,9 @@ function formatDate(dateStr) {
             </td>
             <td class="lt-num">{{ row.weight != null ? `${row.weight} lbs` : '' }}</td>
             <td class="lt-num">{{ row.waist != null ? `${row.waist}"` : '' }}</td>
-            <td class="lt-num">{{ row.dose != null ? `${row.dose} mg` : '' }}</td>
+            <td v-for="c in tableCompounds" :key="c._id" class="lt-num">
+              {{ row.doses[c._id] != null ? `${row.doses[c._id]} ${c.doseUnit}` : '' }}
+            </td>
             <td class="lt-num lt-cal">{{ row.cal != null ? row.cal : '' }}</td>
             <td class="lt-num lt-pro">{{ row.protein != null ? `${row.protein}g` : '' }}</td>
             <td class="lt-num lt-fat">{{ row.fat != null ? `${row.fat}g` : '' }}</td>

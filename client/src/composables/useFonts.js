@@ -4,10 +4,15 @@ import { useStorage } from '@vueuse/core';
 const SYSTEM_SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const SYSTEM_MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
+const JETBRAINS = { name: 'JetBrains Mono', family: 'JetBrains Mono', google: 'JetBrains+Mono:wght@400;500;600;700' };
+
 export const DISPLAY_FONTS = [
+  JETBRAINS,
   { name: 'System', family: SYSTEM_SANS, google: null },
   { name: 'Inter', family: 'Inter', google: 'Inter:wght@400;500;600;700' },
   { name: 'Space Grotesk', family: 'Space Grotesk', google: 'Space+Grotesk:wght@400;500;600;700' },
+  { name: 'Space Mono', family: 'Space Mono', google: 'Space+Mono:wght@400;700' },
+  { name: 'IBM Plex Mono', family: 'IBM Plex Mono', google: 'IBM+Plex+Mono:wght@400;500;700' },
   { name: 'Poppins', family: 'Poppins', google: 'Poppins:wght@400;500;600;700' },
   { name: 'Montserrat', family: 'Montserrat', google: 'Montserrat:wght@400;500;600;700' },
   { name: 'Raleway', family: 'Raleway', google: 'Raleway:wght@400;500;600;700' },
@@ -20,9 +25,12 @@ export const DISPLAY_FONTS = [
 ];
 
 export const BODY_FONTS = [
+  JETBRAINS,
   { name: 'System', family: SYSTEM_SANS, google: null },
   { name: 'Inter', family: 'Inter', google: 'Inter:wght@400;500;600;700' },
+  { name: 'IBM Plex Mono', family: 'IBM Plex Mono', google: 'IBM+Plex+Mono:wght@400;500;700' },
   { name: 'Roboto', family: 'Roboto', google: 'Roboto:wght@400;500;700' },
+  { name: 'Roboto Mono', family: 'Roboto Mono', google: 'Roboto+Mono:wght@400;500;700' },
   { name: 'Open Sans', family: 'Open Sans', google: 'Open+Sans:wght@400;500;600;700' },
   { name: 'Lato', family: 'Lato', google: 'Lato:wght@400;700' },
   { name: 'Nunito', family: 'Nunito', google: 'Nunito:wght@400;500;600;700' },
@@ -88,8 +96,8 @@ function sync(slot, name) {
 
 let started = false;
 export function useFonts() {
-  const display = useStorage('vt-font-display', 'Inter');
-  const body = useStorage('vt-font-body', 'Inter');
+  const display = useStorage('vt-font-display', 'JetBrains Mono');
+  const body = useStorage('vt-font-body', 'JetBrains Mono');
   const mono = useStorage('vt-font-mono', 'JetBrains Mono');
 
   if (!started && typeof window !== 'undefined') {

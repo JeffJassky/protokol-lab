@@ -1,0 +1,242 @@
+<script setup>
+import { ref, computed } from 'vue';
+import { usePhotosStore } from '../stores/photos.js';
+import PhotoViewerModal from './PhotoViewerModal.vue';
+
+const props = defineProps({
+  date: { type: String, required: true },
+});
+
+const photosStore = usePhotosStore();
+
+const ANGLES = [
+  { key: 'front', label: 'Front' },
+  { key: 'side', label: 'Side' },
+  { key: 'back', label: 'Back' },
+];
+
+// We key a hidden file input per angle so the camera/file picker opens on tap
+// without any extra intermediate UI.
+const fileInputs = ref({});
+const errorMsg = ref('');
+const viewerOpen = ref(false);
+const viewerIndex = ref(0);
+
+const slots = computed(() =>
+  ANGLES.map((a) => ({
+    ...a,
+    entry: photosStore.forDateAngle(props.date, a.key),
+  })),
+);
+
+// All photos for the current date, sorted front/side/back/other — used by the
+// viewer so left/right arrows walk through the day's shots.
+const dayPhotos = computed(() => {
+  const order = ['front', 'side', 'back', 'other'];
+  return [...photosStore.forDate(props.date)].sort(
+    (a, b) => order.indexOf(a.angle) - order.indexOf(b.angle),
+  );
+});
+
+function triggerPick(angle) {
+  const el = fileInputs.value[angle];
+  if (el) el.click();
+}
+
+async function onFile(angle, event) {
+  const file = event.target.files?.[0];
+  event.target.value = ''; // allow re-selecting the same file
+  if (!file) return;
+  errorMsg.value = '';
+  try {
+    await photosStore.uploadPhoto(file, { date: props.date, angle });
+  } catch (err) {
+    errorMsg.value = err.message || 'Upload failed';
+  }
+}
+
+function openViewer(entry) {
+  const idx = dayPhotos.value.findIndex((p) => p._id === entry._id);
+  viewerIndex.value = Math.max(0, idx);
+  viewerOpen.value = true;
+}
+
+async function handleDelete(entry, event) {
+  event.stopPropagation();
+  if (!confirm(`Delete this ${entry.angle} photo?`)) return;
+  try {
+    await photosStore.deletePhoto(entry._id);
+  } catch (err) {
+    errorMsg.value = err.message || 'Delete failed';
+  }
+}
+</script>
+
+<template>
+  <div class="photo-card">
+    <div class="photo-header">
+      <h3>Photos</h3>
+      <span v-if="photosStore.uploading" class="card-sub">uploading…</span>
+    </div>
+
+    <div class="photo-slots">
+      <div
+        v-for="slot in slots"
+        :key="slot.key"
+        class="photo-slot"
+        :class="{ filled: !!slot.entry }"
+        @click="slot.entry ? openViewer(slot.entry) : triggerPick(slot.key)"
+      >
+        <img
+          v-if="slot.entry"
+          :src="slot.entry.thumbUrl"
+          :alt="`${slot.label} progress photo`"
+          loading="lazy"
+        />
+        <span v-else class="photo-plus">+</span>
+        <span class="photo-slot-label">{{ slot.label }}</span>
+        <button
+          v-if="slot.entry"
+          class="photo-del"
+          title="Delete"
+          @click="handleDelete(slot.entry, $event)"
+        >×</button>
+        <input
+          :ref="(el) => (fileInputs[slot.key] = el)"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          class="file-input"
+          @change="onFile(slot.key, $event)"
+        />
+      </div>
+    </div>
+
+    <p v-if="errorMsg" class="photo-error">{{ errorMsg }}</p>
+
+    <PhotoViewerModal
+      :open="viewerOpen"
+      :photos="dayPhotos"
+      :start-index="viewerIndex"
+      @close="viewerOpen = false"
+    />
+  </div>
+</template>
+
+<style scoped>
+.photo-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+.photo-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.photo-header h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 0.95rem;
+}
+.card-sub {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.photo-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+.photo-slot {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.25rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+.photo-slot:hover { border-color: var(--primary); }
+.photo-slot.filled { border-style: solid; border-color: var(--border); }
+.photo-slot img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-plus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.4rem;
+  color: var(--text-secondary);
+  line-height: 1;
+  font-weight: 300;
+}
+.photo-slot-label {
+  position: relative;
+  z-index: 1;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+.photo-slot.filled .photo-slot-label {
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+.photo-del {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.photo-slot:hover .photo-del { opacity: 1; }
+.photo-del:hover { background: var(--danger); }
+
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.photo-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  margin: 0.4rem 0 0;
+}
+</style>

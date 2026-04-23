@@ -308,6 +308,56 @@ router.get('/search', async (req, res) => {
   res.json({ results: [...meals, ...local, ...off] });
 });
 
+// Barcode lookup: check local FoodItem first, fall back to OFF's per-product
+// endpoint. Used by the client-side barcode scanner. The search route's
+// name/brand token ranking filters out barcode-only matches, so this is a
+// separate path.
+router.get('/barcode/:code', async (req, res) => {
+  const code = String(req.params.code || '').trim();
+  if (!code) return res.status(400).json({ error: 'code required' });
+
+  const localItem = await FoodItem.findOne({ offBarcode: code });
+  if (localItem) {
+    return res.json({
+      result: {
+        source: 'local',
+        _id: localItem._id,
+        offBarcode: localItem.offBarcode,
+        name: localItem.name,
+        emoji: localItem.emoji || '',
+        brand: localItem.brand,
+        servingSize: localItem.servingSize,
+        servingGrams: localItem.servingGrams,
+        caloriesPer: localItem.caloriesPer,
+        proteinPer: localItem.proteinPer,
+        fatPer: localItem.fatPer,
+        carbsPer: localItem.carbsPer,
+      },
+    });
+  }
+
+  try {
+    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=code,product_name,brands,serving_size,serving_quantity,quantity,categories_tags,nutriments`;
+    const resp = await fetch(url, {
+      headers: {
+        'User-Agent': 'VitalityTracker/0.1 (github.com/JeffJassky/vitality-tracker)',
+        Accept: 'application/json',
+      },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    if (data.status !== 1 || !data.product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    const normalized = normalizeOffProduct(data.product);
+    if (!normalized) return res.status(404).json({ error: 'Product missing nutrition data' });
+    return res.json({ result: normalized });
+  } catch (err) {
+    console.error('[OFF barcode] failed', { code, error: err.message });
+    return res.status(502).json({ error: 'Lookup failed' });
+  }
+});
+
 // Update a food item's nutritional data. Changes propagate to every log entry
 // that references this item since they all point to the same FoodItem document.
 router.put('/:id', async (req, res) => {

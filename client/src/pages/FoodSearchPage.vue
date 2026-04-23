@@ -6,6 +6,7 @@ import { useMealsStore } from '../stores/meals.js';
 import { api } from '../api/index.js';
 import FoodItemRow from '../components/FoodItemRow.vue';
 import EmojiPickerButton from '../components/EmojiPickerButton.vue';
+import BarcodeScannerModal from '../components/BarcodeScannerModal.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -29,6 +30,8 @@ const query = ref('');
 const selectedFood = ref(null);
 const servingCount = ref(1);
 const adding = ref(false);
+const scannerOpen = ref(false);
+const scanError = ref('');
 
 // ---- Meals tab management state -----------------------------------------
 const expandedMealId = ref(null);
@@ -90,6 +93,17 @@ async function ensureFoodItemId(food) {
   const { entry } = await api.post('/api/foodlog', body);
   await api.del(`/api/foodlog/${entry._id}`);
   return entry.foodItemId?._id || entry.foodItemId;
+}
+
+async function handleScanned(code) {
+  scannerOpen.value = false;
+  scanError.value = '';
+  try {
+    const { result } = await api.get(`/api/food/barcode/${encodeURIComponent(code)}`);
+    selectFood(result);
+  } catch (err) {
+    scanError.value = `No match for ${code}`;
+  }
 }
 
 function selectFood(food) {
@@ -329,13 +343,29 @@ async function logMealToToday(m) {
       </div>
 
       <div v-if="tab === 'search'">
-        <input
-          class="search-input"
-          type="text"
-          v-model="query"
-          placeholder="Search foods..."
-          autofocus
-        />
+        <div class="search-row">
+          <input
+            class="search-input"
+            type="text"
+            v-model="query"
+            placeholder="Search foods..."
+            autofocus
+          />
+          <button
+            type="button"
+            class="scan-btn"
+            title="Scan barcode"
+            @click="scannerOpen = true; scanError = ''"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2" />
+              <path stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                d="M7 8v8M10 8v8M13 8v8M17 8v8" />
+            </svg>
+          </button>
+        </div>
+        <p v-if="scanError" class="status scan-error">{{ scanError }}</p>
         <template v-if="query.trim()">
           <p v-if="foodStore.searching" class="status">Searching...</p>
           <div class="results-card">
@@ -473,6 +503,12 @@ async function logMealToToday(m) {
         </div>
       </div>
     </div>
+
+    <BarcodeScannerModal
+      v-if="scannerOpen"
+      @detected="handleScanned"
+      @close="scannerOpen = false"
+    />
   </div>
 </template>
 
@@ -721,16 +757,34 @@ async function logMealToToday(m) {
   color: var(--text-secondary);
   margin: 0.25rem 0 0.4rem;
 }
+.search-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
 .search-input {
-  width: 100%;
+  flex: 1;
   padding: 0.6rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 0.95rem;
-  margin-bottom: 0.75rem;
   background: var(--surface);
   color: var(--text);
 }
+.scan-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.scan-btn:hover { color: var(--primary); border-color: var(--primary); }
+.scan-error { color: var(--danger, #d33); padding: 0.25rem 0; }
 .search-input:focus {
   outline: none;
   border-color: var(--primary);

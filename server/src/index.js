@@ -13,10 +13,15 @@ import mealsRoutes from './routes/meals.js';
 import symptomsRoutes from './routes/symptoms.js';
 import waistRoutes from './routes/waist.js';
 import doseRoutes from './routes/doses.js';
+import compoundsRoutes from './routes/compounds.js';
 import chatRoutes from './routes/chat.js';
 import notesRoutes from './routes/notes.js';
+import photosRoutes from './routes/photos.js';
+import pushRoutes, { publicPushRouter } from './routes/push.js';
 import { requireAuth } from './middleware/requireAuth.js';
 import { runStartupBackup } from './services/backup.js';
+import { initPush } from './services/push.js';
+import { startScheduler, stopScheduler } from './services/scheduler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -41,6 +46,8 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/push', publicPushRouter);
+app.use('/api/push', requireAuth, pushRoutes);
 
 app.use('/api/settings', requireAuth, settingsRoutes);
 app.use('/api/weight', requireAuth, weightRoutes);
@@ -50,8 +57,10 @@ app.use('/api/meals', requireAuth, mealsRoutes);
 app.use('/api/symptoms', requireAuth, symptomsRoutes);
 app.use('/api/waist', requireAuth, waistRoutes);
 app.use('/api/doses', requireAuth, doseRoutes);
+app.use('/api/compounds', requireAuth, compoundsRoutes);
 app.use('/api/chat', requireAuth, chatRoutes);
 app.use('/api/notes', requireAuth, notesRoutes);
+app.use('/api/photos', requireAuth, photosRoutes);
 
 // Swallow errors surfaced by async route handlers so stack traces don't leak
 // to clients. Express 5 forwards rejected promises here automatically.
@@ -86,6 +95,7 @@ const shutdown = async (signal) => {
   }, 3000).unref();
   try {
     if (server) await new Promise((resolve) => server.close(resolve));
+    await stopScheduler();
     await mongoose.disconnect();
   } catch (err) {
     console.error('Error during shutdown:', err);
@@ -101,6 +111,8 @@ try {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected to MongoDB');
   runStartupBackup();
+  initPush();
+  await startScheduler();
   server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

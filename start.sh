@@ -19,5 +19,5 @@ CLIENT_PID=$!
 sleep 2
 open http://localhost:5173
 
-echo "Vitality Tracker running — press Ctrl+C to stop"
+echo "Protokol Lab running — press Ctrl+C to stop"
 wait

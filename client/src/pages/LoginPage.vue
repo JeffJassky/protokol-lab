@@ -28,7 +28,7 @@ async function handleLogin() {
 <template>
   <div class="login-page">
     <div class="login-card">
-      <h1>Vitality Tracker</h1>
+      <h1>Protokol Lab</h1>
       <p class="subtitle">Track your nutrition and weight</p>
       <form @submit.prevent="handleLogin">
         <div class="field">

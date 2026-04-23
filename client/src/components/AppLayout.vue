@@ -1,15 +1,37 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import { useOnboardingStore } from '../stores/onboarding.js';
+import { usePushStore } from '../stores/push.js';
 import { useFonts } from '../composables/useFonts.js';
 import ChatDrawer from './ChatDrawer.vue';
+import OnboardingBanner from './OnboardingBanner.vue';
 
 const auth = useAuthStore();
+const onboarding = useOnboardingStore();
+const pushStore = usePushStore();
 const router = useRouter();
 const showChat = ref(false);
 
 const { display, body, mono, DISPLAY_FONTS, BODY_FONTS, MONO_FONTS } = useFonts();
+
+onMounted(async () => {
+  const uid = auth.user?._id || auth.user?.id;
+  if (uid) onboarding.hydrate(String(uid));
+  if (pushStore.supported) {
+    await pushStore.loadExistingSubscription().catch(() => {});
+  }
+});
+
+watch(() => auth.user, (u) => {
+  if (!u) {
+    onboarding.clear();
+    return;
+  }
+  const uid = u._id || u.id;
+  if (uid) onboarding.hydrate(String(uid));
+});
 
 async function handleLogout() {
   await auth.logout();
@@ -19,8 +41,9 @@ async function handleLogout() {
 
 <template>
   <div class="app-layout">
+    <OnboardingBanner />
     <nav class="top-nav">
-      <router-link to="/" class="brand">Vitality Tracker</router-link>
+      <router-link to="/" class="brand">Protokol Lab</router-link>
       <div class="nav-links">
         <router-link to="/">Log</router-link>
         <router-link to="/dashboard">Dashboard</router-link>
@@ -29,19 +52,25 @@ async function handleLogout() {
           <label class="font-picker" title="Display font">
             <span class="font-picker-tag">Aa</span>
             <select v-model="display">
-              <option v-for="f in DISPLAY_FONTS" :key="f.name" :value="f.name">{{ f.name }}</option>
+              <option v-for="f in DISPLAY_FONTS" :key="f.name" :value="f.name">
+                {{ f.name }}
+              </option>
             </select>
           </label>
           <label class="font-picker" title="Body font">
             <span class="font-picker-tag">aa</span>
             <select v-model="body">
-              <option v-for="f in BODY_FONTS" :key="f.name" :value="f.name">{{ f.name }}</option>
+              <option v-for="f in BODY_FONTS" :key="f.name" :value="f.name">
+                {{ f.name }}
+              </option>
             </select>
           </label>
           <label class="font-picker" title="Monospace font">
             <span class="font-picker-tag">0x</span>
             <select v-model="mono">
-              <option v-for="f in MONO_FONTS" :key="f.name" :value="f.name">{{ f.name }}</option>
+              <option v-for="f in MONO_FONTS" :key="f.name" :value="f.name">
+                {{ f.name }}
+              </option>
             </select>
           </label>
         </div>
@@ -57,7 +86,9 @@ async function handleLogout() {
     </div>
 
     <!-- Chat toggle FAB (hidden when drawer is open) -->
-    <button v-if="!showChat" class="chat-fab" @click="showChat = true">💬</button>
+    <button v-if="!showChat" class="chat-fab" @click="showChat = true">
+      💬
+    </button>
   </div>
 </template>
 

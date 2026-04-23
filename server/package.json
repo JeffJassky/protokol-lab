@@ -9,8 +9,12 @@
     "restore": "node src/scripts/restore.js"
   },
   "dependencies": {
+    "@agendajs/mongo-backend": "^4.0.1",
+    "@aws-sdk/client-s3": "^3.1035.0",
+    "@aws-sdk/s3-request-presigner": "^3.1035.0",
     "@google/genai": "^1.50.1",
     "@sendgrid/mail": "^8.1.6",
+    "agenda": "^6.2.4",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -20,6 +24,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "marked": "^18.0.0",
-    "mongoose": "^9.3.3"
+    "mongoose": "^9.3.3",
+    "web-push": "^3.6.7"
   }
 }

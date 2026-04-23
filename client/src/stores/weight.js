@@ -5,8 +5,6 @@ import { api } from '../api/index.js';
 export const useWeightStore = defineStore('weight', () => {
   const entries = ref([]);
   const stats = ref(null);
-  const doses = ref([]);
-  const pkCurve = ref([]);
   const waistEntries = ref([]);
 
   async function fetchEntries(from, to) {
@@ -32,29 +30,6 @@ export const useWeightStore = defineStore('weight', () => {
     await Promise.all([fetchEntries(), fetchStats()]);
   }
 
-  async function fetchDoses() {
-    const data = await api.get('/api/doses');
-    doses.value = data.entries;
-  }
-
-  async function fetchPkCurve(from, to) {
-    const params = new URLSearchParams({ points: '150' });
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    const data = await api.get(`/api/doses/pk?${params}`);
-    pkCurve.value = data.curve;
-  }
-
-  async function addDose(doseMg, date) {
-    await api.post('/api/doses', { doseMg, date });
-    await Promise.all([fetchDoses(), fetchPkCurve()]);
-  }
-
-  async function deleteDose(id) {
-    await api.del(`/api/doses/${id}`);
-    await Promise.all([fetchDoses(), fetchPkCurve()]);
-  }
-
   async function fetchWaistEntries(from, to) {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
@@ -74,9 +49,8 @@ export const useWeightStore = defineStore('weight', () => {
   }
 
   return {
-    entries, stats, doses, pkCurve, waistEntries,
+    entries, stats, waistEntries,
     fetchEntries, fetchStats, addWeight, deleteWeight,
-    fetchDoses, fetchPkCurve, addDose, deleteDose,
     fetchWaistEntries, addWaist, deleteWaist,
   };
 });
