@@ -1,17 +1,34 @@
 <script setup>
+import EmojiPickerButton from './EmojiPickerButton.vue';
+
 defineProps({
   food: { type: Object, required: true },
   showSource: { type: Boolean, default: false },
+  editableEmoji: { type: Boolean, default: false },
 });
 
-defineEmits(['select', 'favorite', 'unfavorite']);
+defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
 </script>
 
 <template>
   <div class="food-row" @click="$emit('select', food)">
+    <div v-if="editableEmoji" class="row-emoji-slot" @click.stop>
+      <EmojiPickerButton
+        :model-value="food.emoji || ''"
+        size="sm"
+        @update:model-value="$emit('update-emoji', food, $event)"
+      />
+    </div>
+    <span v-else-if="food.emoji" class="row-emoji">{{ food.emoji }}</span>
     <div class="food-info">
-      <span class="food-name">{{ food.name }}</span>
-      <span v-if="food.brand" class="food-brand">{{ food.brand }}</span>
+      <span class="food-name">
+        <span v-if="food.source === 'meal'" class="meal-tag">[MEAL]</span>
+        {{ food.name }}
+        <span v-if="food.source === 'meal' && food.itemCount != null" class="meal-count">
+          ({{ food.itemCount }} item{{ food.itemCount === 1 ? '' : 's' }})
+        </span>
+      </span>
+      <span v-if="food.brand && food.source !== 'meal'" class="food-brand">{{ food.brand }}</span>
       <span class="food-meta">
         {{ food.servingSize || `${food.servingGrams}g` }}
         <span v-if="showSource && food.source" class="source-badge" :class="food.source">{{ food.source }}</span>
@@ -40,6 +57,12 @@ defineEmits(['select', 'favorite', 'unfavorite']);
   transition: background 0.1s;
 }
 .food-row:hover { background: var(--bg); }
+.row-emoji {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.row-emoji-slot { flex-shrink: 0; display: flex; align-items: center; }
 .food-info {
   flex: 1;
   min-width: 0;
@@ -53,6 +76,24 @@ defineEmits(['select', 'favorite', 'unfavorite']);
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.meal-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  color: var(--palette-blue-600);
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+  margin-right: 0.3rem;
+  vertical-align: 2px;
+}
+.meal-count {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: 0.2rem;
+}
 .food-brand {
   display: block;
   font-size: 0.78rem;
@@ -60,7 +101,7 @@ defineEmits(['select', 'favorite', 'unfavorite']);
 }
 .food-meta {
   font-size: 0.72rem;
-  color: #b0b0b0;
+  color: var(--text-tertiary);
 }
 .source-badge {
   display: inline-block;
@@ -73,12 +114,16 @@ defineEmits(['select', 'favorite', 'unfavorite']);
   letter-spacing: 0.03em;
 }
 .source-badge.local {
-  background: rgba(79, 70, 229, 0.1);
+  background: var(--primary-soft);
   color: var(--primary);
 }
 .source-badge.openfoodfacts {
-  background: rgba(22, 163, 74, 0.1);
+  background: rgba(22, 163, 74, 0.12);
   color: var(--success);
+}
+.source-badge.meal {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--palette-blue-600);
 }
 .food-macros {
   display: flex;

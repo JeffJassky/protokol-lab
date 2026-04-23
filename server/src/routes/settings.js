@@ -9,12 +9,12 @@ router.get('/', async (req, res) => {
 });
 
 router.put('/', async (req, res) => {
-  const { sex, heightInches, currentWeightLbs, goalWeightLbs, targets } = req.body;
+  const { sex, heightInches, currentWeightLbs, goalWeightLbs, bmr, doseIntervalDays, targets } = req.body;
 
   const settings = await UserSettings.findOneAndUpdate(
     { userId: req.userId },
-    { sex, heightInches, currentWeightLbs, goalWeightLbs, targets, updatedAt: new Date() },
-    { upsert: true, new: true, runValidators: true },
+    { sex, heightInches, currentWeightLbs, goalWeightLbs, bmr, doseIntervalDays, targets, updatedAt: new Date() },
+    { upsert: true, returnDocument: 'after', runValidators: true },
   );
 
   res.json({ settings });

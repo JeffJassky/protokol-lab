@@ -1,17 +1,156 @@
 <script setup>
+import { computed } from 'vue';
 import MacroBar from './MacroBar.vue';
+import { computeNutritionScore } from '../utils/nutritionScore.js';
 
-defineProps({
+const props = defineProps({
   summary: { type: Object, required: true },
+});
+
+// Shared bar scale across all four macros. When any macro goes over its
+// target the whole group rescales so the most-exceeded one fits at the right
+// edge of the track, and every other bar grows proportionally. Under-target
+// days leave this at 1.
+const scaleMax = computed(() => {
+  const s = props.summary;
+  if (!s || !s.targets) return 1;
+  const ratios = [
+    s.targets.calories ? s.totalCalories / s.targets.calories : 0,
+    s.targets.proteinGrams ? s.totalProtein / s.targets.proteinGrams : 0,
+    s.targets.fatGrams ? s.totalFat / s.targets.fatGrams : 0,
+    s.targets.carbsGrams ? s.totalCarbs / s.targets.carbsGrams : 0,
+  ];
+  return Math.max(1, ...ratios);
+});
+
+const scoreDetail = computed(() => {
+  const s = props.summary;
+  if (!s || !s.targets) return null;
+  const value = computeNutritionScore(
+    { calories: s.totalCalories, protein: s.totalProtein, fat: s.totalFat, carbs: s.totalCarbs },
+    s.targets,
+  );
+  return value != null ? { value } : null;
+});
+
+const scoreBand = computed(() => {
+  const v = scoreDetail.value?.value;
+  if (v == null) return 'none';
+  if (v >= 85) return 'good';
+  if (v >= 60) return 'ok';
+  return 'bad';
+});
+
+// Actionable guidance: given the current state, compute what the user should
+// do next. The most useful case is the classic weight-loss rebalance where
+// calories are over AND protein is under — in that case you can't just "add
+// protein" without blowing calories further, so we compute the fat-for-protein
+// trade that would satisfy both constraints simultaneously.
+//
+// Tolerances prevent us from nagging about 5-calorie overshoots.
+const TOL_CAL = 50;
+const TOL_PRO = 10;
+const TOL_FAT = 5;
+
+const suggestion = computed(() => {
+  const s = props.summary;
+  if (!s || !s.targets) return null;
+  const t = s.targets;
+
+  const calDelta = s.totalCalories - (t.calories || 0); // + = over
+  const proDelta = s.totalProtein - (t.proteinGrams || 0); // - = under
+  const fatDelta = s.totalFat - (t.fatGrams || 0); // + = over
+
+  // All primary macros within tolerance.
+  if (Math.abs(calDelta) <= TOL_CAL && proDelta >= -TOL_PRO && fatDelta <= TOL_FAT) {
+    return {
+      tone: 'good',
+      headline: "You're on track",
+      detail: null,
+    };
+  }
+
+  // Weight-loss classic: under protein AND over calories. Compute the
+  // fat-for-protein trade that hits both targets simultaneously.
+  //   Add P grams protein  → +4P kcal
+  //   Cut F grams fat      → −9F kcal
+  //   Want: +4P − 9F = −calDelta  (net calorie change equals the overage)
+  //   And:  P = |proDelta|      (close the protein gap exactly)
+  //   ⇒  F = (calDelta + 4P) / 9
+  if (proDelta < -TOL_PRO && calDelta > TOL_CAL) {
+    const proToAdd = Math.round(-proDelta);
+    const fatToCut = Math.round((calDelta + 4 * proToAdd) / 9);
+    if (fatToCut > 0) {
+      return {
+        tone: 'fix',
+        headline: `Add ${proToAdd}g protein, cut ${fatToCut}g fat`,
+        detail: 'Swap fat for lean protein — chicken breast, egg whites, or a protein shake — to hit both targets without blowing calories.',
+      };
+    }
+  }
+
+  // Under protein but calories OK or under — just eat more protein.
+  if (proDelta < -TOL_PRO) {
+    const calLeft = Math.max(0, -calDelta);
+    const need = Math.round(-proDelta);
+    return {
+      tone: 'fix',
+      headline: `Need ${need}g more protein`,
+      detail: calLeft > 0
+        ? `You have ~${calLeft} kcal left today — use them for lean protein.`
+        : 'Prioritize a protein-rich food next.',
+    };
+  }
+
+  // Over calories + protein already hit → just cut calories (usually fat or carbs).
+  if (calDelta > TOL_CAL) {
+    return {
+      tone: 'fix',
+      headline: `${calDelta} kcal over target`,
+      detail: fatDelta > TOL_FAT
+        ? `Fat is ${Math.round(fatDelta)}g over — avoid oils and fatty foods for the rest of the day.`
+        : 'Stop eating for the day, or pick lower-calorie options.',
+    };
+  }
+
+  // Under calories with protein hit — room to eat more.
+  if (calDelta < -TOL_CAL) {
+    return {
+      tone: 'ok',
+      headline: `${-calDelta} kcal left for today`,
+      detail: 'Macros look good — eat more of anything you want.',
+    };
+  }
+
+  // Over fat only, calories OK.
+  if (fatDelta > TOL_FAT) {
+    return {
+      tone: 'fix',
+      headline: `Fat is ${Math.round(fatDelta)}g over`,
+      detail: 'Calories are on target but fat is high — be careful with oils and fatty foods.',
+    };
+  }
+
+  return null;
 });
 </script>
 
 <template>
   <div v-if="summary" class="daily-summary">
-    <MacroBar label="Calories" :current="summary.totalCalories" :target="summary.targets?.calories || 0" color="#4f46e5" unit=" kcal" />
-    <MacroBar label="Protein" :current="summary.totalProtein" :target="summary.targets?.proteinGrams || 0" color="#16a34a" unit="g" />
-    <MacroBar label="Fat" :current="summary.totalFat" :target="summary.targets?.fatGrams || 0" color="#f59e0b" unit="g" />
-    <MacroBar label="Carbs" :current="summary.totalCarbs" :target="summary.targets?.carbsGrams || 0" color="#ef4444" unit="g" />
+    <div v-if="suggestion || scoreDetail" class="advice-block">
+      <div v-if="scoreDetail" class="score-pill" :class="`band-${scoreBand}`">
+        <span class="score-value">{{ scoreDetail.value }}</span>
+        <span class="score-suffix">/100</span>
+      </div>
+      <div v-if="suggestion" class="suggestion" :class="`tone-${suggestion.tone}`">
+        <div class="suggestion-headline">{{ suggestion.headline }}</div>
+        <div v-if="suggestion.detail" class="suggestion-detail">{{ suggestion.detail }}</div>
+      </div>
+    </div>
+    <MacroBar label="Calories" :current="summary.totalCalories" :target="summary.targets?.calories || 0" color="var(--color-cal)" unit=" kcal" :scale-max="scaleMax" />
+    <MacroBar label="Protein" :current="summary.totalProtein" :target="summary.targets?.proteinGrams || 0" color="var(--color-protein)" unit="g" :scale-max="scaleMax" />
+    <MacroBar label="Fat" :current="summary.totalFat" :target="summary.targets?.fatGrams || 0" color="var(--color-fat)" unit="g" :scale-max="scaleMax" />
+    <MacroBar label="Carbs" :current="summary.totalCarbs" :target="summary.targets?.carbsGrams || 0" color="var(--color-carbs)" unit="g" :scale-max="scaleMax" />
   </div>
 </template>
 
@@ -22,4 +161,45 @@ defineProps({
   border-radius: 8px;
   padding: 0.85rem 1rem;
 }
+
+.advice-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.score-pill {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0.2rem 0.55rem 0.25rem;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  color: white;
+  flex-shrink: 0;
+}
+.score-value { font-size: 1rem; font-weight: 700; line-height: 1; }
+.score-suffix { font-size: 0.6rem; margin-left: 0.12rem; opacity: 0.85; }
+.band-good { background: var(--success); }
+.band-ok { background: var(--warning); }
+.band-bad { background: var(--danger); }
+.band-none { background: var(--border); color: var(--text-secondary); }
+
+.suggestion { flex: 1; min-width: 0; }
+.suggestion-headline {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+}
+.suggestion-detail {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  margin-top: 0.2rem;
+}
+.tone-good .suggestion-headline { color: var(--success); }
+.tone-fix .suggestion-headline { color: var(--text); }
+.tone-ok .suggestion-headline { color: var(--text); }
 </style>

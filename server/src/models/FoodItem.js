@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const foodItemSchema = new mongoose.Schema({
   offBarcode: { type: String, default: null },
   name: { type: String, required: true },
+  emoji: { type: String, default: '' },
   brand: { type: String, default: '' },
   servingSize: { type: String, default: '' },
   servingGrams: { type: Number, default: 100 },

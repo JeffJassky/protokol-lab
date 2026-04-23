@@ -6,6 +6,8 @@ const userSettingsSchema = new mongoose.Schema({
   heightInches: { type: Number, required: true },
   currentWeightLbs: { type: Number, required: true },
   goalWeightLbs: { type: Number },
+  bmr: { type: Number },
+  doseIntervalDays: { type: Number, default: 5, min: 5, max: 7 },
   targets: {
     calories: { type: Number, required: true },
     proteinGrams: { type: Number, required: true },

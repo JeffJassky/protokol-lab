@@ -1,17 +1,5 @@
-:root {
-  --text: #1f2937;
-  --text-secondary: #6b7280;
-  --bg: #f9fafb;
-  --surface: #ffffff;
-  --border: #e5e7eb;
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --success: #16a34a;
-  --danger: #dc2626;
-  --warning: #f59e0b;
-
-  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+@import './styles/colors.css';
+@import './styles/themes.css';
 
 *,
 *::before,
@@ -21,25 +9,27 @@
 
 body {
   margin: 0;
-  font-family: var(--sans);
-  font-size: 15px;
+  font-family: var(--font-body);
+  font-size: var(--font-size-m);
   line-height: 1.5;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4 {
+h1, h2, h3, h4, h5, h6 {
   margin: 0 0 0.5rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
   line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 p {
   margin: 0;
 }
 
-input, select, button {
+input, select, button, textarea {
   font-family: inherit;
   font-size: inherit;
 }
@@ -51,4 +41,69 @@ a {
 
 #app {
   min-height: 100vh;
+}
+
+/* ---- Monospace for numeric display & inputs -------------------------- */
+/* Number inputs */
+input[type='number'] {
+  font-family: var(--font-mono);
+}
+
+/* Stat cards / metric readouts */
+.stat-value,
+.logged-value,
+.macro-values,
+.total-cal {
+  font-family: var(--font-mono);
+}
+
+/* Allocation (Settings) */
+.alloc-input,
+.alloc-computed,
+.alloc-detail,
+.alloc-unit {
+  font-family: var(--font-mono);
+}
+
+/* Weekly budget strip */
+.wb-value,
+.wb-day-value,
+.wb-adj-values,
+.wb-adj-values > * {
+  font-family: var(--font-mono);
+}
+
+/* Log-page food tables — numeric columns only */
+.meal-table td.col-num,
+.meal-table th.col-num,
+.meal-table td.col-srv,
+.meal-table th.col-srv,
+.meal-table tfoot td.col-num,
+.items-table td.col-num,
+.items-table th.col-num,
+.items-table td.col-srv,
+.items-table th.col-srv,
+.items-table td.col-srv input {
+  font-family: var(--font-mono);
+}
+
+/* Dashboard log-history table — numeric columns only */
+.log-table td.lt-num,
+.log-table th.lt-num {
+  font-family: var(--font-mono);
+}
+
+/* Inline numeric bits */
+.servings,
+.edit-input,
+.dot,
+.count,
+.day-cell,
+.month-label {
+  font-family: var(--font-mono);
+}
+
+/* Score pill digits */
+.score-pill {
+  font-family: var(--font-mono);
 }

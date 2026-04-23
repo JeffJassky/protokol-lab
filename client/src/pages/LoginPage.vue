@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, RouterLink } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 
 const auth = useAuthStore();
@@ -44,6 +44,13 @@ async function handleLogin() {
           {{ loading ? 'Signing in...' : 'Sign In' }}
         </button>
       </form>
+      <p class="forgot">
+        <RouterLink to="/forgot-password">Forgot your password?</RouterLink>
+      </p>
+      <p class="switch">
+        Don't have an account?
+        <RouterLink to="/register">Create one</RouterLink>
+      </p>
     </div>
   </div>
 </template>
@@ -98,18 +105,18 @@ async function handleLogin() {
 .field input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px var(--primary-focus);
 }
 button[type="submit"] {
   width: 100%;
   padding: 0.6rem;
   margin-top: 0.5rem;
   background: var(--primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 500;
+  font-size: var(--font-size-m);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -120,4 +127,26 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
 }
+.forgot {
+  text-align: center;
+  font-size: 0.85rem;
+  margin: 1rem 0 0;
+}
+.forgot a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.forgot a:hover { text-decoration: underline; }
+.switch {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0.75rem 0 0;
+}
+.switch a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.switch a:hover { text-decoration: underline; }
 </style>

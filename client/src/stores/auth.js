@@ -22,10 +22,23 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = data.user;
   }
 
+  async function register(email, password) {
+    const data = await api.post('/api/auth/register', { email, password });
+    user.value = data.user;
+  }
+
+  async function requestPasswordReset(email) {
+    await api.post('/api/auth/forgot-password', { email });
+  }
+
+  async function resetPassword(token, password) {
+    await api.post('/api/auth/reset-password', { token, password });
+  }
+
   async function logout() {
     await api.post('/api/auth/logout');
     user.value = null;
   }
 
-  return { user, checked, fetchMe, login, logout };
+  return { user, checked, fetchMe, login, register, requestPasswordReset, resetPassword, logout };
 });

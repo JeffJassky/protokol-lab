@@ -42,5 +42,19 @@ export const useFoodStore = defineStore('food', () => {
     await fetchFavorites();
   }
 
-  return { searchResults, recents, favorites, searching, search, fetchRecents, fetchFavorites, addFavorite, removeFavorite };
+  async function updateFoodEmoji(foodItemId, emoji) {
+    await api.put(`/api/food/${foodItemId}`, { emoji });
+    // Patch any locally-cached copies so UI updates without a refetch.
+    for (const r of searchResults.value) {
+      if (r.source === 'local' && String(r._id) === String(foodItemId)) r.emoji = emoji;
+    }
+    for (const r of recents.value) {
+      if (r.foodItemId && String(r.foodItemId._id) === String(foodItemId)) r.foodItemId.emoji = emoji;
+    }
+    for (const f of favorites.value) {
+      if (f.foodItemId && String(f.foodItemId._id) === String(foodItemId)) f.foodItemId.emoji = emoji;
+    }
+  }
+
+  return { searchResults, recents, favorites, searching, search, fetchRecents, fetchFavorites, addFavorite, removeFavorite, updateFoodEmoji };
 });

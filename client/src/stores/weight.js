@@ -7,6 +7,7 @@ export const useWeightStore = defineStore('weight', () => {
   const stats = ref(null);
   const doses = ref([]);
   const pkCurve = ref([]);
+  const waistEntries = ref([]);
 
   async function fetchEntries(from, to) {
     const params = new URLSearchParams();
@@ -54,5 +55,28 @@ export const useWeightStore = defineStore('weight', () => {
     await Promise.all([fetchDoses(), fetchPkCurve()]);
   }
 
-  return { entries, stats, doses, pkCurve, fetchEntries, fetchStats, addWeight, deleteWeight, fetchDoses, fetchPkCurve, addDose, deleteDose };
+  async function fetchWaistEntries(from, to) {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const data = await api.get(`/api/waist?${params}`);
+    waistEntries.value = data.entries;
+  }
+
+  async function addWaist(waistInches, date) {
+    await api.post('/api/waist', { waistInches, date });
+    await fetchWaistEntries();
+  }
+
+  async function deleteWaist(id) {
+    await api.del(`/api/waist/${id}`);
+    await fetchWaistEntries();
+  }
+
+  return {
+    entries, stats, doses, pkCurve, waistEntries,
+    fetchEntries, fetchStats, addWeight, deleteWeight,
+    fetchDoses, fetchPkCurve, addDose, deleteDose,
+    fetchWaistEntries, addWaist, deleteWaist,
+  };
 });

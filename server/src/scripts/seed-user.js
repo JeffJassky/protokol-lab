@@ -17,7 +17,7 @@ const passwordHash = await bcrypt.hash(password, 10);
 const user = await User.findOneAndUpdate(
   { email: email.toLowerCase().trim() },
   { passwordHash },
-  { upsert: true, new: true },
+  { upsert: true, returnDocument: 'after' },
 );
 
 console.log(`User seeded: ${user.email} (${user._id})`);

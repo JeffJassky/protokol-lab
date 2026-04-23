@@ -1,0 +1,158 @@
+/*
+ * Semantic design tokens + light/dark themes.
+ * Components reference only these variables — never palette-* directly.
+ *
+ * Theme selector: `html[data-theme="dark"]` (set by useTheme composable via
+ * @vueuse/core's useColorMode). Defaults to light.
+ */
+
+:root {
+  /* ---- Typography ---------------------------------------------------- */
+  /* Runtime-overridden by useFonts composable (Google Fonts). */
+  --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --font-weight-light: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  --font-size-xs: 0.72rem;
+  --font-size-s: 0.85rem;
+  --font-size-m: 0.95rem;
+  --font-size-l: 1.15rem;
+  --font-size-xl: 1.5rem;
+
+  /* ---- Radius -------------------------------------------------------- */
+  --radius-small: 6px;
+  --radius-medium: 10px;
+  --radius-large: 12px;
+  --radius-pill: 999px;
+
+  /* ---- Macro accents (theme-independent brand meaning) --------------- */
+  --color-cal: var(--palette-blue-500);
+  --color-cal-strong: var(--palette-blue-600);
+  --color-protein: var(--palette-green-600);
+  --color-fat: var(--palette-amber-500);
+  --color-carbs: var(--palette-red-500);
+  --color-carbs-strong: var(--palette-red-600);
+
+  /* Dashboard series accents */
+  --color-waist: var(--palette-sky-500);
+  --color-score: var(--palette-violet-500);
+  --color-dose: var(--palette-amber-500);
+  --color-weight: var(--palette-indigo-600);
+
+  /* Symptom rotation (8 colors) */
+  --color-symptom-1: var(--palette-violet-500);
+  --color-symptom-2: var(--palette-pink-500);
+  --color-symptom-3: var(--palette-teal-500);
+  --color-symptom-4: var(--palette-orange-500);
+  --color-symptom-5: var(--palette-indigo-500);
+  --color-symptom-6: var(--palette-lime-500);
+  --color-symptom-7: var(--palette-rose-500);
+  --color-symptom-8: var(--palette-cyan-500);
+
+  /* ---- Light theme (default) ---------------------------------------- */
+  /* Surfaces */
+  --bg: var(--palette-gray-50);
+  --surface: var(--palette-white);
+  --surface-alt: var(--palette-gray-50);
+  --border: var(--palette-gray-200);
+  --border-strong: var(--palette-gray-300);
+
+  /* Text */
+  --text: var(--palette-gray-800);
+  --text-primary: var(--palette-gray-800);
+  --text-secondary: var(--palette-gray-500);
+  --text-tertiary: var(--palette-gray-400);
+  --text-on-primary: var(--palette-white);
+  --text-disabled: var(--palette-gray-300);
+
+  /* Brand */
+  --primary: var(--palette-indigo-600);
+  --primary-hover: var(--palette-indigo-700);
+  --primary-soft: rgba(79, 70, 229, 0.08);
+  --primary-soft-strong: rgba(79, 70, 229, 0.12);
+  --primary-ring: rgba(79, 70, 229, 0.3);
+  --primary-focus: rgba(79, 70, 229, 0.1);
+
+  /* Status */
+  --success: var(--palette-green-600);
+  --danger: var(--palette-red-600);
+  --danger-soft: rgba(220, 38, 38, 0.06);
+  --warning: var(--palette-amber-500);
+
+  /* Overlays / shadows */
+  --overlay: rgba(0, 0, 0, 0.45);
+  --shadow-s: 0 1px 4px rgba(0, 0, 0, 0.15);
+  --shadow-m: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-l: 0 20px 60px rgba(0, 0, 0, 0.3);
+
+  /* Chart helpers */
+  --chart-grid: var(--palette-gray-100);
+  --chart-axis: var(--palette-gray-400);
+
+  /* Tinted surfaces (rows, banners) */
+  --tint-carbs-soft: rgba(239, 68, 68, 0.08);
+  --tint-carbs-softer: rgba(239, 68, 68, 0.04);
+  --tint-carbs-softest: rgba(239, 68, 68, 0.015);
+  --tint-carbs-border: rgba(239, 68, 68, 0.25);
+
+  /* Target line on progress tracks */
+  --track-target-line: rgba(255, 255, 255, 0.7);
+  --track-target-halo: rgba(0, 0, 0, 0.25);
+}
+
+/* ---- Dark theme ---------------------------------------------------- */
+html[data-theme='dark'] {
+  --bg: var(--palette-gray-950);
+  --surface: var(--palette-gray-900);
+  --surface-alt: #1f1f1f;
+  --border: #2e2e2e;
+  --border-strong: var(--palette-gray-700);
+
+  --text: var(--palette-gray-200);
+  --text-primary: var(--palette-gray-200);
+  --text-secondary: var(--palette-gray-400);
+  --text-tertiary: var(--palette-gray-500);
+  --text-on-primary: var(--palette-white);
+  --text-disabled: var(--palette-gray-600);
+
+  --primary: var(--palette-indigo-400);
+  --primary-hover: var(--palette-indigo-300);
+  --primary-soft: rgba(129, 140, 248, 0.15);
+  --primary-soft-strong: rgba(129, 140, 248, 0.22);
+  --primary-ring: rgba(129, 140, 248, 0.35);
+  --primary-focus: rgba(129, 140, 248, 0.22);
+
+  --success: var(--palette-green-400);
+  --danger: var(--palette-red-400);
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --warning: var(--palette-amber-400);
+
+  --overlay: rgba(0, 0, 0, 0.65);
+  --shadow-s: 0 1px 4px rgba(0, 0, 0, 0.5);
+  --shadow-m: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-l: 0 20px 60px rgba(0, 0, 0, 0.7);
+
+  --chart-grid: #2e2e2e;
+  --chart-axis: var(--palette-gray-500);
+
+  --tint-carbs-soft: rgba(248, 113, 113, 0.15);
+  --tint-carbs-softer: rgba(248, 113, 113, 0.08);
+  --tint-carbs-softest: rgba(248, 113, 113, 0.03);
+  --tint-carbs-border: rgba(248, 113, 113, 0.3);
+
+  --track-target-line: rgba(255, 255, 255, 0.5);
+  --track-target-halo: rgba(0, 0, 0, 0.6);
+
+  /* Brighter macro variants for dark mode readability */
+  --color-cal: var(--palette-blue-400);
+  --color-protein: var(--palette-green-400);
+  --color-fat: var(--palette-amber-400);
+  --color-carbs: var(--palette-red-400);
+  --color-waist: #38bdf8;
+  --color-score: #a78bfa;
+  --color-weight: var(--palette-indigo-400);
+}
