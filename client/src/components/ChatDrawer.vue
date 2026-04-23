@@ -44,62 +44,81 @@ const hasMoreThreads = computed(() =>
 );
 
 // ── Deep-chat styles (theme-aware; deep-chat reads plain values, not CSS vars) ──
+// Resolve theme tokens to literal values so deep-chat (which lives inside a
+// shadow root) renders in the app's terminal-green palette + IBM Plex Mono
+// instead of its indigo / system-sans defaults. Recomputes when the theme
+// flips because we depend on `isDark`.
+function readVar(name) {
+  if (typeof window === 'undefined') return '';
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
 const chatPalette = computed(() => {
-  if (isDark.value) {
-    return {
-      surface: '#171717',
-      surfaceAlt: '#1f1f1f',
-      border: '#2e2e2e',
-      borderSoft: '#404040',
-      text: '#e5e5e5',
-      textMuted: '#a3a3a3',
-      primary: '#818cf8',
-      primaryHover: '#a5b4fc',
-      bubbleUserText: '#ffffff',
-    };
-  }
+  // Touch isDark so the computed re-runs when the theme toggles.
+  void isDark.value;
   return {
-    surface: '#ffffff',
-    surfaceAlt: '#f5f5f5',
-    border: '#e5e5e5',
-    borderSoft: '#d4d4d4',
-    text: '#262626',
-    textMuted: '#a3a3a3',
-    primary: '#4f46e5',
-    primaryHover: '#4338ca',
-    bubbleUserText: '#ffffff',
+    bg: readVar('--bg'),
+    surface: readVar('--surface'),
+    surfaceAlt: readVar('--surface-alt'),
+    surfaceRaised: readVar('--surface-raised'),
+    border: readVar('--border'),
+    borderStrong: readVar('--border-strong'),
+    text: readVar('--text'),
+    textSecondary: readVar('--text-secondary'),
+    textTertiary: readVar('--text-tertiary'),
+    primary: readVar('--primary'),
+    primaryHover: readVar('--primary-hover'),
+    primarySoft: readVar('--primary-soft'),
+    textOnPrimary: readVar('--text-on-primary'),
+    danger: readVar('--danger'),
+    fontBody: readVar('--font-body') || 'inherit',
+    fontMono: readVar('--font-mono') || 'monospace',
+    fontDisplay: readVar('--font-display') || 'inherit',
   };
 });
 
 const chatStyles = computed(() => ({ backgroundColor: chatPalette.value.surface }));
 const inputAreaStyle = computed(() => ({
-  backgroundColor: chatPalette.value.surfaceAlt,
+  backgroundColor: chatPalette.value.bg,
   borderTop: `1px solid ${chatPalette.value.border}`,
 }));
 const textInputStyle = computed(() => ({
   styles: {
     container: {
       backgroundColor: chatPalette.value.surface,
-      border: `1px solid ${chatPalette.value.borderSoft}`,
-      borderRadius: '12px',
+      border: `1px solid ${chatPalette.value.border}`,
+      borderRadius: '0',
       color: chatPalette.value.text,
+      fontFamily: chatPalette.value.fontBody,
     },
-    text: { color: chatPalette.value.text },
+    text: { color: chatPalette.value.text, fontFamily: chatPalette.value.fontBody },
   },
-  placeholder: { text: 'Ask anything about your data...', style: { color: chatPalette.value.textMuted } },
+  placeholder: {
+    text: 'Ask anything about your data...',
+    style: { color: chatPalette.value.textTertiary, fontFamily: chatPalette.value.fontBody },
+  },
 }));
 const submitButtonStyle = computed(() => ({
   submit: {
     container: {
-      default: { backgroundColor: chatPalette.value.primary, borderRadius: '8px' },
+      default: { backgroundColor: chatPalette.value.primary, borderRadius: '0' },
       hover: { backgroundColor: chatPalette.value.primaryHover },
     },
+    svg: { content: { default: { fill: chatPalette.value.textOnPrimary } } },
   },
 }));
 const chatMessageStyles = computed(() => ({
   default: {
     user: {
-      bubble: { backgroundColor: chatPalette.value.primary, color: chatPalette.value.bubbleUserText, maxWidth: '85%' },
+      bubble: {
+        backgroundColor: chatPalette.value.primary,
+        color: chatPalette.value.textOnPrimary,
+        maxWidth: '85%',
+        borderRadius: '0',
+        padding: '10px 14px',
+        fontFamily: chatPalette.value.fontBody,
+        fontSize: '13.5px',
+        lineHeight: '1.55',
+      },
     },
     ai: {
       bubble: {
@@ -108,6 +127,10 @@ const chatMessageStyles = computed(() => ({
         border: 'none',
         maxWidth: '95%',
         overflowX: 'auto',
+        padding: '4px 0',
+        fontFamily: chatPalette.value.fontBody,
+        fontSize: '13.5px',
+        lineHeight: '1.6',
       },
     },
   },
@@ -115,27 +138,152 @@ const chatMessageStyles = computed(() => ({
 
 const shadowStyles = computed(() => {
   const p = chatPalette.value;
-  const tableHead = isDark.value ? p.surfaceAlt : '#fafafa';
-  const dangerColor = isDark.value ? '#f87171' : '#dc2626';
   return `
-  * { line-height: 1.6; font-weight: 400; }
-  strong, b, h1, h2, h3, h4, h5, h6, th { font-weight: 700; }
-  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; margin: 12px 0; }
-  thead { background-color: ${tableHead}; }
-  th { padding: 8px 12px; text-align: left; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: ${p.textMuted}; white-space: nowrap; border-bottom: 2px solid ${p.borderSoft}; }
-  td { padding: 8px 12px; border-bottom: 1px solid ${p.border}; color: ${p.text}; }
-  tr:hover td { background-color: ${tableHead}; }
+  * { font-family: ${p.fontBody}; line-height: 1.6; font-weight: 400; }
+  body, .messages { color: ${p.text}; }
+  p { margin: 0 0 0.6em; }
+  p:last-child { margin-bottom: 0; }
 
-  details.agent-trail { border: 1px solid ${p.border}; border-radius: 0; background: ${tableHead}; margin: 4px 0; font-size: 12.5px; }
-  details.agent-trail > summary { list-style: none; cursor: pointer; padding: 8px 12px; color: ${p.textMuted}; display: flex; align-items: center; gap: 8px; user-select: none; }
+  strong, b, th { font-weight: 700; color: ${p.text}; }
+  em, i { font-style: italic; }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: ${p.fontDisplay};
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: ${p.text};
+    margin: 1em 0 0.4em;
+    line-height: 1.25;
+  }
+  h1 { font-size: 18px; }
+  h2 { font-size: 16px; }
+  h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: ${p.textSecondary}; }
+  h4, h5, h6 { font-size: 13px; }
+
+  ul, ol { margin: 0.4em 0 0.8em; padding-left: 1.4em; }
+  li { margin: 0.15em 0; }
+
+  a { color: ${p.primary}; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { color: ${p.primaryHover}; }
+
+  hr { border: none; border-top: 1px solid ${p.border}; margin: 1em 0; }
+
+  /* Inline code + code blocks */
+  code, kbd, samp {
+    font-family: ${p.fontMono};
+    font-size: 0.92em;
+    background: ${p.surfaceAlt};
+    color: ${p.text};
+    padding: 1px 5px;
+    border: 1px solid ${p.border};
+  }
+  pre {
+    font-family: ${p.fontMono};
+    background: ${p.surfaceAlt};
+    color: ${p.text};
+    border: 1px solid ${p.border};
+    padding: 10px 12px;
+    margin: 0.6em 0;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+  blockquote {
+    margin: 0.6em 0;
+    padding: 4px 12px;
+    border-left: 2px solid ${p.border};
+    color: ${p.textSecondary};
+    font-style: normal;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+    margin: 0.8em 0;
+    border: 1px solid ${p.border};
+  }
+  thead { background-color: ${p.surfaceAlt}; }
+  th {
+    padding: 6px 10px;
+    text-align: left;
+    font-family: ${p.fontDisplay};
+    font-weight: 700;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: ${p.textTertiary};
+    white-space: nowrap;
+    border-bottom: 1px solid ${p.border};
+  }
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid ${p.border};
+    color: ${p.text};
+    font-variant-numeric: tabular-nums;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tr:hover td { background-color: ${p.surfaceAlt}; }
+
+  /* Agent thought trail (collapsible step log) */
+  details.agent-trail {
+    border: 1px solid ${p.border};
+    background: ${p.surfaceAlt};
+    margin: 6px 0;
+    font-size: 12px;
+    font-family: ${p.fontMono};
+  }
+  details.agent-trail > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 6px 10px;
+    color: ${p.textSecondary};
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  details.agent-trail > summary:hover { color: ${p.text}; }
   details.agent-trail > summary::-webkit-details-marker { display: none; }
-  details.agent-trail > summary::before { content: '▸'; color: ${p.textMuted}; font-size: 10px; transition: transform 0.15s; display: inline-block; }
+  details.agent-trail > summary::before {
+    content: '▸';
+    color: ${p.textTertiary};
+    font-size: 10px;
+    transition: transform 0.15s;
+    display: inline-block;
+  }
   details.agent-trail[open] > summary::before { transform: rotate(90deg); }
-  details.agent-trail .trail-latest { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  details.agent-trail ol { list-style: none; margin: 0; padding: 4px 12px 10px 12px; border-top: 1px dashed ${p.border}; }
-  details.agent-trail li { padding: 4px 0 4px 22px; color: ${p.textMuted}; position: relative; }
-  details.agent-trail li .trail-icon { position: absolute; left: 0; width: 16px; text-align: center; }
-  details.agent-trail li.trail-err { color: ${dangerColor}; }
+  details.agent-trail .trail-latest {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  details.agent-trail ol {
+    list-style: none;
+    margin: 0;
+    padding: 4px 10px 8px 10px;
+    border-top: 1px dashed ${p.border};
+  }
+  details.agent-trail li {
+    padding: 3px 0 3px 22px;
+    color: ${p.textSecondary};
+    position: relative;
+    line-height: 1.45;
+  }
+  details.agent-trail li .trail-icon {
+    position: absolute;
+    left: 0;
+    width: 16px;
+    text-align: center;
+    color: ${p.textTertiary};
+  }
+  details.agent-trail li.trail-err { color: ${p.danger}; }
+  details.agent-trail li.trail-err .trail-icon { color: ${p.danger}; }
+
   .agent-final { margin-top: 10px; }
 `;
 });

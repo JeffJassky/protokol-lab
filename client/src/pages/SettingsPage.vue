@@ -126,6 +126,28 @@ function signed(n, digits = 0) {
   return n > 0 ? `+${fixed}` : fixed;
 }
 
+// Time to reach goal weight given current calorie delta.
+// Always returns an object so the stat renders; label explains missing inputs.
+const timeToGoal = computed(() => {
+  const cur = Number(currentWeightLbs.value);
+  const goal = Number(goalWeightLbs.value);
+  const wk = weeklyLbs.value;
+  if (!cur || !goal) return { state: 'missing' };
+  if (wk == null || wk === 0) return { state: 'steady' };
+  const remaining = cur - goal;
+  if (Math.abs(remaining) < 0.1) return { state: 'at' };
+  const needLoss = remaining > 0;
+  const losing = wk < 0;
+  if (needLoss !== losing) return { state: 'wrong' };
+  const weeks = Math.abs(remaining) / Math.abs(wk);
+  const days = weeks * 7;
+  let label;
+  if (days < 30) label = `${Math.round(days)}d`;
+  else if (weeks < 10) label = `${weeks.toFixed(1)}w`;
+  else label = `${(weeks / (52 / 12)).toFixed(1)}mo`;
+  return { state: 'ok', label };
+});
+
 // ---- Macro allocation sliders -------------------------------------------
 // Protein (4 kcal/g) is allocated first; then the remaining calories are
 // split between fat (9 kcal/g) and carbs (4 kcal/g) via a second slider.
@@ -507,6 +529,22 @@ watch(
               <span class="cal-stat-value" :class="weeklyLbs < 0 ? 'neg' : 'pos'">
                 {{ signed(weeklyLbs, 2) }}
                 <span class="cal-stat-unit">lbs/wk</span>
+              </span>
+            </div>
+            <div class="cal-stat">
+              <span class="cal-stat-label">To goal</span>
+              <span
+                class="cal-stat-value"
+                :class="{
+                  pos: timeToGoal.state === 'ok' || timeToGoal.state === 'at',
+                  muted: timeToGoal.state !== 'ok' && timeToGoal.state !== 'at',
+                }"
+              >
+                <template v-if="timeToGoal.state === 'ok'">{{ timeToGoal.label }}</template>
+                <template v-else-if="timeToGoal.state === 'at'">At goal</template>
+                <template v-else-if="timeToGoal.state === 'wrong'">Wrong way</template>
+                <template v-else-if="timeToGoal.state === 'steady'">Steady</template>
+                <template v-else>Set goal</template>
               </span>
             </div>
           </div>
@@ -1080,10 +1118,22 @@ watch(
 }
 .cal-hero-aside {
   display: flex;
-  gap: var(--space-4);
+  gap: var(--space-3) var(--space-4);
   align-items: stretch;
+  flex-wrap: wrap;
   padding-left: var(--space-4);
   border-left: 1px solid var(--border);
+}
+@media (max-width: 540px) {
+  .cal-hero {
+    grid-template-columns: 1fr;
+  }
+  .cal-hero-aside {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: var(--space-3);
+  }
 }
 .cal-stat { display: flex; flex-direction: column; gap: var(--space-1); }
 .cal-stat-label {
@@ -1101,6 +1151,7 @@ watch(
 }
 .cal-stat-value.neg { color: var(--danger); }
 .cal-stat-value.pos { color: var(--success); }
+.cal-stat-value.muted { color: var(--text-tertiary); }
 .cal-stat-unit { font-size: var(--font-size-xs); color: var(--text-tertiary); font-weight: var(--font-weight-medium); margin-left: 2px; }
 .cal-hero-hint {
   grid-column: 1 / -1;

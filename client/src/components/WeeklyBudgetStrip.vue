@@ -128,6 +128,19 @@ function barHeightPct(cal) {
   return (cal / maxDayCal.value) * 100;
 }
 
+// Bottom segment: portion of intake up to (but not past) the daily target.
+function normalHeightPct(cal) {
+  const t = targets.value?.calories || 0;
+  return (Math.min(cal, t) / maxDayCal.value) * 100;
+}
+
+// Top segment: only the overage above the daily target.
+function overHeightPct(cal) {
+  const t = targets.value?.calories || 0;
+  if (cal <= t) return 0;
+  return ((cal - t) / maxDayCal.value) * 100;
+}
+
 // Daily target line as % height inside the bar track.
 const targetLinePct = computed(() => {
   if (!targets.value?.calories) return 0;
@@ -171,8 +184,12 @@ const targetLinePct = computed(() => {
           <div class="wb-day-track">
             <div
               class="wb-day-fill"
-              :class="day.calories > (targets.calories || 0) ? 'over' : ''"
-              :style="{ height: barHeightPct(day.calories) + '%' }"
+              :style="{ height: normalHeightPct(day.calories) + '%' }"
+            />
+            <div
+              v-if="overHeightPct(day.calories) > 0"
+              class="wb-day-over"
+              :style="{ bottom: targetLinePct + '%', height: overHeightPct(day.calories) + '%' }"
             />
             <div
               class="wb-day-target-line"
@@ -180,7 +197,10 @@ const targetLinePct = computed(() => {
               title="Daily target"
             />
           </div>
-          <div class="wb-day-value">{{ day.calories ? fmt(day.calories) : '' }}</div>
+          <div
+            class="wb-day-value"
+            :class="{ over: day.calories > (targets.calories || 0) }"
+          >{{ day.calories ? fmt(day.calories) : '' }}</div>
         </div>
       </div>
 
@@ -307,7 +327,13 @@ const targetLinePct = computed(() => {
   background: var(--color-cal);
   transition: height 0.25s;
 }
-.wb-day-fill.over { background: var(--danger); }
+.wb-day-over {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--danger);
+  transition: height 0.25s, bottom 0.25s;
+}
 .wb-day-target-line {
   position: absolute;
   left: 0;
@@ -327,6 +353,7 @@ const targetLinePct = computed(() => {
   color: var(--text);
   font-weight: var(--font-weight-bold);
 }
+.wb-day-value.over { color: var(--danger); }
 
 /* Interpretive note — turns the week's numbers into a sentence. */
 .wb-note {

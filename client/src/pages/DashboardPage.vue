@@ -725,6 +725,35 @@ function formatDate(dateStr) {
   const dt = new Date(y, m - 1, d);
   return dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
+
+// ETA to goal weight based on measured trend (regression) or weekly avg as
+// fallback. Returns a display label + direction flag.
+const etaToGoal = computed(() => {
+  const stats = weightStore.stats;
+  if (!stats || stats.toGoal == null) return null;
+  const rate = stats.trendLbsPerWeek != null ? stats.trendLbsPerWeek : stats.weeklyAvg;
+  const toGoal = Number(stats.toGoal);
+  if (Math.abs(toGoal) < 0.1) return { label: 'At goal', good: true };
+  if (rate == null || Math.abs(rate) < 0.05) return { label: 'Steady', good: false };
+  // toGoal: + means need to lose, - means need to gain.
+  const needLoss = toGoal > 0;
+  const losing = rate < 0;
+  if (needLoss !== losing) return { label: 'Wrong way', good: false };
+  const weeks = Math.abs(toGoal) / Math.abs(rate);
+  const days = weeks * 7;
+  let label;
+  if (days < 30) {
+    const n = Math.round(days);
+    label = `${n} ${n === 1 ? 'day' : 'days'}`;
+  } else if (weeks < 10) {
+    const n = weeks.toFixed(1);
+    label = `${n} ${n === '1.0' ? 'week' : 'weeks'}`;
+  } else {
+    const n = (weeks / (52 / 12)).toFixed(1);
+    label = `${n} ${n === '1.0' ? 'month' : 'months'}`;
+  }
+  return { label, good: true };
+});
 </script>
 
 <template>
@@ -757,9 +786,24 @@ function formatDate(dateStr) {
         <span class="stat-label">Weekly Avg</span>
         <span class="stat-value">{{ weightStore.stats.weeklyAvg }} lbs/wk</span>
       </div>
+      <div v-if="weightStore.stats.trendLbsPerWeek != null" class="stat-card">
+        <span class="stat-label" v-tooltip="'Best-fit slope across all weigh-ins (linear regression)'">Trend</span>
+        <span
+          class="stat-value"
+          :class="weightStore.stats.trendLbsPerWeek < 0 ? 'green' : weightStore.stats.trendLbsPerWeek > 0 ? 'red' : ''"
+        >
+          {{ weightStore.stats.trendLbsPerWeek > 0 ? '+' : '' }}{{ weightStore.stats.trendLbsPerWeek }} lbs/wk
+        </span>
+      </div>
       <div v-if="weightStore.stats.toGoal != null" class="stat-card">
         <span class="stat-label">To Goal</span>
         <span class="stat-value">{{ weightStore.stats.toGoal }} lbs</span>
+      </div>
+      <div v-if="etaToGoal" class="stat-card">
+        <span class="stat-label" v-tooltip="'Estimated time to goal at current trend'">ETA</span>
+        <span class="stat-value" :class="etaToGoal.good ? 'green' : ''">
+          {{ etaToGoal.label }}
+        </span>
       </div>
     </div>
 
