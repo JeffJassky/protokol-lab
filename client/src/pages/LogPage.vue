@@ -907,7 +907,9 @@ function onNoteBlur() {
             <span class="symptom-name">{{ symptom.name }}</span>
             <button
               v-if="!symptom.isDefault"
+              v-tooltip="`Delete '${symptom.name}' symptom`"
               class="delete-btn"
+              :aria-label="`Delete ${symptom.name} symptom`"
               @click="handleDeleteSymptom(symptom)"
             >
               x
@@ -1249,6 +1251,19 @@ function onNoteBlur() {
   padding: var(--space-1);
 }
 .menu-btn { font-size: var(--font-size-l); line-height: 1; }
+.delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  text-transform: uppercase;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
 .delete-btn:hover { color: var(--danger); background: var(--danger-soft); }
 .menu-btn:hover { color: var(--text); background: var(--bg); }
 
@@ -1370,18 +1385,22 @@ function onNoteBlur() {
   margin-bottom: var(--space-3);
 }
 .symptom-row {
-  padding: var(--space-2) 0;
+  padding: var(--space-3) 0;
 }
 .symptom-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-1);
+  min-height: 24px;
+  margin-bottom: var(--space-2);
 }
 .symptom-name {
-  font-size: var(--font-size-s);
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
 }
 .dots {
   display: flex;

@@ -209,7 +209,7 @@ const targetLinePct = computed(() => {
 
 <style scoped>
 .weekly-budget {
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-medium);
 }
