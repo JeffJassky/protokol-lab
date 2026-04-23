@@ -22,6 +22,7 @@ import { useCompoundsStore } from '../stores/compounds.js';
 import { useDosesStore } from '../stores/doses.js';
 import { usePhotosStore } from '../stores/photos.js';
 import { computeNutritionScore } from '../utils/nutritionScore.js';
+import { contrastText } from '../utils/contrast.js';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import OnboardingChecklist from '../components/OnboardingChecklist.vue';
 import PhotoTimelineCard from '../components/PhotoTimelineCard.vue';
@@ -187,7 +188,7 @@ const pillLabelsPlugin = {
         const v = ds.data[i]?.value;
         const u = ds.data[i]?.unit;
         if (v == null) return;
-        drawPill(ctx, `${v} ${u}`, point.x, y, def.color, true, chart.chartArea.bottom);
+        drawPill(ctx, `${v}${u}`, point.x, y, def.color, true, chart.chartArea.bottom);
       });
     });
 
@@ -214,6 +215,24 @@ const pillLabelsPlugin = {
 const noteHitboxes = ref([]);
 const hoveredNote = ref(null);
 
+// Lucide pencil SVG paths (viewBox 24×24). Drawn into the chart canvas via
+// Path2D so the icon matches the table's note column.
+const PENCIL_BODY = new Path2D('M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z');
+const PENCIL_CAP = new Path2D('M15 5 19 9');
+function drawPencil(ctx, cx, cy, size, color) {
+  const s = size / 24;
+  ctx.save();
+  ctx.translate(cx - size / 2, cy - size / 2);
+  ctx.scale(s, s);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 / s; // keep stroke ~2px after scaling
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke(PENCIL_BODY);
+  ctx.stroke(PENCIL_CAP);
+  ctx.restore();
+}
+
 const noteIconsPlugin = {
   id: 'noteIcons',
   afterDraw(chart) {
@@ -223,21 +242,19 @@ const noteIconsPlugin = {
     if (notes.length && xScale) {
       const ctx = chart.ctx;
       const y = xScale.bottom + 12;
-      ctx.save();
-      ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      const color = cssVar('--text-tertiary', '#7a9a8a');
       const minT = xScale.min;
       const maxT = xScale.max;
+      const ICON = 14;
       for (const n of notes) {
         const date = parseLocalDate(n.date);
         const t = date.getTime();
         if (t < minT || t > maxT) continue;
         const px = xScale.getPixelForValue(t);
-        ctx.fillText('📝', px, y);
-        boxes.push({ x: px - 9, y: y - 9, w: 18, h: 18, text: n.text, date: n.date });
+        drawPencil(ctx, px, y, ICON, color);
+        const half = ICON / 2;
+        boxes.push({ x: px - half, y: y - half, w: ICON, h: ICON, text: n.text, date: n.date });
       }
-      ctx.restore();
     }
     noteHitboxes.value = boxes;
   },
@@ -262,7 +279,8 @@ function onChartMouseLeave() {
 
 function drawPill(ctx, label, x, y, color, showTick, tickBottom) {
   ctx.save();
-  ctx.font = 'bold 9px -apple-system, BlinkMacSystemFont, sans-serif';
+  const monoFamily = cssVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace');
+  ctx.font = `bold 9px ${monoFamily}`;
   const tw = ctx.measureText(label).width;
   const pad = 5;
   const w = tw + pad * 2;
@@ -282,11 +300,9 @@ function drawPill(ctx, label, x, y, color, showTick, tickBottom) {
   }
 
   ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(px, py, w, h, h / 2);
-  ctx.fill();
+  ctx.fillRect(px, py, w, h);
 
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = contrastText(color);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x, py + h / 2);
@@ -403,6 +419,33 @@ const symptomDataById = computed(() => {
   }
   return map;
 });
+
+// Map<date, [{symptomId, name, severity}]> for the log-table symptom popover.
+// Severity 0 means "explicitly none" — useful for charting trends but noisy
+// in the popover, so filter those out and treat days with only-zero logs as
+// having no symptoms at all (no dot).
+const symptomsByDate = computed(() => {
+  const nameById = new Map(symptomsStore.symptoms.map((s) => [String(s._id), s.name]));
+  const map = new Map();
+  for (const log of symptomsStore.rangeLogs) {
+    if (log.severity < 1) continue;
+    if (!map.has(log.date)) map.set(log.date, []);
+    map.get(log.date).push({
+      symptomId: log.symptomId,
+      name: nameById.get(String(log.symptomId)) || 'Unknown',
+      severity: log.severity,
+    });
+  }
+  // Sort each day's list by descending severity so the worst items lead.
+  for (const list of map.values()) list.sort((a, b) => b.severity - a.severity);
+  return map;
+});
+function symptomsForDate(date) {
+  return symptomsByDate.value.get(date) || [];
+}
+function severityColor(sev) {
+  return `var(--palette-sev-${Math.max(0, Math.min(10, sev))})`;
+}
 
 // ---- Dynamic chart data -------------------------------------------------
 
@@ -676,21 +719,6 @@ const logTableRows = computed(() => {
   return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
 });
 
-const hoveredTableNote = ref(null);
-
-function onTableNoteEnter(event, row) {
-  const rect = event.currentTarget.getBoundingClientRect();
-  const parent = event.currentTarget.closest('.table-wrap').getBoundingClientRect();
-  hoveredTableNote.value = {
-    x: rect.left - parent.left + rect.width / 2,
-    y: rect.top - parent.top,
-    text: row.note,
-    date: row.date,
-  };
-}
-function onTableNoteLeave() {
-  hoveredTableNote.value = null;
-}
 
 function formatDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -747,7 +775,7 @@ function formatDate(dateStr) {
           <button
             v-for="r in ranges"
             :key="r.label"
-            :class="{ active: selectedRange === r }"
+            :class="{ active: selectedRange.label === r.label }"
             @click="selectedRange = r"
           >
             {{ r.label }}
@@ -801,11 +829,11 @@ function formatDate(dateStr) {
         <p v-else class="empty">Select a series above to view data.</p>
         <div
           v-if="hoveredNote"
-          class="note-tooltip"
+          class="popover note-popover note-chart-popover"
           :style="{ left: hoveredNote.x + 'px', top: hoveredNote.y + 'px' }"
         >
-          <div class="note-tooltip-date">{{ formatDate(hoveredNote.date) }}</div>
-          <div class="note-tooltip-text">{{ hoveredNote.text }}</div>
+          <div class="note-pop-title">Note · {{ formatDate(hoveredNote.date) }}</div>
+          <div class="note-pop-text">{{ hoveredNote.text }}</div>
         </div>
       </div>
     </div>
@@ -830,43 +858,88 @@ function formatDate(dateStr) {
             <th class="lt-num lt-carb">Carbs</th>
             <th class="lt-num lt-score">Score</th>
             <th class="lt-sym">Symptoms</th>
+            <th class="lt-note">Note</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in logTableRows" :key="row.date" class="lt-row" @click="router.push(`/?date=${row.date}`)">
-            <td class="lt-date">
-              {{ formatDate(row.date) }}
-              <span
-                v-if="row.note"
-                class="note-icon"
-                @mouseenter="onTableNoteEnter($event, row)"
-                @mouseleave="onTableNoteLeave"
-                @click.stop
-              >📝</span>
-            </td>
-            <td class="lt-num">{{ row.weight != null ? `${row.weight} lbs` : '' }}</td>
+            <td class="lt-date">{{ formatDate(row.date) }}</td>
+            <td class="lt-num">{{ row.weight != null ? `${row.weight} lb` : '' }}</td>
             <td class="lt-num">{{ row.waist != null ? `${row.waist}"` : '' }}</td>
-            <td v-for="c in tableCompounds" :key="c._id" class="lt-num" :style="{ color: c.color || '' }">
-              {{ row.doses[c._id] != null ? `${row.doses[c._id]} ${c.doseUnit}` : '' }}
+            <td v-for="c in tableCompounds" :key="c._id" class="lt-num lt-dose">
+              <span
+                v-if="row.doses[c._id] != null"
+                class="dose-tag"
+                :style="{ background: c.color || 'var(--border)', color: contrastText(c.color) }"
+              >{{ row.doses[c._id] }}{{ c.doseUnit }}</span>
             </td>
             <td class="lt-num lt-cal">{{ row.cal != null ? row.cal.toLocaleString() : '' }}</td>
             <td class="lt-num lt-pro">{{ row.protein != null ? `${row.protein}g` : '' }}</td>
             <td class="lt-num lt-fat">{{ row.fat != null ? `${row.fat}g` : '' }}</td>
             <td class="lt-num lt-carb">{{ row.carbs != null ? `${row.carbs}g` : '' }}</td>
             <td class="lt-num lt-score" :class="row.score != null ? (row.score >= 85 ? 'score-good' : row.score >= 60 ? 'score-ok' : 'score-bad') : ''">{{ row.score != null ? row.score : '' }}</td>
-            <td class="lt-sym">{{ row.symptoms ? '✓' : '' }}</td>
+            <td class="lt-sym">
+              <VDropdown
+                v-if="symptomsForDate(row.date).length"
+                :triggers="['hover', 'focus']"
+                :popper-triggers="['hover']"
+                :delay="{ show: 100, hide: 100 }"
+                placement="left"
+                :distance="8"
+              >
+                <span
+                  class="sym-dot"
+                  :style="{ background: severityColor(symptomsForDate(row.date)[0].severity) }"
+                />
+                <template #popper>
+                  <div class="popover sym-popover">
+                    <div class="sym-pop-title">Symptoms · {{ formatDate(row.date) }}</div>
+                    <ul class="sym-pop-list">
+                      <li v-for="s in symptomsForDate(row.date)" :key="s.symptomId">
+                        <span class="sym-pop-sev" :style="{ color: severityColor(s.severity) }">{{ s.severity }}</span>
+                        <span class="sym-pop-name">{{ s.name }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </template>
+              </VDropdown>
+            </td>
+            <td class="lt-note">
+              <VDropdown
+                v-if="row.note"
+                :triggers="['hover', 'focus']"
+                :popper-triggers="['hover']"
+                :delay="{ show: 100, hide: 100 }"
+                placement="left"
+                :distance="8"
+              >
+                <span class="note-icon" @click.stop>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-label="Note"
+                  >
+                    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    <path d="m15 5 4 4" />
+                  </svg>
+                </span>
+                <template #popper>
+                  <div class="popover note-popover">
+                    <div class="note-pop-title">Note · {{ formatDate(row.date) }}</div>
+                    <div class="note-pop-text">{{ row.note }}</div>
+                  </div>
+                </template>
+              </VDropdown>
+            </td>
           </tr>
         </tbody>
       </table>
       <p v-else class="empty">No entries yet.</p>
-      <div
-        v-if="hoveredTableNote"
-        class="note-tooltip"
-        :style="{ left: hoveredTableNote.x + 'px', top: hoveredTableNote.y + 'px' }"
-      >
-        <div class="note-tooltip-date">{{ formatDate(hoveredTableNote.date) }}</div>
-        <div class="note-tooltip-text">{{ hoveredTableNote.text }}</div>
-      </div>
       </div>
     </div>
   </div>
@@ -933,26 +1006,26 @@ function formatDate(dateStr) {
 }
 .range-buttons {
   display: inline-flex;
-  gap: 0;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  padding: 2px;
+  gap: 2px;
 }
 .range-buttons button {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  margin-left: -1px;
-  background: var(--bg);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
+  padding: 0.25rem 0.65rem;
+  background: none;
+  border: none;
+  font-size: var(--font-size-s);
   color: var(--text-secondary);
-  transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
-.range-buttons button:first-child { margin-left: 0; }
+.range-buttons button:hover { color: var(--text); }
 .range-buttons button.active {
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border-color: var(--primary);
-  position: relative;
-  z-index: 1;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+  box-shadow: var(--shadow-s);
 }
 
 /* Chip bar */
@@ -977,8 +1050,8 @@ function formatDate(dateStr) {
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
   white-space: nowrap;
 }
-.chip:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
-.chip:hover .chip-x { color: var(--primary); }
+.chip:hover { background: var(--primary-soft); color: var(--text); border-color: var(--text-secondary); }
+.chip:hover .chip-x { color: var(--text); }
 .chip-dot {
   width: 8px;
   height: 8px;
@@ -1048,45 +1121,30 @@ function formatDate(dateStr) {
 
 .chart-container { height: 360px; position: relative; }
 
-.note-tooltip {
+.note-chart-popover {
   position: absolute;
   transform: translate(-50%, calc(-100% - 14px));
-  background: var(--text);
-  color: var(--surface);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-small);
-  font-size: var(--font-size-xs);
-  line-height: 1.35;
-  max-width: 280px;
-  white-space: pre-wrap;
   pointer-events: none;
   z-index: 20;
-  box-shadow: var(--shadow-m);
 }
-.note-tooltip-date {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  opacity: 0.7;
-  margin-bottom: var(--space-1);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-}
-.note-tooltip-text { color: var(--surface); }
 
 .table-wrap { position: relative; }
 .note-icon {
-  display: inline-block;
-  margin-left: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: help;
-  font-size: var(--font-size-s);
-  line-height: 1;
+  color: var(--text-tertiary);
+  transition: color var(--transition-fast);
 }
+.note-icon:hover { color: var(--text); }
+.note-icon svg { width: 14px; height: 14px; display: block; }
 
 /* Log history table */
 .log-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }
 .log-table th {
@@ -1106,8 +1164,18 @@ function formatDate(dateStr) {
 .log-table tbody tr:last-child td { border-bottom: none; }
 .lt-row { cursor: pointer; }
 .lt-row:hover td { background: var(--bg); }
-.lt-date { text-align: left; white-space: nowrap; }
+.log-table td.lt-date { text-align: left; white-space: nowrap; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: var(--tracking-wide); font-weight: var(--font-weight-medium); }
 .lt-num { text-align: right; white-space: nowrap; }
+.dose-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.4;
+}
 .log-table td.lt-cal { color: var(--color-cal); font-weight: var(--font-weight-bold); }
 .log-table td.lt-pro { color: var(--color-protein); }
 .log-table td.lt-fat { color: var(--color-fat); }
@@ -1121,7 +1189,84 @@ function formatDate(dateStr) {
 .log-table td.score-good { color: var(--success); }
 .log-table td.score-ok { color: var(--warning); }
 .log-table td.score-bad { color: var(--danger); }
-.lt-sym { text-align: center; width: 4rem; color: var(--success); }
+.lt-sym { text-align: center; width: 4rem; }
+.lt-note { text-align: center; width: 3rem; }
+.sym-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  cursor: default;
+}
+.sym-popover {
+  min-width: 200px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--font-size-s);
+  box-shadow: var(--shadow-m);
+  columns: auto;
+}
+.sym-pop-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+.sym-pop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sym-pop-list li {
+  font-size: var(--font-size-s);
+  line-height: 1.4;
+}
+.sym-pop-sev {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  margin-right: 6px;
+  background: none;
+  padding: 0;
+}
+.sym-pop-name { color: var(--text); }
+
+.note-popover {
+  min-width: 220px;
+  max-width: 320px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--font-size-s);
+  box-shadow: var(--shadow-m);
+  columns: auto;
+}
+.note-pop-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+.note-pop-text {
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
 
 .empty { color: var(--text-secondary); font-size: var(--font-size-s); text-align: center; padding: var(--space-6) 0; }
 </style>

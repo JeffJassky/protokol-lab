@@ -14,8 +14,10 @@ export const useCompoundsStore = defineStore('compounds', () => {
     loaded.value = true;
   }
 
-  async function create({ name, halfLifeDays, intervalDays, doseUnit, color }) {
-    const data = await api.post('/api/compounds', { name, halfLifeDays, intervalDays, doseUnit, color });
+  async function create({ name, halfLifeDays, intervalDays, doseUnit, color, kineticsShape }) {
+    const data = await api.post('/api/compounds', {
+      name, halfLifeDays, intervalDays, doseUnit, color, kineticsShape,
+    });
     compounds.value.push(data.compound);
     return data.compound;
   }

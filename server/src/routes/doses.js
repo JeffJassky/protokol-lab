@@ -17,8 +17,26 @@ router.get('/', async (req, res) => {
   res.json({ entries });
 });
 
+// Absorption half-life (days) per kinetics shape. Bolus is special-cased.
+const ABSORPTION_HALF_LIFE_DAYS = { subq: 0.25, depot: 1 };
+
+// Active amount in central compartment at `daysSince` after a dose, given the
+// compound's kinetics shape. Bolus = single-exp decay. Subq/depot = Bateman
+// (absorption + elimination), normalized so total exposure equals D/ke.
+function activeAmount(dose, halfLifeDays, shape, daysSince) {
+  if (daysSince < 0 || halfLifeDays <= 0) return 0;
+  const ke = Math.LN2 / halfLifeDays;
+  if (shape === 'bolus') return dose * Math.exp(-ke * daysSince);
+  const absH = ABSORPTION_HALF_LIFE_DAYS[shape] ?? ABSORPTION_HALF_LIFE_DAYS.subq;
+  const ka = Math.LN2 / absH;
+  if (Math.abs(ka - ke) < 1e-6) {
+    return dose * ke * daysSince * Math.exp(-ke * daysSince);
+  }
+  return dose * (ka / (ka - ke)) * (Math.exp(-ke * daysSince) - Math.exp(-ka * daysSince));
+}
+
 // Compute PK curves — one per compound — as estimated active amount in system
-// over time. Each compound uses its own half-life.
+// over time. Each compound uses its own half-life + kinetics shape.
 router.get('/pk', async (req, res) => {
   const { from, to, points = 100 } = req.query;
 
@@ -48,22 +66,21 @@ router.get('/pk', async (req, res) => {
   for (const [compoundId, doses] of dosesByCompound) {
     const compound = compoundById.get(compoundId);
     if (!compound) continue; // Orphaned logs (shouldn't happen). Skip.
-    const decay = Math.LN2 / compound.halfLifeDays;
+    const shape = compound.kineticsShape || 'subq';
     const curve = [];
     for (let i = 0; i < n; i++) {
       const t = new Date(startDate.getTime() + stepMs * i);
       let active = 0;
       for (const dose of doses) {
         const daysSince = (t - dose.date) / 86400000;
-        if (daysSince >= 0) {
-          active += dose.value * Math.exp(-decay * daysSince);
-        }
+        active += activeAmount(dose.value, compound.halfLifeDays, shape, daysSince);
       }
       curve.push({ date: t.toISOString(), activeValue: Number(active.toFixed(4)) });
     }
     curves.push({
       compoundId,
       halfLifeDays: compound.halfLifeDays,
+      kineticsShape: shape,
       doseUnit: compound.doseUnit,
       curve,
     });

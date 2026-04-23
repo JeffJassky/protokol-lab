@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch, reactive } from 'vue';
 import { useSettingsStore } from '../stores/settings.js';
 import { useCompoundsStore } from '../stores/compounds.js';
+import { useDosesStore } from '../stores/doses.js';
 import { usePushStore } from '../stores/push.js';
 import { usePwa } from '../composables/usePwa.js';
 import { useTheme } from '../composables/useTheme.js';
@@ -9,9 +10,27 @@ import InstallInstructions from '../components/InstallInstructions.vue';
 
 const store = useSettingsStore();
 const compoundsStore = useCompoundsStore();
+const dosesStore = useDosesStore();
 const pushStore = usePushStore();
 const pwa = usePwa();
 const theme = useTheme();
+
+function nextDoseInfo(compound) {
+  const last = dosesStore.latestDoseFor(compound._id);
+  if (!last) return { label: 'No doses logged', status: 'none' };
+  const interval = Number(compound.intervalDays) || 0;
+  if (!interval) return { label: '—', status: 'none' };
+  const lastDate = new Date(String(last.date).slice(0, 10));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const next = new Date(lastDate);
+  next.setDate(next.getDate() + interval);
+  const days = Math.round((next - today) / 86400000);
+  if (days < 0) return { label: `${-days}d overdue`, status: 'overdue' };
+  if (days === 0) return { label: 'Due today', status: 'today' };
+  if (days === 1) return { label: 'Due tomorrow', status: 'upcoming' };
+  return { label: `In ${days}d`, status: 'upcoming' };
+}
 
 // ---- Notifications ------------------------------------------------------
 const trackReminderEnabled = ref(false);
@@ -20,16 +39,6 @@ const notificationError = ref('');
 const notificationSaving = ref(false);
 const testSending = ref(false);
 const testStatus = ref(''); // 'ok' | 'err' | ''
-
-const WEEKDAYS = [
-  { value: 0, label: 'S' },
-  { value: 1, label: 'M' },
-  { value: 2, label: 'T' },
-  { value: 3, label: 'W' },
-  { value: 4, label: 'T' },
-  { value: 5, label: 'F' },
-  { value: 6, label: 'S' },
-];
 
 const notificationsBlockedByIos = computed(
   () => pwa.platform.value === 'ios' && !pwa.installed.value,
@@ -97,6 +106,7 @@ const carbsGrams = ref(200);
 const saving = ref(false);
 const saved = ref(false);
 const error = ref('');
+const hydrated = ref(false);
 
 const totalHeightInches = computed(() => heightFeet.value * 12 + heightInches.value);
 
@@ -196,7 +206,40 @@ function onAllocDown(e) {
 
 // ---- Compounds ----------------------------------------------------------
 
-const compoundDrafts = reactive({}); // id → { halfLifeDays, intervalDays, color }
+const KINETICS_SHAPES = [
+  { value: 'bolus', label: 'Bolus', blurb: 'Instant peak, then exponential decay. IV-like or anything that hits peak almost immediately.' },
+  { value: 'subq', label: 'Sub-Q', blurb: 'Rises over a few hours, then decays. Default for self-injected peptides.' },
+  { value: 'depot', label: 'Depot', blurb: 'Slow release: lower peak, much longer tail. Long-acting weeklies and oil-based formulations.' },
+];
+
+// Mini sparkline path for the profile popover. Single dose, normalized to
+// each shape's own peak so the silhouette differences (instant vs ramp vs
+// slow rise) read clearly at small size.
+function profileSparkline(shape) {
+  const W = 96, H = 28, PAD = 2;
+  const N = 64, tMax = 6;
+  const halfLife = 1;
+  const ke = Math.LN2 / halfLife;
+  const ABS = { subq: 0.25, depot: 1 };
+  const ka = shape === 'bolus' ? null : Math.LN2 / ABS[shape];
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    const t = (i / (N - 1)) * tMax;
+    let y;
+    if (shape === 'bolus') y = Math.exp(-ke * t);
+    else if (Math.abs(ka - ke) < 1e-6) y = ke * t * Math.exp(-ke * t);
+    else y = (ka / (ka - ke)) * (Math.exp(-ke * t) - Math.exp(-ka * t));
+    pts.push({ t, y });
+  }
+  const maxY = Math.max(...pts.map((p) => p.y)) || 1;
+  return pts.map((p, i) => {
+    const x = PAD + (p.t / tMax) * (W - 2 * PAD);
+    const y = H - PAD - (p.y / maxY) * (H - 2 * PAD);
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(' ');
+}
+
+const compoundDrafts = reactive({}); // id → { halfLifeDays, intervalDays, color, kineticsShape, ... }
 const compoundSaveState = reactive({}); // id → 'saving' | 'saved' | 'error'
 const newCompound = reactive({
   name: '',
@@ -204,40 +247,19 @@ const newCompound = reactive({
   intervalDays: 7,
   doseUnit: 'mg',
   color: '',
+  kineticsShape: 'subq',
 });
 const compoundsError = ref('');
-
-const compoundRemindersExpanded = reactive({}); // id → bool
 
 function startCompoundDraft(c) {
   compoundDrafts[c._id] = {
     halfLifeDays: c.halfLifeDays,
     intervalDays: c.intervalDays,
     color: c.color || '',
+    kineticsShape: c.kineticsShape || 'subq',
     reminderEnabled: Boolean(c.reminderEnabled),
-    reminderTimes: Array.isArray(c.reminderTimes) ? [...c.reminderTimes] : [],
-    reminderWeekdays: Array.isArray(c.reminderWeekdays) ? [...c.reminderWeekdays] : [],
+    reminderTime: c.reminderTime || '09:00',
   };
-}
-
-function toggleCompoundReminderWeekday(compoundId, weekday) {
-  const draft = compoundDrafts[compoundId];
-  if (!draft) return;
-  const idx = draft.reminderWeekdays.indexOf(weekday);
-  if (idx >= 0) draft.reminderWeekdays.splice(idx, 1);
-  else draft.reminderWeekdays.push(weekday);
-}
-
-function addCompoundReminderTime(compoundId) {
-  const draft = compoundDrafts[compoundId];
-  if (!draft) return;
-  draft.reminderTimes.push('09:00');
-}
-
-function removeCompoundReminderTime(compoundId, idx) {
-  const draft = compoundDrafts[compoundId];
-  if (!draft) return;
-  draft.reminderTimes.splice(idx, 1);
 }
 
 async function saveCompoundReminder(compound) {
@@ -247,8 +269,7 @@ async function saveCompoundReminder(compound) {
   try {
     await compoundsStore.update(compound._id, {
       reminderEnabled: draft.reminderEnabled,
-      reminderTimes: draft.reminderTimes.filter((t) => /^\d{2}:\d{2}$/.test(t)),
-      reminderWeekdays: draft.reminderWeekdays,
+      reminderTime: /^\d{2}:\d{2}$/.test(draft.reminderTime) ? draft.reminderTime : '',
     });
     compoundSaveState[compound._id] = 'saved';
     setTimeout(() => { compoundSaveState[compound._id] = null; }, 1200);
@@ -280,6 +301,7 @@ async function saveCompoundDraft(compound) {
       halfLifeDays: Number(draft.halfLifeDays),
       intervalDays: Number(draft.intervalDays),
       color: draft.color,
+      kineticsShape: draft.kineticsShape,
     });
     compoundSaveState[compound._id] = 'saved';
     setTimeout(() => { compoundSaveState[compound._id] = null; }, 1200);
@@ -310,6 +332,7 @@ async function handleAddCompound() {
       intervalDays: Number(newCompound.intervalDays),
       doseUnit: newCompound.doseUnit,
       color: newCompound.color,
+      kineticsShape: newCompound.kineticsShape,
     });
     startCompoundDraft(created);
     newCompound.name = '';
@@ -317,6 +340,7 @@ async function handleAddCompound() {
     newCompound.intervalDays = 7;
     newCompound.doseUnit = 'mg';
     newCompound.color = '';
+    newCompound.kineticsShape = 'subq';
   } catch (err) {
     compoundsError.value = err.message;
   }
@@ -329,6 +353,7 @@ onMounted(async () => {
   if (!compoundsStore.loaded) {
     await compoundsStore.fetchAll();
   }
+  dosesStore.fetchEntries().catch(() => {});
   for (const c of compoundsStore.compounds) startCompoundDraft(c);
   if (store.settings) {
     const s = store.settings;
@@ -345,6 +370,7 @@ onMounted(async () => {
     trackReminderEnabled.value = Boolean(s.trackReminder?.enabled);
     trackReminderTime.value = s.trackReminder?.time || '20:00';
   }
+  hydrated.value = true;
 
   // Push subscription state — safe to call unconditionally; store guards
   // for unsupported browsers.
@@ -356,9 +382,8 @@ onMounted(async () => {
   }
 });
 
-async function handleSave() {
+async function persistSettings() {
   error.value = '';
-  saved.value = false;
   saving.value = true;
   try {
     await store.updateSettings({
@@ -375,66 +400,117 @@ async function handleSave() {
       },
     });
     saved.value = true;
+    setTimeout(() => { saved.value = false; }, 1500);
   } catch (err) {
     error.value = err.message;
   } finally {
     saving.value = false;
   }
 }
+
+let saveTimer = null;
+function scheduleSave() {
+  if (!hydrated.value) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persistSettings, 600);
+}
+
+watch(
+  [sex, heightFeet, heightInches, currentWeightLbs, goalWeightLbs, bmr,
+   calories, proteinGrams, fatGrams, carbsGrams],
+  scheduleSave,
+);
 </script>
 
 <template>
   <div class="settings-page">
-    <h2>Settings</h2>
+    <div class="settings-head">
+      <h2>Settings</h2>
+      <span v-if="saving" class="autosave-status">Saving…</span>
+      <span v-else-if="saved" class="autosave-status ok">Saved</span>
+    </div>
 
-    <form @submit.prevent="handleSave">
+    <form @submit.prevent>
       <div class="card">
         <h3>Profile</h3>
-        <div class="field">
-          <label>Sex</label>
-          <div class="radio-group">
-            <label class="radio"><input type="radio" v-model="sex" value="male" /> Male</label>
-            <label class="radio"><input type="radio" v-model="sex" value="female" /> Female</label>
+
+        <div class="stat-grid">
+          <label class="stat-cell">
+            <span class="stat-label">Current</span>
+            <span class="stat-value-wrap">
+              <input type="number" v-model.number="currentWeightLbs" step="0.1" required class="stat-input" />
+              <span class="stat-unit">lbs</span>
+            </span>
+          </label>
+          <label class="stat-cell">
+            <span class="stat-label">Goal</span>
+            <span class="stat-value-wrap">
+              <input type="number" v-model.number="goalWeightLbs" step="0.1" class="stat-input" placeholder="—" />
+              <span class="stat-unit">lbs</span>
+            </span>
+          </label>
+          <label class="stat-cell">
+            <span class="stat-label">BMR</span>
+            <span class="stat-value-wrap">
+              <input type="number" v-model.number="bmr" step="1" class="stat-input" placeholder="—" />
+              <span class="stat-unit">kcal/day</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="bio-row">
+          <div class="bio-group">
+            <span class="bio-label">Sex</span>
+            <div class="seg-control">
+              <button type="button" class="seg-btn" :class="{ active: sex === 'male' }" @click="sex = 'male'">Male</button>
+              <button type="button" class="seg-btn" :class="{ active: sex === 'female' }" @click="sex = 'female'">Female</button>
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label>Height</label>
-          <div class="inline-fields">
-            <input type="number" v-model.number="heightFeet" min="3" max="8" class="sm" /> <span>ft</span>
-            <input type="number" v-model.number="heightInches" min="0" max="11" class="sm" /> <span>in</span>
+          <div class="bio-group">
+            <span class="bio-label">Height</span>
+            <div class="bio-inline">
+              <input type="number" v-model.number="heightFeet" min="3" max="8" class="bio-input" />
+              <span class="bio-unit">ft</span>
+              <input type="number" v-model.number="heightInches" min="0" max="11" class="bio-input" />
+              <span class="bio-unit">in</span>
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label for="weight">Current Weight (lbs)</label>
-          <input id="weight" type="number" v-model.number="currentWeightLbs" step="0.1" required />
-        </div>
-        <div class="field">
-          <label for="goal">Goal Weight (lbs)</label>
-          <input id="goal" type="number" v-model.number="goalWeightLbs" step="0.1" />
-        </div>
-        <div class="field">
-          <label for="bmr">BMR (kcal/day)</label>
-          <input id="bmr" type="number" v-model.number="bmr" step="1" placeholder="Optional" />
-          <p class="field-hint">Basal metabolic rate — calories burned at rest. Leave blank if unknown.</p>
         </div>
       </div>
 
       <div class="card">
         <h3>Daily Targets</h3>
 
-        <div class="field">
-          <label for="calories">Calories</label>
-          <input id="calories" type="number" v-model.number="calories" min="400" step="50" required />
-          <p v-if="calorieDelta != null" class="field-hint calc">
-            <span :class="calorieDelta < 0 ? 'neg' : 'pos'">
-              {{ signed(calorieDelta) }} kcal/day
-            </span>
-            vs BMR ·
-            <span :class="weeklyLbs < 0 ? 'neg' : 'pos'">
-              {{ signed(weeklyLbs, 2) }} lbs/week
-            </span>
-          </p>
-          <p v-else class="field-hint">Set BMR above to see estimated weekly change.</p>
+        <div class="cal-hero">
+          <label class="cal-hero-main">
+            <span class="cal-hero-label">Calories / day</span>
+            <input
+              id="calories"
+              type="number"
+              v-model.number="calories"
+              min="400"
+              step="50"
+              required
+              class="cal-hero-input"
+            />
+          </label>
+          <div v-if="calorieDelta != null" class="cal-hero-aside">
+            <div class="cal-stat">
+              <span class="cal-stat-label">vs BMR</span>
+              <span class="cal-stat-value" :class="calorieDelta < 0 ? 'neg' : 'pos'">
+                {{ signed(calorieDelta) }}
+                <span class="cal-stat-unit">kcal</span>
+              </span>
+            </div>
+            <div class="cal-stat">
+              <span class="cal-stat-label">Projected</span>
+              <span class="cal-stat-value" :class="weeklyLbs < 0 ? 'neg' : 'pos'">
+                {{ signed(weeklyLbs, 2) }}
+                <span class="cal-stat-unit">lbs/wk</span>
+              </span>
+            </div>
+          </div>
+          <p v-else class="cal-hero-hint">Set BMR in Profile to see deficit + projected weekly change.</p>
         </div>
 
         <!-- Single allocation bar with two drag handles:
@@ -478,10 +554,6 @@ async function handleSave() {
       </div>
 
       <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="saved" class="success">Settings saved.</p>
-      <button type="submit" class="btn-primary" :disabled="saving">
-        {{ saving ? 'Saving...' : 'Save Settings' }}
-      </button>
     </form>
 
     <div class="card">
@@ -495,30 +567,55 @@ async function handleSave() {
           :key="c._id"
           class="compound-row"
           :class="{ disabled: !c.enabled }"
+          :style="c.enabled && c.color ? { borderLeftColor: c.color, borderLeftWidth: '3px' } : null"
         >
-          <div class="compound-row-top">
-            <label class="compound-toggle">
+          <div class="compound-lead">
+            <label class="compound-enable" :title="c.enabled ? 'Disable' : 'Enable'">
               <input
                 type="checkbox"
                 :checked="c.enabled"
                 @change.stop="toggleCompoundEnabled(c)"
                 @click.stop
               />
-              <span class="compound-name">
-                {{ c.name }}
-                <span v-if="c.isSystem" class="compound-tag">system</span>
-              </span>
+              <span class="compound-swatch" :style="{ background: c.color || 'var(--border)' }" />
             </label>
+            <div class="compound-identity">
+              <div class="compound-name-row">
+                <span class="compound-name">{{ c.name }}</span>
+                <svg
+                  v-if="c.isSystem"
+                  class="compound-lock"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-label="System compound"
+                >
+                  <rect x="4" y="11" width="16" height="9" rx="0" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+              </div>
+              <span
+                v-if="c.enabled"
+                class="compound-next"
+                :class="`status-${nextDoseInfo(c).status}`"
+              >{{ nextDoseInfo(c).label }}</span>
+              <span v-else class="compound-next muted">Disabled</span>
+            </div>
             <button
               v-if="!c.isSystem"
               type="button"
               class="compound-del"
               @click.stop="handleDeleteCompound(c)"
-            >Delete</button>
+              title="Delete compound"
+            >×</button>
           </div>
-          <div v-if="draftFor(c._id)" class="compound-row-bot">
-            <label class="compound-field">
-              <span>Half-life (days)</span>
+          <div v-if="draftFor(c._id) && c.enabled" class="compound-params">
+            <label class="param-chip">
+              <span class="param-label">Half-life</span>
               <input
                 type="number"
                 step="0.25"
@@ -526,9 +623,10 @@ async function handleSave() {
                 v-model.number="draftFor(c._id).halfLifeDays"
                 @change="saveCompoundDraft(c)"
               />
+              <span class="param-unit">d</span>
             </label>
-            <label class="compound-field">
-              <span>Interval (days)</span>
+            <label class="param-chip">
+              <span class="param-label">Interval</span>
               <input
                 type="number"
                 step="0.5"
@@ -536,13 +634,53 @@ async function handleSave() {
                 v-model.number="draftFor(c._id).intervalDays"
                 @change="saveCompoundDraft(c)"
               />
+              <span class="param-unit">d</span>
             </label>
-            <label class="compound-field small">
-              <span>Unit</span>
-              <span class="compound-static">{{ c.doseUnit }}</span>
-            </label>
-            <label class="compound-field small">
-              <span>Color</span>
+            <VDropdown
+              :triggers="['hover', 'focus']"
+              :popper-triggers="['hover']"
+              :delay="{ show: 200, hide: 100 }"
+              placement="bottom-start"
+              :distance="6"
+            >
+              <div class="param-chip shape-chip">
+                <span class="param-label">Profile</span>
+                <select
+                  v-model="draftFor(c._id).kineticsShape"
+                  @change="saveCompoundDraft(c)"
+                >
+                  <option v-for="s in KINETICS_SHAPES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                </select>
+              </div>
+              <template #popper>
+                <div class="popover profile-pop">
+                  <h4 class="profile-pop-title">PK profile</h4>
+                  <p class="profile-pop-lede">
+                    Half-life sets how fast the dose clears. The profile sets how
+                    it gets there — instant peak vs. gradual rise from absorption.
+                  </p>
+                  <ul class="profile-pop-list">
+                    <li v-for="s in KINETICS_SHAPES" :key="s.value">
+                      <svg class="profile-spark" viewBox="0 0 96 28" preserveAspectRatio="none" aria-hidden="true">
+                        <path :d="profileSparkline(s.value)" fill="none" stroke="currentColor" stroke-width="1.5" />
+                      </svg>
+                      <div class="profile-pop-name">{{ s.label }}</div>
+                      <div class="profile-pop-blurb">{{ s.blurb }}</div>
+                    </li>
+                  </ul>
+                  <p class="profile-pop-hint">
+                    Not sure which fits {{ c.name }}? Ask the chat assistant —
+                    it has your full compound + dose context.
+                  </p>
+                </div>
+              </template>
+            </VDropdown>
+            <div class="param-chip static">
+              <span class="param-label">Unit</span>
+              <span class="param-static-val">{{ c.doseUnit }}</span>
+            </div>
+            <label class="param-chip color-chip">
+              <span class="param-label">Color</span>
               <input
                 type="color"
                 v-model="draftFor(c._id).color"
@@ -561,90 +699,22 @@ async function handleSave() {
 
           <!-- Dose reminders (per-compound) -->
           <div v-if="draftFor(c._id) && c.enabled" class="compound-reminder">
-            <button
-              type="button"
-              class="reminder-toggle"
-              @click="compoundRemindersExpanded[c._id] = !compoundRemindersExpanded[c._id]"
-            >
-              <span class="reminder-ind" :class="{ on: draftFor(c._id).reminderEnabled }" />
-              Dose reminders
-              <span class="reminder-sub">
-                <template v-if="draftFor(c._id).reminderEnabled && draftFor(c._id).reminderTimes.length">
-                  {{ draftFor(c._id).reminderTimes.join(', ') }}
-                  <template v-if="draftFor(c._id).reminderWeekdays.length">
-                    · {{ draftFor(c._id).reminderWeekdays.map((d) => WEEKDAYS[d].label).join('') }}
-                  </template>
-                </template>
-                <template v-else-if="draftFor(c._id).reminderEnabled">No times set</template>
-                <template v-else>Off</template>
-              </span>
-              <span class="reminder-chev" :class="{ open: compoundRemindersExpanded[c._id] }">▾</span>
-            </button>
-
-            <div v-if="compoundRemindersExpanded[c._id]" class="reminder-body">
-              <label class="notif-inline small">
-                <input
-                  type="checkbox"
-                  v-model="draftFor(c._id).reminderEnabled"
-                  @change="saveCompoundReminder(c)"
-                />
-                Remind me for {{ c.name }}
-              </label>
-
-              <div
-                class="reminder-field"
-                :class="{ disabled: !draftFor(c._id).reminderEnabled }"
-              >
-                <span class="reminder-label">Days</span>
-                <div class="weekday-row">
-                  <button
-                    v-for="wd in WEEKDAYS"
-                    :key="wd.value"
-                    type="button"
-                    class="weekday-btn"
-                    :class="{ active: draftFor(c._id).reminderWeekdays.includes(wd.value) }"
-                    :disabled="!draftFor(c._id).reminderEnabled"
-                    @click="toggleCompoundReminderWeekday(c._id, wd.value); saveCompoundReminder(c)"
-                  >{{ wd.label }}</button>
-                </div>
-                <span class="reminder-hint">
-                  Empty = every day.
-                </span>
-              </div>
-
-              <div
-                class="reminder-field"
-                :class="{ disabled: !draftFor(c._id).reminderEnabled }"
-              >
-                <span class="reminder-label">Times</span>
-                <div class="time-list">
-                  <div
-                    v-for="(t, idx) in draftFor(c._id).reminderTimes"
-                    :key="idx"
-                    class="time-row"
-                  >
-                    <input
-                      type="time"
-                      :value="t"
-                      :disabled="!draftFor(c._id).reminderEnabled"
-                      @change="draftFor(c._id).reminderTimes[idx] = $event.target.value; saveCompoundReminder(c)"
-                    />
-                    <button
-                      type="button"
-                      class="time-remove"
-                      :disabled="!draftFor(c._id).reminderEnabled"
-                      @click="removeCompoundReminderTime(c._id, idx); saveCompoundReminder(c)"
-                    >×</button>
-                  </div>
-                  <button
-                    type="button"
-                    class="time-add"
-                    :disabled="!draftFor(c._id).reminderEnabled"
-                    @click="addCompoundReminderTime(c._id); saveCompoundReminder(c)"
-                  >+ Add time</button>
-                </div>
-              </div>
-            </div>
+            <label class="switch" :title="draftFor(c._id).reminderEnabled ? 'Reminder on' : 'Reminder off'">
+              <input
+                type="checkbox"
+                v-model="draftFor(c._id).reminderEnabled"
+                @change="saveCompoundReminder(c)"
+              />
+              <span class="switch-track"><span class="switch-thumb" /></span>
+            </label>
+            <span class="reminder-inline-label">Remind on dose days at</span>
+            <input
+              type="time"
+              class="reminder-time"
+              v-model="draftFor(c._id).reminderTime"
+              :disabled="!draftFor(c._id).reminderEnabled"
+              @change="saveCompoundReminder(c)"
+            />
           </div>
         </li>
       </ul>
@@ -671,6 +741,12 @@ async function handleSave() {
               <option value="mcg">mcg</option>
               <option value="iu">iu</option>
               <option value="ml">ml</option>
+            </select>
+          </label>
+          <label class="compound-field">
+            <span>Shape</span>
+            <select v-model="newCompound.kineticsShape">
+              <option v-for="s in KINETICS_SHAPES" :key="s.value" :value="s.value">{{ s.label }}</option>
             </select>
           </label>
           <label class="compound-field small">
@@ -709,21 +785,26 @@ async function handleSave() {
           <InstallInstructions />
         </div>
 
-        <!-- Master toggle -->
-        <div class="notif-toggle-row">
-          <div>
-            <div class="notif-title">Notifications on this device</div>
-            <div class="notif-sub">
-              <template v-if="pushStore.enabled">Enabled.</template>
-              <template v-else-if="pushStore.permission === 'denied'">
-                Blocked by the browser — re-enable in your device settings.
-              </template>
-              <template v-else>Off.</template>
+        <!-- Device status hero -->
+        <div class="notif-hero" :class="{ on: pushStore.enabled, blocked: pushStore.permission === 'denied' }">
+          <div class="notif-hero-main">
+            <span class="notif-hero-ind" />
+            <div class="notif-hero-text">
+              <div class="notif-hero-state">
+                <template v-if="pushStore.enabled">Active on this device</template>
+                <template v-else-if="pushStore.permission === 'denied'">Blocked by browser</template>
+                <template v-else>Not enabled</template>
+              </div>
+              <div class="notif-hero-sub">
+                <template v-if="pushStore.enabled">Push reminders will be delivered here.</template>
+                <template v-else-if="pushStore.permission === 'denied'">Re-enable notifications in your device settings.</template>
+                <template v-else>Turn on to receive dose and tracking reminders.</template>
+              </div>
             </div>
           </div>
           <button
             type="button"
-            class="notif-toggle-btn"
+            class="notif-hero-btn"
             :class="{ on: pushStore.enabled }"
             :disabled="pushStore.loading || notificationsBlockedByIos"
             @click="toggleNotifications"
@@ -732,69 +813,79 @@ async function handleSave() {
           </button>
         </div>
 
-        <!-- Per-category opt-outs + tracking reminder -->
-        <div v-if="pushStore.enabled" class="notif-categories">
-          <label class="notif-cat">
-            <input
-              type="checkbox"
-              :checked="pushStore.subscriptionDoc?.categories?.doseReminder !== false"
-              @change="toggleCategory('doseReminder')"
-            />
-            <span>Dose reminders</span>
-            <span class="notif-cat-sub">Triggered by each compound's schedule below.</span>
-          </label>
-          <label class="notif-cat">
-            <input
-              type="checkbox"
-              :checked="pushStore.subscriptionDoc?.categories?.trackReminder !== false"
-              @change="toggleCategory('trackReminder')"
-            />
-            <span>Daily tracking reminder</span>
-            <span class="notif-cat-sub">Evening nudge if you haven't logged yet.</span>
-          </label>
-        </div>
-
-        <div v-if="pushStore.enabled" class="notif-track-time">
-          <div class="notif-track-row">
-            <label class="notif-inline">
-              <input type="checkbox" v-model="trackReminderEnabled" />
-              Send tracking reminder at
+        <template v-if="pushStore.enabled">
+          <div class="notif-section-label">Categories</div>
+          <div class="notif-categories">
+            <label class="notif-cat">
+              <input
+                type="checkbox"
+                :checked="pushStore.subscriptionDoc?.categories?.doseReminder !== false"
+                @change="toggleCategory('doseReminder')"
+              />
+              <span>Dose reminders</span>
+              <span class="notif-cat-sub">Triggered by each compound's schedule below.</span>
             </label>
-            <input
-              type="time"
-              v-model="trackReminderTime"
-              :disabled="!trackReminderEnabled"
-              class="notif-time"
-            />
+            <label class="notif-cat">
+              <input
+                type="checkbox"
+                :checked="pushStore.subscriptionDoc?.categories?.trackReminder !== false"
+                @change="toggleCategory('trackReminder')"
+              />
+              <span>Daily tracking reminder</span>
+              <span class="notif-cat-sub">Evening nudge if you haven't logged yet.</span>
+            </label>
+          </div>
+
+          <div class="notif-test-row">
             <button
               type="button"
-              class="btn-secondary sm"
-              :disabled="notificationSaving"
-              @click="saveTrackReminder"
+              class="btn-secondary"
+              :disabled="testSending"
+              @click="sendTest"
             >
-              {{ notificationSaving ? 'Saving…' : 'Save' }}
+              {{ testSending ? 'Sending…' : 'Send test notification' }}
             </button>
+            <span v-if="testStatus === 'ok'" class="notif-success">Sent — check your device.</span>
+            <span v-else-if="testStatus === 'err'" class="notif-err">Failed. Check logs.</span>
           </div>
-          <p class="notif-sub">Won't fire if you've already logged weight, meals, symptoms, or a dose that day.</p>
-        </div>
-
-        <div v-if="pushStore.enabled" class="notif-test-row">
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="testSending"
-            @click="sendTest"
-          >
-            {{ testSending ? 'Sending…' : 'Send test notification' }}
-          </button>
-          <span v-if="testStatus === 'ok'" class="notif-success">Sent — check your device.</span>
-          <span v-else-if="testStatus === 'err'" class="notif-err">Failed. Check logs.</span>
-        </div>
+        </template>
 
         <p v-if="notificationError || pushStore.error" class="error">
           {{ notificationError || pushStore.error }}
         </p>
       </template>
+    </div>
+
+    <!-- Daily tracking reminder ---------------------------------------- -->
+    <div
+      v-if="pushStore.supported && pushStore.serverEnabled"
+      class="card"
+    >
+      <h3>Daily tracking</h3>
+      <p class="track-lead">
+        Evening nudge if you haven't logged weight, meals, symptoms, or a dose that day.
+      </p>
+      <div class="track-row" :class="{ disabled: !pushStore.enabled }">
+        <label class="track-toggle">
+          <input type="checkbox" v-model="trackReminderEnabled" :disabled="!pushStore.enabled" />
+          <span>Remind me at</span>
+        </label>
+        <input
+          type="time"
+          v-model="trackReminderTime"
+          :disabled="!trackReminderEnabled || !pushStore.enabled"
+          class="track-time"
+        />
+        <button
+          type="button"
+          class="btn-secondary sm"
+          :disabled="notificationSaving || !pushStore.enabled"
+          @click="saveTrackReminder"
+        >
+          {{ notificationSaving ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
+      <p v-if="!pushStore.enabled" class="track-hint">Enable notifications above to activate this reminder.</p>
     </div>
 
     <div class="card">
@@ -827,7 +918,21 @@ async function handleSave() {
 </template>
 
 <style scoped>
-.settings-page { max-width: 480px; }
+.settings-page { max-width: 560px; }
+.settings-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.settings-head h2 { margin: 0; }
+.autosave-status {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+.autosave-status.ok { color: var(--success); }
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -836,52 +941,173 @@ async function handleSave() {
   margin-bottom: var(--space-4);
 }
 .card h3 {
-  font-size: var(--font-size-m);
-  margin-bottom: var(--space-4);
-  color: var(--text);
-}
-.field {
-  margin-bottom: var(--space-3);
-}
-.field > label {
-  display: block;
-  margin-bottom: var(--space-1);
-  font-size: var(--font-size-s);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-secondary);
-}
-.field-hint {
-  margin: var(--space-1) 0 0;
   font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-4);
 }
-.field-hint.calc { font-size: var(--font-size-s); font-variant-numeric: tabular-nums; }
-.field-hint.calc .neg { color: var(--danger); font-weight: var(--font-weight-bold); }
-.field-hint.calc .pos { color: var(--success); font-weight: var(--font-weight-bold); }
-.field input[type="number"] {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-m);
+
+/* ---- Profile: stat-card led ------------------------------------------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: text;
+  transition: border-color var(--transition-fast);
+}
+.stat-cell:focus-within { border-color: var(--primary); }
+.stat-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.stat-value-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+.stat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-l);
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+.stat-input::placeholder { color: var(--text-disabled); font-weight: var(--font-weight-light); }
+.stat-unit {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+.bio-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4);
+  align-items: center;
+}
+.bio-group { display: flex; align-items: center; gap: var(--space-2); }
+.bio-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.seg-control {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  padding: 2px;
+  gap: 2px;
+}
+.seg-btn {
+  padding: 0.25rem 0.65rem;
+  background: none;
+  border: none;
+  font-size: var(--font-size-s);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.seg-btn:hover { color: var(--text); }
+.seg-btn.active {
+  background: var(--surface-raised);
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+  box-shadow: var(--shadow-s);
+}
+.bio-inline { display: inline-flex; align-items: baseline; gap: var(--space-1); }
+.bio-input {
+  width: 48px;
+  padding: 0.25rem 0.35rem;
+  text-align: right;
+  font-size: var(--font-size-s);
+  font-variant-numeric: tabular-nums;
+}
+.bio-unit { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-right: var(--space-1); }
+
+/* ---- Daily Targets: hero calories + stat asides ----------------------- */
+.cal-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-4);
+  align-items: end;
+  padding: var(--space-4);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  margin-bottom: var(--space-5);
+}
+.cal-hero-main { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.cal-hero-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.cal-hero-input {
+  padding: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
   width: 100%;
 }
-.field input.sm { width: 64px; }
-.inline-fields {
+.cal-hero-aside {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  gap: var(--space-4);
+  align-items: stretch;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--border);
 }
-.radio-group {
-  display: flex;
-  gap: var(--space-5);
+.cal-stat { display: flex; flex-direction: column; gap: var(--space-1); }
+.cal-stat-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
 }
-.radio {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--font-size-s);
+.cal-stat-value {
+  font-size: var(--font-size-m);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
   color: var(--text);
-  cursor: pointer;
+}
+.cal-stat-value.neg { color: var(--danger); }
+.cal-stat-value.pos { color: var(--success); }
+.cal-stat-unit { font-size: var(--font-size-xs); color: var(--text-tertiary); font-weight: var(--font-weight-medium); margin-left: 2px; }
+.cal-hero-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
 }
 /* Macro allocation bar — single bar, two draggable handles */
 .alloc-bar {
@@ -976,72 +1202,258 @@ async function handleSave() {
 .error { color: var(--danger); font-size: var(--font-size-s); margin-bottom: 0.5rem; }
 .success { color: var(--success); font-size: var(--font-size-s); margin-bottom: 0.5rem; }
 
-/* Compounds */
+/* ---- Compounds -------------------------------------------------------- */
 .compound-list {
   list-style: none;
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-4);
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .compound-row {
   border: 1px solid var(--border);
-  border-radius: var(--radius-medium);
-  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--border);
   background: var(--bg);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color var(--transition-fast);
 }
-.compound-row.disabled { opacity: 0.55; }
-.compound-row-top {
-  display: flex;
+.compound-row.disabled { opacity: 0.6; }
+.compound-row.disabled .compound-swatch { background: var(--border) !important; }
+
+.compound-lead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3);
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
 }
-.compound-toggle {
-  display: flex;
+.compound-enable {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   cursor: pointer;
+}
+.compound-enable input[type="checkbox"] { accent-color: var(--primary); cursor: pointer; }
+.compound-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.compound-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.compound-name-row { display: inline-flex; align-items: center; gap: var(--space-1); }
+.compound-name {
   font-size: var(--font-size-m);
+  font-weight: var(--font-weight-bold);
   color: var(--text);
+  letter-spacing: var(--tracking-tight);
 }
-.compound-name { font-weight: var(--font-weight-medium); }
-.compound-tag {
-  display: inline-block;
-  margin-left: 0.3rem;
-  padding: 0 0.35rem;
+.compound-lock {
+  width: 11px;
+  height: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.compound-next {
   font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
-  vertical-align: middle;
 }
+.compound-next.status-overdue { color: var(--danger); font-weight: var(--font-weight-bold); }
+.compound-next.status-today { color: var(--warning); font-weight: var(--font-weight-bold); }
+.compound-next.status-upcoming { color: var(--text-secondary); }
+.compound-next.status-none { color: var(--text-tertiary); font-style: italic; }
+.compound-next.muted { color: var(--text-tertiary); }
+
 .compound-del {
+  width: 24px;
+  height: 24px;
   background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
-  padding: 0.2rem 0.5rem;
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-l);
+  line-height: 1;
   cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 .compound-del:hover { color: var(--danger); border-color: var(--danger); }
-.compound-row-bot {
+
+.compound-params {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  margin-top: 0.5rem;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+  align-items: center;
+}
+.param-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-xs);
+}
+.param-chip:focus-within { border-color: var(--primary); }
+.param-label {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-weight: var(--font-weight-bold);
+}
+.param-chip input[type="number"] {
+  width: 48px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.param-unit { color: var(--text-tertiary); font-size: var(--font-size-xs); }
+.param-static-val {
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+}
+.color-chip { padding: 2px 6px; }
+.color-chip input[type="color"] {
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.shape-chip select {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* PK profile educational popover */
+.profile-pop {
+  width: 340px;
+  padding: var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--font-size-s);
+  line-height: 1.5;
+  box-shadow: var(--shadow-m);
+}
+.profile-pop-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  margin: 0 0 var(--space-2);
+}
+.profile-pop-lede {
+  margin: 0 0 var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+.profile-pop-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.profile-pop-list li {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  align-items: center;
+}
+.profile-spark {
+  grid-row: 1 / span 2;
+  width: 56px;
+  height: 28px;
+  color: var(--primary);
+  display: block;
+}
+.profile-pop-name {
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-s);
+  color: var(--text);
+  letter-spacing: var(--tracking-tight);
+}
+.profile-pop-blurb {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.profile-pop-hint {
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.compound-status { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-left: auto; }
+.compound-status.ok { color: var(--success); }
+
+.compound-add {
+  border-top: 1px dashed var(--border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-2);
+}
+.compound-add h4 {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-tertiary);
+  margin: 0 0 var(--space-2);
+}
+.compound-add-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
   align-items: flex-end;
+  margin-bottom: var(--space-2);
 }
 .compound-field {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+}
+.compound-field > span {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-weight: var(--font-weight-bold);
 }
 .compound-field input[type="number"],
 .compound-field input[type="text"],
@@ -1060,41 +1472,12 @@ async function handleSave() {
   background: transparent;
   cursor: pointer;
 }
-.compound-static {
-  padding: 0.3rem 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: var(--font-size-s);
-  color: var(--text-secondary);
-  text-align: center;
-  width: 56px;
-}
-.compound-status { font-size: var(--font-size-xs); color: var(--text-secondary); }
-.compound-status.ok { color: var(--success); }
-.compound-add {
-  border-top: 1px dashed var(--border);
-  padding-top: 0.75rem;
-  margin-top: 0.5rem;
-}
-.compound-add h4 {
-  font-size: var(--font-size-s);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-secondary);
-  margin: 0 0 0.5rem;
-}
-.compound-add-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  align-items: flex-end;
-  margin-bottom: 0.5rem;
-}
 
-/* Notifications */
+/* ---- Notifications ---------------------------------------------------- */
 .notif-note {
   font-size: var(--font-size-s);
   color: var(--text-secondary);
-  padding: 0.5rem 0;
+  padding: var(--space-2) 0;
 }
 .notif-note.warn { color: var(--warning, var(--text-secondary)); }
 .notif-note code {
@@ -1102,197 +1485,210 @@ async function handleSave() {
   padding: 0.05rem 0.25rem;
   font-size: var(--font-size-s);
 }
-
 .notif-install {
-  margin-bottom: 0.85rem;
-  padding-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
   border-bottom: 1px dashed var(--border);
 }
-.notif-lead { margin: 0 0 0.5rem; font-size: var(--font-size-s); color: var(--text); }
+.notif-lead { margin: 0 0 var(--space-2); font-size: var(--font-size-s); color: var(--text); }
 
-.notif-toggle-row {
-  display: flex;
+/* Device status hero */
+.notif-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-3);
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border);
-}
-.notif-title { font-size: var(--font-size-s); font-weight: var(--font-weight-medium); color: var(--text); }
-.notif-sub { font-size: var(--font-size-xs); color: var(--text-secondary); margin-top: 0.15rem; }
-.notif-toggle-btn {
-  padding: 0.4rem 0.9rem;
+  padding: var(--space-4);
+  background: var(--bg);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  margin-bottom: var(--space-4);
+}
+.notif-hero.on { border-left-color: var(--primary); }
+.notif-hero.blocked { border-left-color: var(--danger); }
+.notif-hero-main { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.notif-hero-ind {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex: none;
+  box-shadow: 0 0 0 3px var(--bg);
+}
+.notif-hero.on .notif-hero-ind {
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.notif-hero.blocked .notif-hero-ind { background: var(--danger); }
+.notif-hero-text { min-width: 0; }
+.notif-hero-state {
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+  letter-spacing: var(--tracking-tight);
+}
+.notif-hero-sub {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+.notif-hero-btn {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
   font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
   cursor: pointer;
-  font-weight: var(--font-weight-medium);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
-.notif-toggle-btn.on {
+.notif-hero-btn:hover { border-color: var(--text-secondary); }
+.notif-hero-btn.on {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--text-on-primary);
 }
-.notif-toggle-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.notif-hero-btn.on:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.notif-hero-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.notif-section-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
 
 .notif-categories {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 .notif-cat {
   display: grid;
   grid-template-columns: 20px 1fr;
   align-items: baseline;
-  gap: 0.15rem 0.5rem;
+  gap: 2px var(--space-2);
   font-size: var(--font-size-s);
   color: var(--text);
   cursor: pointer;
 }
-.notif-cat input[type="checkbox"] { grid-row: 1 / span 2; align-self: start; margin-top: 3px; }
-.notif-cat-sub { grid-column: 2; font-size: var(--font-size-xs); color: var(--text-secondary); }
-
-.notif-track-time {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border);
-}
-.notif-track-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-.notif-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: var(--font-size-s);
-  color: var(--text);
-  cursor: pointer;
-}
-.notif-inline.small { font-size: var(--font-size-s); }
-.notif-time {
-  padding: 0.3rem 0.5rem;
-  font-size: var(--font-size-s);
-}
-.notif-time:disabled { opacity: 0.5; }
+.notif-cat input[type="checkbox"] { grid-row: 1 / span 2; align-self: start; margin-top: 3px; accent-color: var(--primary); }
+.notif-cat-sub { grid-column: 2; font-size: var(--font-size-xs); color: var(--text-tertiary); }
 
 .notif-test-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.75rem 0 0.25rem;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
   flex-wrap: wrap;
 }
 .notif-success { color: var(--success); font-size: var(--font-size-s); }
 .notif-err { color: var(--danger); font-size: var(--font-size-s); }
 
+/* ---- Daily tracking card --------------------------------------------- */
+.track-lead {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-s);
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  transition: opacity var(--transition-fast);
+}
+.track-row.disabled { opacity: 0.55; }
+.track-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-s);
+  color: var(--text);
+  cursor: pointer;
+}
+.track-toggle input { accent-color: var(--primary); }
+.track-time {
+  padding: 0.3rem 0.5rem;
+  font-size: var(--font-size-s);
+  font-variant-numeric: tabular-nums;
+}
+.track-time:disabled { opacity: 0.5; }
+.track-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
 /* Per-compound reminder block */
 .compound-reminder {
   margin-top: 0.5rem;
   border-top: 1px dashed var(--border);
-  padding-top: 0.5rem;
-}
-.reminder-toggle {
+  padding-top: 0.6rem;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  width: 100%;
-  background: none;
-  border: none;
-  padding: var(--space-1) 0;
-  cursor: pointer;
-  text-align: left;
   font-size: var(--font-size-s);
+  color: var(--text-secondary);
+}
+.reminder-inline-label {
   color: var(--text);
-}
-.reminder-ind {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--border);
-  flex: none;
-}
-.reminder-ind.on { background: var(--success, var(--primary)); }
-.reminder-sub {
-  flex: 1;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-}
-.reminder-chev {
-  color: var(--text-secondary);
-  transition: transform var(--transition-base);
-}
-.reminder-chev.open { transform: rotate(180deg); }
-
-.reminder-body {
-  margin-top: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.5rem 0.1rem 0.2rem;
-}
-.reminder-field { display: flex; flex-direction: column; gap: 0.3rem; }
-.reminder-field.disabled { opacity: 0.55; }
-.reminder-label {
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-}
-.reminder-hint { font-size: var(--font-size-xs); color: var(--text-secondary); }
-
-.weekday-row { display: flex; gap: 0.25rem; }
-.weekday-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
   font-weight: var(--font-weight-medium);
 }
-.weekday-btn.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--text-on-primary);
+.reminder-inline-hint {
+  font-size: var(--font-size-xs);
 }
-.weekday-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.time-list { display: flex; flex-direction: column; gap: 0.35rem; }
-.time-row { display: flex; align-items: center; gap: 0.35rem; }
-.time-row input[type="time"] {
+.reminder-time {
   padding: 0.3rem 0.45rem;
   font-size: var(--font-size-s);
 }
-.time-remove {
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-secondary);
+.reminder-time:disabled { opacity: 0.5; }
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  display: inline-flex;
+  width: 36px;
+  height: 20px;
+  flex: none;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
   border-radius: var(--radius-pill);
-  cursor: pointer;
-  font-size: var(--font-size-m);
-  line-height: 1;
+  transition: background var(--transition-fast);
 }
-.time-remove:hover { color: var(--danger); border-color: var(--danger); }
-.time-add {
-  background: none;
-  border: 1px dashed var(--border);
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  padding: 0.3rem 0.6rem;
-  cursor: pointer;
-  align-self: flex-start;
+.switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
-.time-add:hover { color: var(--text); border-color: var(--text-secondary); }
-.time-add:disabled { opacity: 0.5; cursor: not-allowed; }
+.switch input:checked + .switch-track { background: var(--primary); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(16px); }
 
 /* Theme toggle — segmented control */
 .theme-toggle {

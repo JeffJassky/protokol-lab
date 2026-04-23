@@ -82,6 +82,41 @@ const weekScaleMax = computed(() => {
   return Math.max(1, ...ratios);
 });
 
+// Per-macro view-model for the "Today vs adjusted target" grid. Pulls
+// today's intake (perDay[6]) + the adjusted target (target rebalanced for
+// prior days' surplus/deficit) and packages each macro with its color,
+// unit, and over/busted flags so the template stays declarative.
+// Weekly progress bars + a today-remaining annotation per macro. The note
+// is derived from `adjustedToday` (today's target rebalanced for the week's
+// surplus / deficit) so a single row tells you both the weekly pace and the
+// action item for today.
+const weekMacroBars = computed(() => {
+  const today = perDay.value[6] || {};
+  const adj = adjustedToday.value || {};
+  const w = weekTarget.value || {};
+  const c = consumed.value || {};
+  const macros = [
+    { key: 'cal', label: 'Cal (week)',     short: 'kcal', unit: ' kcal', color: 'var(--color-cal)',     current: r(c.calories), target: w.calories, todayValue: today.calories || 0, todayTarget: adj.calories || 0 },
+    { key: 'p',   label: 'Protein (week)', short: 'g',    unit: 'g',     color: 'var(--color-protein)', current: r(c.protein),  target: w.protein,  todayValue: today.protein  || 0, todayTarget: adj.protein  || 0 },
+    { key: 'f',   label: 'Fat (week)',     short: 'g',    unit: 'g',     color: 'var(--color-fat)',     current: r(c.fat),      target: w.fat,      todayValue: today.fat      || 0, todayTarget: adj.fat      || 0 },
+    { key: 'c',   label: 'Carbs (week)',   short: 'g',    unit: 'g',     color: 'var(--color-carbs)',   current: r(c.carbs),    target: w.carbs,    todayValue: today.carbs    || 0, todayTarget: adj.carbs    || 0 },
+  ];
+  return macros.map((m) => {
+    let note = '';
+    let noteTone = 'muted';
+    if (m.todayTarget <= 0) {
+      note = `over by ${fmt(-m.todayTarget)}${m.short} this week`;
+      noteTone = 'over';
+    } else if (m.todayValue > m.todayTarget) {
+      note = `over by ${fmt(m.todayValue - m.todayTarget)}${m.short} today`;
+      noteTone = 'over';
+    } else {
+      note = `${fmt(m.todayTarget - m.todayValue)}${m.short} left today`;
+    }
+    return { ...m, note, noteTone };
+  });
+});
+
 // Vertical bar height scaled to the largest single-day intake in the window,
 // so every bar is readable even when days are wildly different.
 const maxDayCal = computed(() => {
@@ -155,28 +190,18 @@ const targetLinePct = computed(() => {
       </div>
 
       <div class="wb-macros">
-        <MacroBar label="Cal (week)" :current="r(consumed.calories)" :target="weekTarget.calories" color="var(--color-cal)" unit=" kcal" :scale-max="weekScaleMax" />
-        <MacroBar label="Protein (week)" :current="r(consumed.protein)" :target="weekTarget.protein" color="var(--color-protein)" unit="g" :scale-max="weekScaleMax" />
-        <MacroBar label="Fat (week)" :current="r(consumed.fat)" :target="weekTarget.fat" color="var(--color-fat)" unit="g" :scale-max="weekScaleMax" />
-        <MacroBar label="Carbs (week)" :current="r(consumed.carbs)" :target="weekTarget.carbs" color="var(--color-carbs)" unit="g" :scale-max="weekScaleMax" />
-      </div>
-
-      <div class="wb-adjusted">
-        <div class="wb-adj-label">Today vs adjusted target</div>
-        <div class="wb-adj-values">
-          <span class="adj-cal" :class="perDay[6].calories > adjustedToday.calories ? 'adj-over' : ''">
-            {{ fmt(perDay[6].calories) }} / {{ fmt(adjustedToday.calories) }} kcal
-          </span>
-          <span class="adj-p" :class="perDay[6].protein > adjustedToday.protein ? 'adj-over' : ''">
-            {{ fmt(perDay[6].protein) }} / {{ fmt(adjustedToday.protein) }}g P
-          </span>
-          <span class="adj-f" :class="perDay[6].fat > adjustedToday.fat ? 'adj-over' : ''">
-            {{ fmt(perDay[6].fat) }} / {{ fmt(adjustedToday.fat) }}g F
-          </span>
-          <span class="adj-c" :class="perDay[6].carbs > adjustedToday.carbs ? 'adj-over' : ''">
-            {{ fmt(perDay[6].carbs) }} / {{ fmt(adjustedToday.carbs) }}g C
-          </span>
-        </div>
+        <MacroBar
+          v-for="m in weekMacroBars"
+          :key="m.key"
+          :label="m.label"
+          :current="m.current"
+          :target="m.target"
+          :color="m.color"
+          :unit="m.unit"
+          :scale-max="weekScaleMax"
+          :note="m.note"
+          :note-tone="m.noteTone"
+        />
       </div>
     </div>
   </div>
@@ -325,31 +350,5 @@ const targetLinePct = computed(() => {
 .wb-note.tone-over .wb-note-arrow { color: var(--danger); }
 
 /* Weekly macro bars */
-.wb-macros { margin-bottom: var(--space-3); }
-
-/* Adjusted-today row */
-.wb-adjusted {
-  padding-top: var(--space-2);
-  border-top: 1px dashed var(--border);
-}
-.wb-adj-label {
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wider);
-  color: var(--text-secondary);
-  font-weight: var(--font-weight-bold);
-  margin-bottom: var(--space-1);
-}
-.wb-adj-values {
-  display: flex;
-  gap: var(--space-3);
-  font-size: var(--font-size-s);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-bold);
-}
-.adj-cal { color: var(--color-cal); }
-.adj-p { color: var(--color-protein); }
-.adj-f { color: var(--color-fat); }
-.adj-c { color: var(--color-carbs); }
-.wb-adj-values .adj-over { color: var(--danger); }
+.wb-macros { margin-bottom: var(--space-1); }
 </style>

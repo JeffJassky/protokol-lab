@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { usePushStore } from '../stores/push.js';
-import { useFonts } from '../composables/useFonts.js';
 import { useTheme } from '../composables/useTheme.js';
 import ChatDrawer from './ChatDrawer.vue';
 import OnboardingBanner from './OnboardingBanner.vue';
@@ -15,7 +14,6 @@ const pushStore = usePushStore();
 const router = useRouter();
 const showChat = ref(false);
 
-const { display, body, mono, DISPLAY_FONTS, BODY_FONTS, MONO_FONTS } = useFonts();
 const theme = useTheme();
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark';
@@ -53,76 +51,50 @@ async function handleLogout() {
         <router-link to="/">Log</router-link>
         <router-link to="/dashboard">Dashboard</router-link>
         <router-link to="/settings">Settings</router-link>
-        <div class="font-pickers">
-          <label class="font-picker" title="Display font">
-            <span class="font-picker-tag">Aa</span>
-            <select v-model="display">
-              <option v-for="f in DISPLAY_FONTS" :key="f.name" :value="f.name">
-                {{ f.name }}
-              </option>
-            </select>
-          </label>
-          <label class="font-picker" title="Body font">
-            <span class="font-picker-tag">aa</span>
-            <select v-model="body">
-              <option v-for="f in BODY_FONTS" :key="f.name" :value="f.name">
-                {{ f.name }}
-              </option>
-            </select>
-          </label>
-          <label class="font-picker" title="Monospace font">
-            <span class="font-picker-tag">0x</span>
-            <select v-model="mono">
-              <option v-for="f in MONO_FONTS" :key="f.name" :value="f.name">
-                {{ f.name }}
-              </option>
-            </select>
-          </label>
-          <button
-            class="theme-toggle"
-            type="button"
-            :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-            :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-            @click="toggleTheme"
+        <button
+          class="theme-toggle"
+          type="button"
+          :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+          :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="toggleTheme"
+        >
+          <svg
+            v-if="theme === 'dark'"
+            class="theme-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-            <svg
-              v-if="theme === 'dark'"
-              class="theme-icon"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2" />
-              <path d="M12 20v2" />
-              <path d="m4.93 4.93 1.41 1.41" />
-              <path d="m17.66 17.66 1.41 1.41" />
-              <path d="M2 12h2" />
-              <path d="M20 12h2" />
-              <path d="m4.93 19.07 1.41-1.41" />
-              <path d="m17.66 6.34 1.41-1.41" />
-            </svg>
-            <svg
-              v-else
-              class="theme-icon"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-          </button>
-        </div>
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2" />
+            <path d="M12 20v2" />
+            <path d="m4.93 4.93 1.41 1.41" />
+            <path d="m17.66 17.66 1.41 1.41" />
+            <path d="M2 12h2" />
+            <path d="M20 12h2" />
+            <path d="m4.93 19.07 1.41-1.41" />
+            <path d="m17.66 6.34 1.41-1.41" />
+          </svg>
+          <svg
+            v-else
+            class="theme-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </button>
         <button class="logout-btn" @click="handleLogout">Logout</button>
       </div>
     </nav>
@@ -186,43 +158,6 @@ async function handleLogout() {
   background: var(--primary-soft);
   font-weight: var(--font-weight-medium);
 }
-.font-pickers {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-left: var(--space-2);
-  padding-left: var(--space-2);
-  border-left: 1px solid var(--border);
-}
-.font-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
-  padding: 0.15rem 0.3rem 0.15rem 0.45rem;
-  cursor: pointer;
-  transition: border-color var(--transition-fast);
-}
-.font-picker:hover { border-color: var(--border-strong); }
-.font-picker-tag {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
-}
-.font-picker select {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  padding: 0.15rem 0.2rem;
-  cursor: pointer;
-  max-width: 110px;
-  outline: none;
-}
-.font-picker select:hover { color: var(--text); }
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -230,6 +165,7 @@ async function handleLogout() {
   width: 28px;
   height: 28px;
   padding: 0;
+  margin-left: var(--space-2);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -241,9 +177,6 @@ async function handleLogout() {
   height: 16px;
   color: var(--text-secondary);
   transition: color var(--transition-fast);
-}
-@media (max-width: 900px) {
-  .font-pickers { display: none; }
 }
 
 .logout-btn {

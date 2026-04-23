@@ -12,6 +12,15 @@ const compoundSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: true },
     halfLifeDays: { type: Number, required: true, min: 0 },
     intervalDays: { type: Number, required: true, min: 0.5 },
+    // PK curve shape. 'bolus' = instant peak (IV-like). 'subq' = absorption
+    // phase + elimination (Bateman, ~6h absorption t½). 'depot' = slow
+    // absorption from a depot (~24h absorption t½). Defaults to 'subq' since
+    // peptides in this app are nearly always self-administered subcutaneously.
+    kineticsShape: {
+      type: String,
+      enum: ['bolus', 'subq', 'depot'],
+      default: 'subq',
+    },
     doseUnit: {
       type: String,
       enum: ['mg', 'mcg', 'iu', 'ml'],
@@ -20,11 +29,11 @@ const compoundSchema = new mongoose.Schema(
     color: { type: String, default: '' },
     order: { type: Number, default: 0 },
     // Reminder config — the scheduler checks this every minute in the
-    // user's timezone (see UserSettings.timezone). Times are HH:mm, 24h.
-    // reminderWeekdays empty = every day; otherwise a subset of 0–6 (Sun=0).
+    // user's timezone (see UserSettings.timezone). Time is HH:mm, 24h.
+    // Dose days are inferred from intervalDays + last DoseLog; the user picks
+    // only the time of day the reminder fires.
     reminderEnabled: { type: Boolean, default: false },
-    reminderTimes: { type: [String], default: [] },
-    reminderWeekdays: { type: [Number], default: [] },
+    reminderTime: { type: String, default: '' },
   },
   { timestamps: true },
 );

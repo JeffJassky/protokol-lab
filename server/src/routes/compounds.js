@@ -8,11 +8,11 @@ const router = Router();
 // show up for existing users on next fetch (insertMany skips duplicates by
 // the (userId, name) unique index).
 const SYSTEM_COMPOUNDS = [
-  { name: 'Retatrutide',  halfLifeDays: 6,   intervalDays: 7, doseUnit: 'mg', color: '#f59e0b', enabledByDefault: true },
-  { name: 'Tirzepatide',  halfLifeDays: 5,   intervalDays: 7, doseUnit: 'mg', color: '#10b981', enabledByDefault: false },
-  { name: 'Semaglutide',  halfLifeDays: 7,   intervalDays: 7, doseUnit: 'mg', color: '#3b82f6', enabledByDefault: false },
-  { name: 'Cagrilintide', halfLifeDays: 7,   intervalDays: 7, doseUnit: 'mg', color: '#8b5cf6', enabledByDefault: false },
-  { name: 'BPC-157',      halfLifeDays: 0.25,intervalDays: 1, doseUnit: 'mcg',color: '#ec4899', enabledByDefault: false },
+  { name: 'Retatrutide',  halfLifeDays: 6,   intervalDays: 7, doseUnit: 'mg', color: '#f59e0b', kineticsShape: 'subq',  enabledByDefault: true },
+  { name: 'Tirzepatide',  halfLifeDays: 5,   intervalDays: 7, doseUnit: 'mg', color: '#10b981', kineticsShape: 'subq',  enabledByDefault: false },
+  { name: 'Semaglutide',  halfLifeDays: 7,   intervalDays: 7, doseUnit: 'mg', color: '#3b82f6', kineticsShape: 'depot', enabledByDefault: false },
+  { name: 'Cagrilintide', halfLifeDays: 7,   intervalDays: 7, doseUnit: 'mg', color: '#8b5cf6', kineticsShape: 'subq',  enabledByDefault: false },
+  { name: 'BPC-157',      halfLifeDays: 0.25,intervalDays: 1, doseUnit: 'mcg',color: '#ec4899', kineticsShape: 'subq',  enabledByDefault: false },
 ];
 
 async function ensureDefaults(userId) {
@@ -29,6 +29,7 @@ async function ensureDefaults(userId) {
     intervalDays: c.intervalDays,
     doseUnit: c.doseUnit,
     color: c.color,
+    kineticsShape: c.kineticsShape,
     order: i,
   }));
   try {
@@ -45,7 +46,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, halfLifeDays, intervalDays, doseUnit, color } = req.body;
+  const { name, halfLifeDays, intervalDays, doseUnit, color, kineticsShape } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
   if (halfLifeDays == null || intervalDays == null) {
     return res.status(400).json({ error: 'halfLifeDays and intervalDays required' });
@@ -64,6 +65,7 @@ router.post('/', async (req, res) => {
       intervalDays: Number(intervalDays),
       doseUnit: doseUnit || 'mg',
       color: color || '',
+      kineticsShape: ['bolus', 'subq', 'depot'].includes(kineticsShape) ? kineticsShape : 'subq',
       order,
     });
     res.status(201).json({ compound });
@@ -78,8 +80,8 @@ router.patch('/:id', async (req, res) => {
   if (!compound) return res.status(404).json({ error: 'Not found' });
 
   const {
-    name, enabled, halfLifeDays, intervalDays, doseUnit, color,
-    reminderEnabled, reminderTimes, reminderWeekdays,
+    name, enabled, halfLifeDays, intervalDays, doseUnit, color, kineticsShape,
+    reminderEnabled, reminderTime,
   } = req.body;
 
   // System rows: locked name + doseUnit. Other fields user-tunable so research
@@ -100,15 +102,13 @@ router.patch('/:id', async (req, res) => {
   if (intervalDays !== undefined) compound.intervalDays = Number(intervalDays);
   if (!compound.isSystem && doseUnit !== undefined) compound.doseUnit = doseUnit;
   if (color !== undefined) compound.color = color;
-  if (reminderEnabled !== undefined) compound.reminderEnabled = Boolean(reminderEnabled);
-  if (Array.isArray(reminderTimes)) {
-    // Validate HH:mm so the scheduler doesn't have to defend against garbage.
-    compound.reminderTimes = reminderTimes.filter((t) => /^\d{2}:\d{2}$/.test(t));
+  if (kineticsShape !== undefined && ['bolus', 'subq', 'depot'].includes(kineticsShape)) {
+    compound.kineticsShape = kineticsShape;
   }
-  if (Array.isArray(reminderWeekdays)) {
-    compound.reminderWeekdays = reminderWeekdays
-      .map((n) => Number(n))
-      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+  if (reminderEnabled !== undefined) compound.reminderEnabled = Boolean(reminderEnabled);
+  if (reminderTime !== undefined) {
+    // Validate HH:mm so the scheduler doesn't have to defend against garbage.
+    compound.reminderTime = /^\d{2}:\d{2}$/.test(reminderTime) ? reminderTime : '';
   }
 
   try {

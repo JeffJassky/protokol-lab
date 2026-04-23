@@ -48,12 +48,18 @@
   --palette-amber-600: #c49840;
   --palette-orange-500: #f97316;
 
-  /* Red — carbs / danger */
+  /* Red — danger */
   --palette-red-300: #ffb3b3;
   --palette-red-400: #ff8a8a;
   --palette-red-500: #ff5a5a;
   --palette-red-600: #e04545;
   --palette-red-700: #b91c1c;
+
+  /* Aqua — carbs (bright teal) */
+  --palette-aqua-300: #a7fbf8;
+  --palette-aqua-400: #62f9f4;
+  --palette-aqua-500: #2dd4cf;
+  --palette-aqua-600: #1ba8a3;
 
   /* Slate — terminal neutrals (replaces blue-tinted gray for dark mode) */
   --palette-slate-950: #05080a;

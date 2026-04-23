@@ -13,7 +13,7 @@ const MINUTE = 60 * 1000;
 
 let agenda = null;
 
-// Formats `date` as { hhmm: "HH:mm", weekday: 0-6 } in the given IANA tz.
+// Formats `date` as "HH:mm" in the given IANA tz.
 // Uses Intl.DateTimeFormat so we don't pull in a date library.
 function formatInZone(date, timeZone) {
   try {
@@ -22,22 +22,32 @@ function formatInZone(date, timeZone) {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',
-      weekday: 'short',
     });
     const parts = fmt.formatToParts(date);
     let hh = '00';
     let mm = '00';
-    let wd = 'Sun';
     for (const p of parts) {
       if (p.type === 'hour') hh = p.value === '24' ? '00' : p.value.padStart(2, '0');
       if (p.type === 'minute') mm = p.value.padStart(2, '0');
-      if (p.type === 'weekday') wd = p.value;
     }
-    const weekday = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[wd] ?? 0;
-    return { hhmm: `${hh}:${mm}`, weekday };
+    return { hhmm: `${hh}:${mm}` };
   } catch {
-    return { hhmm: '00:00', weekday: 0 };
+    return { hhmm: '00:00' };
   }
+}
+
+// Local YYYY-MM-DD for `date` in the given IANA tz.
+function localDayKey(date, timeZone) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+}
+
+// Whole-day count between two YYYY-MM-DD strings (b - a).
+function daysBetweenDayKeys(a, b) {
+  const [ay, am, ad] = a.split('-').map(Number);
+  const [by, bm, bd] = b.split('-').map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
 }
 
 // Start-of-day boundaries in the given timezone expressed in UTC — used to
@@ -127,13 +137,30 @@ async function runTick() {
 
   for (const [uid, settings] of settingsByUser) {
     const tz = settings.timezone || 'UTC';
-    const { hhmm, weekday } = formatInZone(now, tz);
+    const { hhmm } = formatInZone(now, tz);
+    const todayKey = localDayKey(now, tz);
 
-    // Compound dose reminders.
+    // Compound dose reminders. Dose days are inferred from intervalDays + the
+    // user's most recent DoseLog for the compound. Fire only when due (today
+    // or overdue) and not yet logged today.
     const compounds = compoundsByUser.get(uid) || [];
     for (const c of compounds) {
-      if (!c.reminderTimes?.includes(hhmm)) continue;
-      if (c.reminderWeekdays?.length && !c.reminderWeekdays.includes(weekday)) continue;
+      if (!c.reminderTime || c.reminderTime !== hhmm) continue;
+      const interval = Number(c.intervalDays) || 0;
+      if (!interval) continue;
+
+      const last = await DoseLog.findOne({ userId: uid, compoundId: c._id })
+        .sort({ date: -1 })
+        .select('date')
+        .lean();
+      if (last) {
+        const lastKey = localDayKey(last.date, tz);
+        if (lastKey === todayKey) continue; // already logged today
+        const required = Math.max(1, Math.ceil(interval));
+        if (daysBetweenDayKeys(lastKey, todayKey) < required) continue;
+      }
+      // No prior dose → due immediately.
+
       const minuteKey = `${now.toISOString().slice(0, 16)}`;
       await sendToUser(uid, 'doseReminder', {
         title: `Time for ${c.name}`,

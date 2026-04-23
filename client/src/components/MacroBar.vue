@@ -11,6 +11,10 @@ const props = defineProps({
   // 0 → scaleMax × target, and overage (the portion beyond target) is drawn
   // in red. Default 1 = track represents 0 → target, no overage shown.
   scaleMax: { type: Number, default: 1 },
+  // Optional trailing annotation rendered to the right of the bar track —
+  // e.g. "459 kcal left today" beside a weekly progress bar.
+  note: { type: String, default: '' },
+  noteTone: { type: String, default: 'muted' }, // 'muted' | 'over'
 });
 
 const ratio = computed(() => {
@@ -40,7 +44,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   <div class="macro-bar">
     <div class="macro-header">
       <span class="macro-label">{{ label }}</span>
-      <span class="macro-values"><span class="macro-current">{{ Math.round(current).toLocaleString() }}</span><span class="macro-budget"> / {{ Math.round(target).toLocaleString() }}{{ unit }}</span></span>
+      <span class="macro-values"><span class="macro-current">{{ Math.round(current).toLocaleString() }}</span><span class="macro-budget"> / {{ Math.round(target).toLocaleString() }}{{ unit }}<template v-if="note"> ·</template></span><span v-if="note" class="macro-note" :class="`note-${noteTone}`"> {{ note }}</span></span>
     </div>
     <div class="bar-track">
       <div class="bar-fill" :style="{ width: normalWidth + '%', background: color }" />
@@ -56,6 +60,8 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 .macro-header {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
   font-size: var(--font-size-xs);
   margin-bottom: var(--space-1);
 }
@@ -70,6 +76,9 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 .macro-values { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .macro-current { font-weight: var(--font-weight-bold); color: var(--text); }
 .macro-budget { color: var(--text-tertiary); }
+.macro-note { font-weight: var(--font-weight-bold); }
+.note-muted { color: var(--text-secondary); }
+.note-over  { color: var(--danger); }
 .bar-track {
   position: relative;
   height: 8px;
