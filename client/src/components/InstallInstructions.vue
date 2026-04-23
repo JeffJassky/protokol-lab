@@ -79,15 +79,15 @@ async function handleInstall() {
 </template>
 
 <style scoped>
-.install-instructions { font-size: 0.88rem; color: var(--text); }
-.lead { margin: 0 0 0.5rem; }
-.note { margin: 0.4rem 0 0; font-size: 0.78rem; color: var(--text-secondary); }
+.install-instructions { font-size: var(--font-size-s); color: var(--text); }
+.lead { margin: 0 0 var(--space-2); }
+.note { margin: var(--space-1) 0 0; font-size: var(--font-size-xs); color: var(--text-secondary); }
 
 .state {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-3) var(--space-4);
 }
 .state.ok {
   background: var(--success-soft, var(--bg));
@@ -98,14 +98,14 @@ async function handleInstall() {
   border-color: var(--warning, var(--border));
   color: var(--warning, var(--text));
 }
-.check { font-weight: 700; margin-right: 0.35rem; }
+.check { font-weight: var(--font-weight-bold); margin-right: var(--space-1); }
 
 .ios-steps {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
   color: var(--text);
 }
 .ios-steps li {
@@ -116,18 +116,6 @@ async function handleInstall() {
   align-items: center;
   vertical-align: -5px;
   color: var(--primary);
-  margin-right: 0.2rem;
+  margin-right: var(--space-1);
 }
-
-.btn-primary {
-  padding: 0.5rem 1rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-.btn-primary:hover { background: var(--primary-hover); }
 </style>

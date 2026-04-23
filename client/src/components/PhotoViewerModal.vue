@@ -83,19 +83,19 @@ function formatDate(dateStr) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: var(--space-8);
 }
 .viewer-close {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: var(--space-4);
+  right: var(--space-4);
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
   border: none;
-  font-size: 1.4rem;
+  font-size: var(--font-size-xl);
   line-height: 1;
   cursor: pointer;
 }
@@ -107,16 +107,16 @@ function formatDate(dateStr) {
   transform: translateY(-50%);
   width: 44px;
   height: 44px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
   border: none;
-  font-size: 1.8rem;
+  font-size: var(--font-size-xl);
   line-height: 1;
   cursor: pointer;
 }
-.viewer-nav.prev { left: 1rem; }
-.viewer-nav.next { right: 1rem; }
+.viewer-nav.prev { left: var(--space-4); }
+.viewer-nav.next { right: var(--space-4); }
 .viewer-nav:hover { background: rgba(255, 255, 255, 0.3); }
 
 .viewer-frame {
@@ -126,27 +126,27 @@ function formatDate(dateStr) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .viewer-frame img {
   max-width: 100%;
   max-height: 84vh;
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   background: #000;
 }
 .viewer-frame figcaption {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   color: rgba(255, 255, 255, 0.85);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
 }
 .cap-angle {
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-  font-size: 0.72rem;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-xs);
   color: #fff;
 }
 .cap-count {

@@ -49,10 +49,18 @@ function cssVar(name, fallback = '') {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
 }
+function applyChartFont() {
+  const family = getComputedStyle(document.documentElement).getPropertyValue('--font-body').trim();
+  if (family) ChartJS.defaults.font.family = family;
+}
 let themeObserver = null;
 onMounted(() => {
-  themeObserver = new MutationObserver(() => { themeTick.value += 1; });
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  applyChartFont();
+  themeObserver = new MutationObserver(() => {
+    themeTick.value += 1;
+    applyChartFont();
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
 });
 onUnmounted(() => { themeObserver?.disconnect(); });
 
@@ -154,9 +162,6 @@ const activeSeriesDefs = computed(() =>
   allSeries.value.filter((s) => activeSeries.has(s.id)),
 );
 
-// ---- Popover state ------------------------------------------------------
-
-const popoverOpen = ref(false);
 
 // ---- Chart plugins (dose pills, waist pills) ----------------------------
 
@@ -762,32 +767,33 @@ function formatDate(dateStr) {
           {{ def.label }}
           <span class="chip-x">×</span>
         </button>
-        <button class="chip chip-add" @click.stop="popoverOpen = !popoverOpen">+ Add</button>
-
-        <!-- Grouped popover -->
-        <div v-if="popoverOpen" class="popover" @click.stop>
-          <div v-for="[cat, items] in seriesByCategory" :key="cat" class="pop-group">
-            <div class="pop-cat">{{ cat }}</div>
-            <label
-              v-for="s in items"
-              :key="s.id"
-              class="pop-item"
-            >
-              <input
-                type="checkbox"
-                :checked="activeSeries.has(s.id)"
-                @change="toggleSeries(s.id)"
-              />
-              <span class="pop-dot" :style="{ background: s.color }" />
-              {{ s.label }}
-            </label>
-          </div>
-        </div>
+        <VDropdown placement="bottom-start" :distance="6">
+          <button class="chip chip-add">+ Add</button>
+          <template #popper>
+            <div class="popover">
+              <div v-for="[cat, items] in seriesByCategory" :key="cat" class="pop-group">
+                <div class="pop-cat">{{ cat }}</div>
+                <label
+                  v-for="s in items"
+                  :key="s.id"
+                  class="pop-item"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="activeSeries.has(s.id)"
+                    @change="toggleSeries(s.id)"
+                  />
+                  <span class="pop-dot" :style="{ background: s.color }" />
+                  {{ s.label }}
+                </label>
+              </div>
+            </div>
+          </template>
+        </VDropdown>
       </div>
 
       <div
         class="chart-container"
-        @click="popoverOpen = false"
         @mousemove="onChartMouseMove"
         @mouseleave="onChartMouseLeave"
       >
@@ -817,8 +823,8 @@ function formatDate(dateStr) {
             <th class="lt-date">Date</th>
             <th class="lt-num">Weight</th>
             <th class="lt-num">Waist</th>
-            <th v-for="c in tableCompounds" :key="c._id" class="lt-num">{{ c.name }}</th>
-            <th class="lt-num lt-cal">Cal</th>
+            <th v-for="c in tableCompounds" :key="c._id" class="lt-num" :style="{ color: c.color || '' }">{{ c.name }}</th>
+            <th class="lt-num lt-cal">Kcal</th>
             <th class="lt-num lt-pro">Pro</th>
             <th class="lt-num lt-fat">Fat</th>
             <th class="lt-num lt-carb">Carbs</th>
@@ -840,10 +846,10 @@ function formatDate(dateStr) {
             </td>
             <td class="lt-num">{{ row.weight != null ? `${row.weight} lbs` : '' }}</td>
             <td class="lt-num">{{ row.waist != null ? `${row.waist}"` : '' }}</td>
-            <td v-for="c in tableCompounds" :key="c._id" class="lt-num">
+            <td v-for="c in tableCompounds" :key="c._id" class="lt-num" :style="{ color: c.color || '' }">
               {{ row.doses[c._id] != null ? `${row.doses[c._id]} ${c.doseUnit}` : '' }}
             </td>
-            <td class="lt-num lt-cal">{{ row.cal != null ? row.cal : '' }}</td>
+            <td class="lt-num lt-cal">{{ row.cal != null ? row.cal.toLocaleString() : '' }}</td>
             <td class="lt-num lt-pro">{{ row.protein != null ? `${row.protein}g` : '' }}</td>
             <td class="lt-num lt-fat">{{ row.fat != null ? `${row.fat}g` : '' }}</td>
             <td class="lt-num lt-carb">{{ row.carbs != null ? `${row.carbs}g` : '' }}</td>
@@ -872,11 +878,11 @@ function formatDate(dateStr) {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
 }
-.card h3 { font-size: 0.95rem; margin-bottom: 0.75rem; }
+.card h3 { font-size: var(--font-size-m); margin-bottom: var(--space-3); }
 .weekly-card { padding: 0; overflow: hidden; }
 .weekly-card :deep(.weekly-budget) {
   background: transparent;
@@ -886,29 +892,34 @@ function formatDate(dateStr) {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+@media (max-width: 720px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .stat-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.75rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-3);
   text-align: center;
 }
 .stat-label {
   display: block;
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
-  margin-bottom: 0.2rem;
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--space-1);
 }
 .stat-value {
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-size: var(--font-size-l);
+  font-weight: var(--font-weight-bold);
   color: var(--text);
+  white-space: nowrap;
 }
 .stat-value.green { color: var(--success); }
 .stat-value.red { color: var(--danger); }
@@ -918,51 +929,56 @@ function formatDate(dateStr) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
 }
 .range-buttons {
-  display: flex;
-  gap: 0.35rem;
+  display: inline-flex;
+  gap: 0;
 }
 .range-buttons button {
-  padding: 0.25rem 0.65rem;
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
+  margin-left: -1px;
   background: var(--bg);
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
 }
+.range-buttons button:first-child { margin-left: 0; }
 .range-buttons button.active {
   background: var(--primary);
   color: var(--text-on-primary);
   border-color: var(--primary);
+  position: relative;
+  z-index: 1;
 }
 
 /* Chip bar */
 .chip-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
   position: relative;
 }
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg);
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  background: var(--border);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text);
-  transition: background 0.1s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
   white-space: nowrap;
 }
-.chip:hover { background: var(--border); }
+.chip:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+.chip:hover .chip-x { color: var(--primary); }
 .chip-dot {
   width: 8px;
   height: 8px;
@@ -971,55 +987,50 @@ function formatDate(dateStr) {
 }
 .chip-x {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   line-height: 1;
   margin-left: 0.1rem;
 }
 .chip-add {
   border-style: dashed;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .chip-add:hover { color: var(--text); border-color: var(--text-secondary); }
 
 /* Popover */
 .popover {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.35rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-medium);
   box-shadow: var(--shadow-m);
-  padding: 0.75rem 0.85rem;
-  z-index: 200;
+  padding: var(--space-3);
   min-width: 240px;
   max-height: 400px;
   overflow-y: auto;
   columns: 2;
-  column-gap: 1rem;
+  column-gap: var(--space-4);
 }
 .pop-group {
   break-inside: avoid;
-  margin-bottom: 0.6rem;
+  margin-bottom: var(--space-2);
 }
 .pop-cat {
-  font-size: 0.62rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
-  font-weight: 600;
-  margin-bottom: 0.3rem;
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--space-1);
 }
 .pop-item {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
+  gap: var(--space-1);
+  font-size: var(--font-size-s);
   color: var(--text);
   cursor: pointer;
-  padding: 0.2rem 0;
+  padding: var(--space-1) 0;
   white-space: nowrap;
 }
 .pop-item input[type="checkbox"] {
@@ -1042,9 +1053,9 @@ function formatDate(dateStr) {
   transform: translate(-50%, calc(-100% - 14px));
   background: var(--text);
   color: var(--surface);
-  padding: 0.5rem 0.7rem;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-small);
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   line-height: 1.35;
   max-width: 280px;
   white-space: pre-wrap;
@@ -1053,21 +1064,21 @@ function formatDate(dateStr) {
   box-shadow: var(--shadow-m);
 }
 .note-tooltip-date {
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   opacity: 0.7;
-  margin-bottom: 0.2rem;
+  margin-bottom: var(--space-1);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-wide);
 }
 .note-tooltip-text { color: var(--surface); }
 
 .table-wrap { position: relative; }
 .note-icon {
   display: inline-block;
-  margin-left: 0.3rem;
+  margin-left: var(--space-1);
   cursor: help;
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   line-height: 1;
 }
 
@@ -1075,20 +1086,20 @@ function formatDate(dateStr) {
 .log-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: var(--font-size-s);
   font-variant-numeric: tabular-nums;
 }
 .log-table th {
-  font-weight: 500;
-  font-size: 0.68rem;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
-  padding: 0.3rem 0.4rem;
+  padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 .log-table td {
-  padding: 0.45rem 0.4rem;
+  padding: var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
@@ -1097,7 +1108,7 @@ function formatDate(dateStr) {
 .lt-row:hover td { background: var(--bg); }
 .lt-date { text-align: left; white-space: nowrap; }
 .lt-num { text-align: right; white-space: nowrap; }
-.log-table td.lt-cal { color: var(--color-cal); }
+.log-table td.lt-cal { color: var(--color-cal); font-weight: var(--font-weight-bold); }
 .log-table td.lt-pro { color: var(--color-protein); }
 .log-table td.lt-fat { color: var(--color-fat); }
 .log-table td.lt-carb { color: var(--color-carbs); }
@@ -1112,5 +1123,5 @@ function formatDate(dateStr) {
 .log-table td.score-bad { color: var(--danger); }
 .lt-sym { text-align: center; width: 4rem; color: var(--success); }
 
-.empty { color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 1.5rem 0; }
+.empty { color: var(--text-secondary); font-size: var(--font-size-s); text-align: center; padding: var(--space-6) 0; }
 </style>

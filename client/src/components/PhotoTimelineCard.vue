@@ -147,34 +147,34 @@ function isSelected(photo) {
 .timeline-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
 }
 .tl-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 .tl-header h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--font-size-m);
   flex: 1;
 }
 .tl-pick {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .tl-cancel {
   background: none;
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   text-decoration: underline;
   padding: 0;
 }
@@ -182,36 +182,36 @@ function isSelected(photo) {
 
 .tl-empty {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   text-align: center;
-  padding: 1rem 0;
+  padding: var(--space-4) 0;
 }
 
 .tl-rows {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .tl-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .tl-row-label {
   width: 48px;
   flex-shrink: 0;
-  font-size: 0.68rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
   color: var(--text-secondary);
 }
 
 .tl-strip {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--space-1);
   overflow-x: auto;
-  padding: 0.15rem 0 0.4rem;
+  padding: 0.15rem 0 var(--space-1);
   flex: 1;
   min-width: 0;
   scrollbar-width: thin;
@@ -221,18 +221,18 @@ function isSelected(photo) {
   flex-shrink: 0;
   width: 64px;
   aspect-ratio: 3 / 4;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   overflow: hidden;
   border: 2px solid transparent;
   background: var(--bg);
   padding: 0;
   cursor: pointer;
-  transition: transform 0.1s, border-color 0.1s;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
 }
 .tl-thumb:hover { transform: translateY(-2px); }
 .tl-thumb.selected {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 0 0 3px var(--primary-ring);
 }
 .tl-thumb img {
   width: 100%;
@@ -250,14 +250,14 @@ function isSelected(photo) {
   text-align: center;
   background: rgba(0, 0, 0, 0.55);
   padding: 1px 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-small);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 
 .tl-hint {
-  margin: 0.75rem 0 0;
-  font-size: 0.75rem;
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-align: center;
 }

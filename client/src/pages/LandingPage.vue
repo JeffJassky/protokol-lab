@@ -96,24 +96,7 @@ const rolling = computed(() => {
   };
 });
 
-// ---- Correlation mini ---------------------------------------------------
-const correlation = computed(() => {
-  const W = 520, H = 200;
-  const pad = { t: 14, r: 14, b: 22, l: 30 };
-  const W0 = W - pad.l - pad.r, H0 = H - pad.t - pad.b;
-  const N = 40;
-  const pk = Array.from({ length: N }, (_, i) => 0.5 + 0.5 * Math.exp(-(i % 7) / 4) + Math.sin(i * 0.3) * 0.08);
-  const nausea = Array.from({ length: N }, (_, i) => Math.max(0, pk[i] - 0.35) * 8 + (i * 0.173 % 0.6));
-  const ix = (i) => pad.l + (i / (N - 1)) * W0;
-  const py = (v, max) => pad.t + (1 - v / max) * H0;
-  const pkMax = 1.2, nMax = 6;
-  const pkPath = pk.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${py(v, pkMax).toFixed(1)}`).join(' ');
-  const nPath = nausea.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${py(v, nMax).toFixed(1)}`).join(' ');
-  const gridYs = [0.25, 0.5, 0.75].map(f => pad.t + f * H0);
-  return { W, H, pad, pkPath, nPath, gridYs, right: W - pad.r };
-});
-
-// ---- Static mini-UI data ------------------------------------------------
+// ---- Compound library (used by Feature 01) ------------------------------
 const compoundLib = [
   { name: 'Semaglutide',    t: '7.0 d' },
   { name: 'Tirzepatide',    t: '5.0 d' },
@@ -122,6 +105,7 @@ const compoundLib = [
   { name: 'Custom...',      t: '—',     custom: true },
 ];
 
+// ---- Feature grid static data -------------------------------------------
 const foodItems = [
   { name: 'Greek yogurt, 2% fat',        meta: '100g · 59 kcal · 9.9g P', tag: 'RECENT' },
   { name: 'Chicken breast, grilled',     meta: '100g · 165 kcal · 31g P', tag: 'FAV' },
@@ -162,6 +146,19 @@ function dotColor(n) {
   if (n <= 6) return '#f97316';
   return 'var(--color-carbs)';
 }
+
+// ---- Agentic AI tool trail (Feature 03) ---------------------------------
+const aiTrail = [
+  { icon: '•',  text: 'Understanding request',                           kind: 'status' },
+  { icon: '⚙',  text: 'search_food_items("sweetgreen kale caesar")',     kind: 'call'   },
+  { icon: '✓',  text: 'No match in database',                             kind: 'result' },
+  { icon: '⚙',  text: 'googleSearch("sweetgreen kale caesar nutrition")', kind: 'call'   },
+  { icon: '✓',  text: 'Found: 560 cal · 40g P · 31g F · 42g C',          kind: 'result' },
+  { icon: '⚙',  text: 'create_food_item(name: "Sweetgreen Kale Caesar")', kind: 'call'   },
+  { icon: '✓',  text: 'Created custom food · saved to library',           kind: 'result' },
+  { icon: '⚙',  text: 'log_food_entry(meal: "lunch", qty: 1)',            kind: 'call'   },
+  { icon: '✓',  text: 'Logged to today · lunch',                          kind: 'result' },
+];
 </script>
 
 <template>
@@ -218,8 +215,8 @@ function dotColor(n) {
           Protokol Lab
         </span>
         <div class="nav-links">
-          <a href="#features" class="nav-link">Features</a>
-          <a href="#premium" class="nav-link">Premium</a>
+          <a href="/features" class="nav-link">Features</a>
+          <a href="#ai" class="nav-link">AI</a>
           <a href="#pricing" class="nav-link">Pricing</a>
         </div>
         <button class="nav-cta" @click="goLogin">Sign in</button>
@@ -705,100 +702,95 @@ function dotColor(n) {
       </div>
     </section>
 
-    <!-- PREMIUM -->
-    <section id="premium">
+    <!-- FEATURE 03 · AGENTIC AI -->
+    <section id="ai">
       <div class="wrap">
         <div class="section-head">
-          <div class="eyebrow">Premium · $2.99/mo</div>
+          <div class="eyebrow">03 · Agentic AI</div>
           <h2>
-            The features that <span class="accent">earn the upgrade.</span>
+            An assistant that<br /><span class="accent">does the work.</span>
           </h2>
           <p class="lead">
-            Two things you can't get anywhere else: an AI that's actually read
-            your data, and a chart that shows you what's causing what.
+            Not a chatbot. The AI has tools — it reads your log, searches the
+            web for anything new, creates custom foods, and writes entries
+            directly into your day. You describe what you ate. It handles the
+            rest.
           </p>
         </div>
-        <div class="premium-grid">
-          <div class="premium-card">
-            <span class="premium-tag">PREMIUM</span>
-            <h3>AI that knows your data</h3>
-            <p>
-              Ask it anything. It's already read your food log, your doses, how
-              you've been feeling, and your notes. "What should I eat to hit my
-              protein?" "How do I handle the nausea this week?" Real answers,
-              based on <em>your</em> numbers.
+        <div class="feat-row">
+          <div class="feat-text">
+            <h3 class="feat-head">
+              Tell it what you ate.<br /><span class="accent">It logs it.</span>
+            </h3>
+            <p class="feat-body">
+              Most trackers give you a chat window and call it AI. This one
+              actually does things. Watch the tool trail on the right — it
+              checks your food database, falls back to web search when a new
+              item isn't there, saves it to your library, and writes the
+              entry into today's log.
             </p>
-            <div class="mini-ui">
-              <div class="aichat">
-                <div class="aichat-msg user">
-                  <div class="aichat-tag">You</div>
-                  <div>
-                    I'm under on calories today and barely hungry. What should I
-                    grab?
-                  </div>
-                </div>
-                <div class="aichat-msg ai">
-                  <div class="aichat-tag">Protokol Lab</div>
-                  <div>
-                    You're 260 cal and 52g of carbs short. Your dose just
-                    peaked, so tomorrow you'll probably want to eat less —
-                    today's a good day to catch up. Try
-                    <span class="hl">½ cup rice and a banana</span> — that gets
-                    you there.
-                  </div>
-                </div>
-                <div class="aichat-chips">
-                  <div class="aichat-chip">+ ½ cup rice</div>
-                  <div class="aichat-chip">+ Banana</div>
-                </div>
-              </div>
-            </div>
+            <ul class="feat-bullets">
+              <li>
+                <span>
+                  <b>Reads your data</b> · every food, dose, weigh-in, symptom,
+                  and note is available context
+                </span>
+              </li>
+              <li>
+                <span>
+                  <b>Searches the web</b> · new restaurant, new supplement, any
+                  nutrition fact it needs to check
+                </span>
+              </li>
+              <li>
+                <span>
+                  <b>Creates &amp; logs</b> · custom foods and log entries
+                  written straight to your account
+                </span>
+              </li>
+              <li>
+                <span>
+                  <b>Multi-thread history</b> · keep "Dose escalation plan"
+                  separate from "Nausea tolerance"
+                </span>
+              </li>
+            </ul>
           </div>
-          <div class="premium-card">
-            <span class="premium-tag">PREMIUM</span>
-            <h3>See what's causing what</h3>
-            <p>
-              Put any two things on the same chart. Find out the nausea peaks
-              two days after your shot. That you sleep worse on high-carb days.
-              That your weight stalls when protein drops. Patterns, not guesses.
-            </p>
-            <div class="mini-ui">
-              <div class="mini-pad alt">
-                <div class="corr-legend">
-                  <span class="corr-amber">━ Dose in system</span>
-                  <span class="corr-red">━ Nausea</span>
-                  <span class="corr-dim">Strong match</span>
+          <div class="feat-visual">
+            <div class="hero-terminal">
+              <div class="term-titlebar">
+                <div class="term-dots">
+                  <span class="term-dot"></span><span class="term-dot"></span
+                  ><span class="term-dot"></span>
                 </div>
-                <svg
-                  :viewBox="`0 0 ${correlation.W} ${correlation.H}`"
-                  class="block-svg"
-                >
-                  <line
-                    v-for="(y, i) in correlation.gridYs"
-                    :key="i"
-                    :x1="correlation.pad.l"
-                    :x2="correlation.right"
-                    :y1="y"
-                    :y2="y"
-                    stroke="var(--border)"
-                    stroke-dasharray="1 3"
-                  />
-                  <path
-                    :d="correlation.pkPath"
-                    fill="none"
-                    stroke="var(--color-fat)"
-                    stroke-width="1.5"
-                  />
-                  <path
-                    :d="correlation.nPath"
-                    fill="none"
-                    stroke="var(--color-carbs)"
-                    stroke-width="1.5"
-                    stroke-dasharray="3 2"
-                  />
-                </svg>
-                <div class="corr-footer">
-                  -40d <span class="right">today</span>
+                <span class="term-title">ai · tool trail</span>
+                <span class="term-badge"><span class="dot-live"></span>LIVE</span>
+              </div>
+              <div class="term-body" style="padding: 0;">
+                <div class="aichat">
+                  <div class="aichat-msg user">
+                    <div class="aichat-tag">You</div>
+                    <div>I just ate a Sweetgreen Kale Caesar at lunch.</div>
+                  </div>
+                  <div class="aichat-msg ai">
+                    <div class="aichat-tag">Protokol Lab</div>
+                    <ol class="trail">
+                      <li
+                        v-for="(t, i) in aiTrail"
+                        :key="i"
+                        class="trail-item"
+                        :class="t.kind"
+                      >
+                        <span class="trail-icon">{{ t.icon }}</span>
+                        <span class="trail-text">{{ t.text }}</span>
+                      </li>
+                    </ol>
+                    <div class="ai-final">
+                      Logged. You're at <b>1,240 cal</b>, 340 to go for the
+                      day. Protein's at 92g — you'll want another shake before
+                      bed to hit 180.
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -985,6 +977,28 @@ function dotColor(n) {
         </div>
       </div>
     </section>
+
+    <!-- MORE FEATURES CALLOUT -->
+    <section class="more-features">
+      <div class="wrap">
+        <div class="section-head center">
+          <div class="eyebrow center">Core · Free forever</div>
+          <h2>
+            That's the sales pitch.<br /><span class="accent">See the full tour.</span>
+          </h2>
+          <p class="lead">
+            Food library, saved meals, macro targets, BMR projections, goal
+            countdown, progress photos, push scheduler, custom symptoms,
+            offline sync, data export. Every feature illustrated with a real
+            screen from the app.
+          </p>
+          <div class="more-cta">
+            <a href="/features" class="btn-secondary">Browse all features →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
 
     <!-- PRICING -->
     <section class="pricing" id="pricing">
@@ -1424,47 +1438,41 @@ section.hero { padding: 72px 0 96px; }
 .rolling-note .arrow { color: var(--primary); }
 .rolling-note .dim { color: var(--text-tertiary); }
 
-/* ---- Premium ------------------------------------------------------ */
-.premium-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.premium-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 28px;
-  display: flex; flex-direction: column;
-  position: relative;
+/* ---- Agentic AI mini (Feature 03) --------------------------------- */
+.aichat { padding: 14px; background: var(--surface-alt); font-size: 12px; line-height: 1.55; }
+.aichat-msg {
+  padding: 10px 12px; margin-bottom: 10px;
+  border-left: 2px solid var(--text-tertiary);
+  background: var(--surface-raised);
 }
-.premium-tag {
-  position: absolute; top: 0; right: 0;
-  background: var(--primary); color: var(--bg);
-  font-size: 9px; font-weight: 700;
-  padding: 4px 10px; letter-spacing: 0.14em;
+.aichat-msg.ai {
+  border-left-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
 }
-.premium-card h3 { font-size: 22px; margin: 0 0 12px; font-weight: 700; letter-spacing: -0.01em; }
-.premium-card p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 0 0 20px; }
-.premium-card .mini-ui { margin-top: auto; }
-
-/* AI chat mini */
-.aichat { padding: 14px; background: var(--surface-alt); font-size: 11px; line-height: 1.55; }
-.aichat-msg { padding: 10px 12px; margin-bottom: 10px; border-left: 2px solid var(--text-tertiary); background: var(--surface-raised); }
-.aichat-msg.ai { border-left-color: var(--primary); background: color-mix(in srgb, var(--primary) 4%, transparent); margin-bottom: 6px; }
-.aichat-tag { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-tertiary); margin-bottom: 3px; }
+.aichat-tag {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--text-tertiary); margin-bottom: 6px;
+}
 .aichat-msg.ai .aichat-tag { color: var(--primary); }
 .aichat-msg.user > div:last-child { color: var(--text); }
-.aichat-msg.ai > div:last-child { color: var(--text-secondary); }
-.aichat-msg .hl { color: var(--text); }
-.aichat-chips { display: flex; gap: 6px; margin-top: 10px; }
-.aichat-chip {
-  font-size: 10px; color: var(--text-tertiary); padding: 3px 8px;
-  border: 1px solid var(--border); background: var(--surface);
-}
 
-/* Correlation mini */
-.corr-legend { display: flex; gap: 16px; font-size: 10px; margin-bottom: 8px; }
-.corr-amber { color: var(--color-fat); }
-.corr-red { color: var(--color-carbs); }
-.corr-dim { color: var(--text-tertiary); margin-left: auto; }
-.corr-footer { font-size: 10px; color: var(--text-tertiary); margin-top: 4px; font-family: var(--font-mono); }
-.corr-footer .right { float: right; }
+.trail {
+  list-style: none; margin: 0 0 10px; padding: 0;
+  border: 1px solid var(--border); background: var(--surface-alt);
+}
+.trail-item {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 5px 10px; font-size: 11px;
+  color: var(--text-secondary); font-family: var(--font-mono);
+  border-bottom: 1px dashed var(--border);
+}
+.trail-item:last-child { border-bottom: none; }
+.trail-item .trail-icon { width: 12px; color: var(--text-tertiary); flex-shrink: 0; text-align: center; }
+.trail-item.call .trail-icon,
+.trail-item.result .trail-icon { color: var(--primary); }
+.trail-item.call .trail-text { color: var(--text); }
+.ai-final { color: var(--text); font-size: 12.5px; line-height: 1.5; }
+.ai-final b { color: var(--primary); }
 
 /* ---- Feature grid ------------------------------------------------- */
 .fg {
@@ -1577,6 +1585,19 @@ section.hero { padding: 72px 0 96px; }
 }
 .photos-meta { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); }
 
+/* ---- More features callout --------------------------------------- */
+.more-features { padding: 96px 0; border-bottom: 1px solid var(--border); }
+.more-cta { margin-top: 28px; }
+.more-cta .btn-secondary {
+  display: inline-block; padding: 14px 22px;
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border-strong); font-weight: 600; font-size: 13px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer; font-family: inherit; text-decoration: none;
+  transition: border-color .15s, color .15s;
+}
+.more-cta .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+
 /* ---- Pricing ------------------------------------------------------ */
 .pricing { padding: 96px 0; }
 .price-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 860px; margin: 0 auto; }
@@ -1642,7 +1663,7 @@ footer {
   .feat-row, .feat-row.reverse { grid-template-columns: 1fr; gap: 36px; }
   .feat-row.reverse .feat-text { order: 1; }
   .feat-row.reverse .feat-visual { order: 2; }
-  .premium-grid, .fg, .price-cards { grid-template-columns: 1fr; }
+  .fg, .price-cards { grid-template-columns: 1fr; }
   .fg-cell { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
 }

@@ -78,6 +78,9 @@ async function handleDelete(entry, event) {
       <h3>Photos</h3>
       <span v-if="photosStore.uploading" class="card-sub">uploading…</span>
     </div>
+    <p class="hint">
+      Snap a front, side, and back shot whenever you can. Consistency beats frequency.
+    </p>
 
     <div class="photo-slots">
       <div
@@ -127,46 +130,51 @@ async function handleDelete(entry, event) {
 .photo-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-3) var(--space-4);
 }
 .photo-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 .photo-header h3 {
   margin: 0;
   flex: 1;
-  font-size: 0.95rem;
+  font-size: var(--font-size-m);
+}
+.hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-3);
 }
 .card-sub {
-  font-size: 0.68rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .photo-slots {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.4rem;
+  gap: var(--space-1);
 }
 .photo-slot {
   position: relative;
   aspect-ratio: 3 / 4;
   background: var(--bg);
   border: 1px dashed var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   cursor: pointer;
   overflow: hidden;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0.25rem;
-  transition: border-color 0.15s, background 0.15s;
+  padding: var(--space-1);
+  transition: border-color var(--transition-base), background var(--transition-base);
 }
 .photo-slot:hover { border-color: var(--primary); }
 .photo-slot.filled { border-style: solid; border-color: var(--border); }
@@ -182,22 +190,22 @@ async function handleDelete(entry, event) {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 1.4rem;
+  font-size: var(--font-size-xl);
   color: var(--text-secondary);
   line-height: 1;
-  font-weight: 300;
+  font-weight: var(--font-weight-light);
 }
 .photo-slot-label {
   position: relative;
   z-index: 1;
-  font-size: 0.65rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
   color: var(--text-secondary);
   background: var(--surface);
   padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--radius-small);
 }
 .photo-slot.filled .photo-slot-label {
   background: rgba(0, 0, 0, 0.55);
@@ -209,11 +217,11 @@ async function handleDelete(entry, event) {
   right: 3px;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
   border: none;
-  font-size: 0.9rem;
+  font-size: var(--font-size-s);
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -221,7 +229,7 @@ async function handleDelete(entry, event) {
   justify-content: center;
   padding: 0;
   opacity: 0;
-  transition: opacity 0.12s;
+  transition: opacity var(--transition-fast);
 }
 .photo-slot:hover .photo-del { opacity: 1; }
 .photo-del:hover { background: var(--danger); }
@@ -236,7 +244,7 @@ async function handleDelete(entry, event) {
 
 .photo-error {
   color: var(--danger);
-  font-size: 0.75rem;
-  margin: 0.4rem 0 0;
+  font-size: var(--font-size-xs);
+  margin: var(--space-1) 0 0;
 }
 </style>

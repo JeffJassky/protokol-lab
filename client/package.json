@@ -16,6 +16,7 @@
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
     "deep-chat": "^2.4.2",
+    "floating-vue": "^5.2.2",
     "pinia": "^3.0.4",
     "vue": "^3.5.30",
     "vue-chartjs": "^5.3.3",

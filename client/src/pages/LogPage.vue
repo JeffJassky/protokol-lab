@@ -33,8 +33,7 @@ const date = ref(route.query.date || new Date().toISOString().slice(0, 10));
 const editingId = ref(null);
 const editServings = ref(1);
 
-// Flyout state for the food entry "..." menus.
-const openMenuId = ref(null);
+// Inline submenu expansion within the "..." menu (VDropdown handles open/close).
 const openSubmenu = ref(null); // null | 'addToMeal'
 // Collapsed meal groups keyed by `${mealType}:${mealId}`.
 const collapsedGroups = reactive(new Set());
@@ -50,7 +49,6 @@ const editFoodItem = ref(null);
 const editModalOpen = ref(false);
 
 function openEditModal(entry) {
-  closeMenu();
   editFoodItem.value = entry.foodItemId;
   editModalOpen.value = true;
 }
@@ -245,24 +243,11 @@ function addFood(mealType) {
 
 // ---- "..." flyout -------------------------------------------------------
 
-function openMenu(entryId, event) {
-  event.stopPropagation();
-  openMenuId.value = openMenuId.value === entryId ? null : entryId;
-  openSubmenu.value = null;
-}
-
-function closeMenu() {
-  openMenuId.value = null;
-  openSubmenu.value = null;
-}
-
 async function handleDelete(entry) {
-  closeMenu();
   await foodlogStore.deleteEntry(entry._id);
 }
 
 async function handleDeleteGroup(mealType, group) {
-  closeMenu();
   if (!confirm(`Remove all ${group.entries.length} items from "${group.mealName}"?`)) return;
   for (const entry of group.entries) {
     // eslint-disable-next-line no-await-in-loop
@@ -271,7 +256,6 @@ async function handleDeleteGroup(mealType, group) {
 }
 
 async function addEntryToMeal(entry, mealId) {
-  closeMenu();
   const foodItemId = entry.foodItemId?._id;
   if (!foodItemId) return;
   await mealsStore.addItem(mealId, foodItemId, entry.servingCount);
@@ -280,7 +264,6 @@ async function addEntryToMeal(entry, mealId) {
 async function addEntryToNewMeal(entry) {
   const name = prompt('New meal name:');
   if (!name || !name.trim()) return;
-  closeMenu();
   const foodItemId = entry.foodItemId?._id;
   if (!foodItemId) return;
   const meal = await mealsStore.createMeal(name.trim());
@@ -290,7 +273,6 @@ async function addEntryToNewMeal(entry) {
 // ---- Copy / Move flows --------------------------------------------------
 
 function openPicker({ mode, ids, title }) {
-  closeMenu();
   pickerMode.value = mode;
   pickerTargetIds.value = ids;
   pickerTitle.value = title;
@@ -495,7 +477,7 @@ function onNoteBlur() {
 </script>
 
 <template>
-  <div class="log-page" @click="closeMenu">
+  <div class="log-page">
     <h2>Daily Log</h2>
     <DateSelector v-model="date" />
 
@@ -511,7 +493,7 @@ function onNoteBlur() {
       <div class="top-col stacked-col">
         <div class="meal-card compact">
           <div class="body-metrics">
-            <div class="metric-col">
+            <div class="metric-col" v-tooltip="'Log your weight'">
               <div class="metric-label">Weight</div>
               <form
                 v-if="!todaysWeight"
@@ -542,7 +524,7 @@ function onNoteBlur() {
                 </button>
               </div>
             </div>
-            <div class="metric-col">
+            <div class="metric-col" v-tooltip="'Log your waist'">
               <div class="metric-label">Waist</div>
               <form
                 v-if="!todaysWaist"
@@ -572,57 +554,56 @@ function onNoteBlur() {
           </div>
         </div>
 
-        <div
-          v-for="compound in enabledCompounds"
-          :key="compound._id"
-          class="meal-card compact"
-        >
-          <div class="meal-header">
-            <h3>{{ compound.name }}</h3>
-            <span class="card-sub">dose</span>
-          </div>
-          <form
-            v-if="!todaysDoseFor(compound._id)"
-            class="quick-form"
-            @submit.prevent="handleAddDose(compound)"
-          >
-            <input
-              type="number"
-              v-model.number="newDoseByCompound[compound._id]"
-              step="0.25"
-              :placeholder="compound.doseUnit"
-              required
-            />
-            <button
-              class="btn-primary"
-              type="submit"
-              :disabled="savingDoseByCompound[compound._id]"
-            >
-              {{ savingDoseByCompound[compound._id] ? 'Saving...' : 'Log' }}
-            </button>
-          </form>
-          <div v-else class="logged-row">
-            <span class="logged-value">
-              {{ todaysDoseFor(compound._id).value }} {{ compound.doseUnit }}
-            </span>
-            <button
-              class="delete-btn"
-              @click="handleDeleteDose(todaysDoseFor(compound._id))"
-            >
-              x
-            </button>
-          </div>
+        <div v-if="enabledCompounds.length" class="meal-card compact compounds-card">
           <div
-            v-if="nextDoseLabelFor(compound)"
-            class="next-dose"
-            :class="{ urgent: nextDoseLabelFor(compound).urgent }"
+            v-for="compound in enabledCompounds"
+            :key="compound._id"
+            class="compound-row"
+            v-tooltip="`Log ${compound.name} dose`"
           >
-            <span class="next-dose-label">Next dose:</span>
-            {{ nextDoseLabelFor(compound).text }}
+            <div class="metric-label">{{ compound.name }}</div>
+            <form
+              v-if="!todaysDoseFor(compound._id)"
+              class="quick-form"
+              @submit.prevent="handleAddDose(compound)"
+            >
+              <input
+                type="number"
+                v-model.number="newDoseByCompound[compound._id]"
+                step="0.25"
+                :placeholder="compound.doseUnit"
+                required
+              />
+              <button
+                class="btn-primary"
+                type="submit"
+                :disabled="savingDoseByCompound[compound._id]"
+              >
+                {{ savingDoseByCompound[compound._id] ? 'Saving...' : 'Log' }}
+              </button>
+            </form>
+            <div v-else class="logged-row">
+              <span class="logged-value">
+                {{ todaysDoseFor(compound._id).value }} {{ compound.doseUnit }}
+              </span>
+              <button
+                class="delete-btn"
+                @click="handleDeleteDose(todaysDoseFor(compound._id))"
+              >
+                x
+              </button>
+            </div>
+            <div
+              v-if="nextDoseLabelFor(compound)"
+              class="next-dose"
+              :class="{ urgent: nextDoseLabelFor(compound).urgent }"
+            >
+              <span class="next-dose-label">Next dose:</span>
+              {{ nextDoseLabelFor(compound).text }}
+            </div>
           </div>
         </div>
 
-        <PhotoCaptureCard :date="date" />
       </div>
     </div>
 
@@ -645,7 +626,7 @@ function onNoteBlur() {
       >
         <div class="meal-section-header">
           <h4>{{ meal.label }}</h4>
-          <button class="add-btn" @click="addFood(meal.key)">+</button>
+          <button class="add-btn" v-tooltip="`Add to ${meal.label.toLowerCase()}`" @click="addFood(meal.key)">+</button>
         </div>
         <table v-if="foodlogStore.entries[meal.key].length" class="meal-table">
           <thead>
@@ -654,7 +635,7 @@ function onNoteBlur() {
               <th class="col-name">Item</th>
               <th class="col-srv">Servings</th>
               <th class="col-num sortable" @click="toggleSort('cal')">
-                Cal{{ sortIndicator('cal') }}
+                Kcal{{ sortIndicator('cal') }}
               </th>
               <th class="col-num col-p sortable" @click="toggleSort('p')">
                 Pro{{ sortIndicator('p') }}
@@ -682,6 +663,7 @@ function onNoteBlur() {
                   <input
                     type="checkbox"
                     :checked="row.entry.consumed !== false"
+                    v-tooltip="row.entry.consumed !== false ? 'Mark as not yet eaten' : 'Mark as eaten'"
                     @click.stop
                     @change="foodlogStore.toggleConsumed(row.entry._id, $event.target.checked)"
                   />
@@ -729,69 +711,36 @@ function onNoteBlur() {
                 <td class="col-num col-f">{{ entryNutrition(row.entry).f }}</td>
                 <td class="col-num col-c">{{ entryNutrition(row.entry).c }}</td>
                 <td class="col-del">
-                  <div class="menu-anchor">
-                    <button
-                      class="menu-btn"
-                      @click.stop="openMenu(row.entry._id, $event)"
-                    >
-                      ⋯
-                    </button>
-                    <div
-                      v-if="openMenuId === row.entry._id"
-                      class="menu"
-                      @click.stop
-                    >
-                      <button
-                        class="menu-item"
-                        @click="openEditModal(row.entry)"
-                      >
-                        Edit item
-                      </button>
-                      <button
-                        class="menu-item"
-                        @click="handleDelete(row.entry)"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        class="menu-item"
-                        @click="startCopyEntry(row.entry)"
-                      >
-                        Copy to...
-                      </button>
-                      <button
-                        class="menu-item"
-                        @click="startMoveEntry(row.entry)"
-                      >
-                        Move to...
-                      </button>
-                      <button
-                        class="menu-item with-submenu"
-                        @click="openSubmenu = openSubmenu === 'addToMeal' ? null : 'addToMeal'"
-                      >
-                        Add to meal ▸
-                      </button>
-                      <div v-if="openSubmenu === 'addToMeal'" class="submenu">
+                  <VDropdown placement="bottom-end" :distance="4" @hide="openSubmenu = null">
+                    <button class="menu-btn">⋯</button>
+                    <template #popper>
+                      <div class="menu">
+                        <button class="menu-item" v-close-popper @click="openEditModal(row.entry)">Edit item</button>
+                        <button class="menu-item" v-close-popper @click="handleDelete(row.entry)">Delete</button>
+                        <button class="menu-item" v-close-popper @click="startCopyEntry(row.entry)">Copy to...</button>
+                        <button class="menu-item" v-close-popper @click="startMoveEntry(row.entry)">Move to...</button>
                         <button
-                          class="menu-item"
-                          @click="addEntryToNewMeal(row.entry)"
+                          class="menu-item with-submenu"
+                          @click="openSubmenu = openSubmenu === 'addToMeal' ? null : 'addToMeal'"
                         >
-                          + New meal...
+                          Add to meal ▸
                         </button>
-                        <button
-                          v-for="m in mealsStore.meals"
-                          :key="m._id"
-                          class="menu-item"
-                          @click="addEntryToMeal(row.entry, m._id)"
-                        >
-                          {{ m.name }}
-                        </button>
-                        <p v-if="!mealsStore.meals.length" class="menu-empty">
-                          No meals yet
-                        </p>
+                        <div v-if="openSubmenu === 'addToMeal'" class="submenu">
+                          <button class="menu-item" v-close-popper @click="addEntryToNewMeal(row.entry)">+ New meal...</button>
+                          <button
+                            v-for="m in mealsStore.meals"
+                            :key="m._id"
+                            class="menu-item"
+                            v-close-popper
+                            @click="addEntryToMeal(row.entry, m._id)"
+                          >
+                            {{ m.name }}
+                          </button>
+                          <p v-if="!mealsStore.meals.length" class="menu-empty">No meals yet</p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    </template>
+                  </VDropdown>
                 </td>
               </tr>
 
@@ -829,32 +778,16 @@ function onNoteBlur() {
                     {{ sumNutrition(row.entries).c }}
                   </td>
                   <td class="col-del">
-                    <div class="menu-anchor">
-                      <button
-                        class="menu-btn"
-                        @click.stop="openMenu(`g:${meal.key}:${row.mealId}`, $event)"
-                      >
-                        ⋯
-                      </button>
-                      <div
-                        v-if="openMenuId === `g:${meal.key}:${row.mealId}`"
-                        class="menu"
-                        @click.stop
-                      >
-                        <button
-                          class="menu-item"
-                          @click="handleDeleteGroup(meal.key, row)"
-                        >
-                          Delete group
-                        </button>
-                        <button class="menu-item" @click="startCopyGroup(row)">
-                          Copy to...
-                        </button>
-                        <button class="menu-item" @click="startMoveGroup(row)">
-                          Move to...
-                        </button>
-                      </div>
-                    </div>
+                    <VDropdown placement="bottom-end" :distance="4">
+                      <button class="menu-btn" @click.stop>⋯</button>
+                      <template #popper>
+                        <div class="menu">
+                          <button class="menu-item" v-close-popper @click="handleDeleteGroup(meal.key, row)">Delete group</button>
+                          <button class="menu-item" v-close-popper @click="startCopyGroup(row)">Copy to...</button>
+                          <button class="menu-item" v-close-popper @click="startMoveGroup(row)">Move to...</button>
+                        </div>
+                      </template>
+                    </VDropdown>
                   </td>
                 </tr>
                 <template v-if="!isCollapsed(meal.key, row.mealId)">
@@ -868,6 +801,7 @@ function onNoteBlur() {
                       <input
                         type="checkbox"
                         :checked="child.consumed !== false"
+                        v-tooltip="child.consumed !== false ? 'Mark as not yet eaten' : 'Mark as eaten'"
                         @click.stop
                         @change="foodlogStore.toggleConsumed(child._id, $event.target.checked)"
                       />
@@ -1046,9 +980,12 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <div class="meal-card">
       <div class="meal-header">
-        <h3>Note</h3>
+        <h3>Journal Notes</h3>
         <span v-if="notesStore.saving" class="card-sub">saving...</span>
       </div>
+      <p class="hint">
+        Capture how you felt or anything worth remembering about today.
+      </p>
       <textarea
         v-model="noteDraft"
         class="note-textarea"
@@ -1058,6 +995,11 @@ function onNoteBlur() {
         @blur="onNoteBlur"
       ></textarea>
     </div>
+
+    <!-- =========================================================== -->
+    <!-- PHOTO LOG                                                    -->
+    <!-- =========================================================== -->
+    <PhotoCaptureCard :date="date" />
 
     <DatePickerModal
       :open="pickerOpen"
@@ -1082,7 +1024,7 @@ function onNoteBlur() {
 
 /* The nutrition card uses the same shell as a meal card but its inner padding
    gets a touch more breathing room since the macro bars need vertical space. */
-.nutrition-card { padding-bottom: 1.25rem; }
+.nutrition-card { padding-bottom: var(--space-5); }
 .nutrition-card :deep(.daily-summary) {
   background: transparent;
   border: none;
@@ -1094,126 +1036,137 @@ function onNoteBlur() {
 .top-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 .top-row .top-col { min-width: 0; }
 .top-row .meal-card { margin-bottom: 0; }
 .stacked-col {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
-.meal-card.compact { padding: 0.85rem 1rem; }
-.meal-card.compact .meal-header { margin-bottom: 0.4rem; }
+.meal-card.compact { padding: var(--space-3) var(--space-4); }
+.meal-card.compact .meal-header { margin-bottom: var(--space-1); }
 .body-metrics {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 .metric-col { flex: 1; min-width: 0; }
-.metric-label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.35rem;
+.metric-label,
+.meal-card.compact .meal-header h3 {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  margin: 0 0 var(--space-2);
 }
 
 .card-sub {
-  font-size: 0.68rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+}
+.compounds-card .compound-row + .compound-row {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
 }
 .next-dose {
-  margin-top: 0.5rem;
-  padding-top: 0.45rem;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--border);
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 .next-dose.urgent { color: var(--warning); font-weight: var(--font-weight-bold); }
-.next-dose-label { font-weight: 500; color: var(--text-secondary); }
+.next-dose-label { font-weight: var(--font-weight-medium); color: var(--text-secondary); }
 @media (max-width: 540px) {
   .top-row { grid-template-columns: 1fr; }
 }
 
-.weekly-wrap { margin-bottom: 0.75rem; }
+.weekly-wrap { margin-bottom: var(--space-3); }
 
 .meal-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 0.75rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-3);
 }
 .meal-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 .meal-header h3 {
   margin: 0;
   flex: 1;
-  font-size: 0.95rem;
+  font-size: var(--font-size-m);
 }
 
 /* Food card with stacked meal sections (Breakfast / Lunch / Dinner / Snack). */
 .food-card .meal-section + .meal-section {
   border-top: 1px solid var(--border);
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
 }
 .meal-section-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 .meal-section-header h4 {
   margin: 0;
   flex: 1;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
 }
 
 .add-btn {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: var(--radius-small);
   background: var(--primary);
   color: var(--text-on-primary);
   border: none;
-  font-size: 1.1rem;
+  font-size: var(--font-size-l);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  transition: background var(--transition-base);
 }
 .add-btn:hover { background: var(--primary-hover); }
 
 .meal-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.83rem;
+  font-size: var(--font-size-s);
   font-variant-numeric: tabular-nums;
 }
 .meal-table th {
-  font-weight: 500;
-  font-size: 0.7rem;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
-  padding: 0.3rem 0.4rem;
+  padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
+.meal-table th.col-name,
+.meal-table th.col-srv { color: var(--text-tertiary); }
 .meal-table td {
-  padding: 0.4rem 0.4rem;
+  padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
@@ -1221,8 +1174,15 @@ function onNoteBlur() {
 .meal-table tfoot td {
   border-top: 1px solid var(--border);
   border-bottom: none;
-  padding-top: 0.5rem;
-  font-weight: 600;
+  padding-top: var(--space-2);
+  font-weight: var(--font-weight-bold);
+}
+.meal-table tfoot td.col-name {
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
 }
 
 .col-name {
@@ -1259,8 +1219,8 @@ function onNoteBlur() {
 .meal-table th.col-c { color: var(--color-carbs); }
 .meal-table tfoot td.col-num:not(.col-p):not(.col-f):not(.col-c) { color: var(--color-cal); }
 
-.entry-name { font-weight: 500; color: var(--text); }
-.entry-emoji { display: inline-block; margin-right: 0.3rem; font-size: 0.95rem; line-height: 1; }
+.entry-name { font-weight: var(--font-weight-medium); color: var(--text); }
+.entry-emoji { display: inline-block; margin-right: var(--space-1); font-size: var(--font-size-m); line-height: 1; }
 .servings {
   cursor: pointer;
   border-bottom: 1px dotted var(--text-secondary);
@@ -1268,21 +1228,15 @@ function onNoteBlur() {
 }
 .edit-input {
   width: 48px;
-  padding: 0.15rem 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.8rem;
-  background: var(--bg);
-  color: var(--text);
+  padding: 0.15rem var(--space-1);
+  font-size: var(--font-size-s);
 }
-.edit-input:focus { outline: none; border-color: var(--primary); }
 .save-btn {
-  font-size: 0.7rem;
-  padding: 0.1rem 0.35rem;
+  font-size: var(--font-size-xs);
+  padding: 0.1rem var(--space-1);
   background: var(--primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 4px;
   cursor: pointer;
   margin-left: 0.2rem;
 }
@@ -1292,53 +1246,46 @@ function onNoteBlur() {
   color: var(--text-disabled);
   cursor: pointer;
   font-size: var(--font-size-s);
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  padding: var(--space-1);
 }
-.menu-btn { font-size: 1.1rem; line-height: 1; }
+.menu-btn { font-size: var(--font-size-l); line-height: 1; }
 .delete-btn:hover { color: var(--danger); background: var(--danger-soft); }
 .menu-btn:hover { color: var(--text); background: var(--bg); }
 
 .menu-anchor { position: relative; display: inline-block; }
 .menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
   min-width: 140px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   box-shadow: var(--shadow-m);
-  padding: 0.25rem;
-  z-index: 100;
-  margin-top: 0.25rem;
+  padding: var(--space-1);
 }
 .menu-item {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 0.4rem 0.7rem;
+  padding: var(--space-1) var(--space-2);
   background: none;
   border: none;
-  border-radius: 4px;
   cursor: pointer;
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: var(--font-size-s);
   white-space: nowrap;
 }
 .menu-item:hover { background: var(--bg); }
 .menu-item.with-submenu { position: relative; }
 .submenu {
   border-top: 1px solid var(--border);
-  margin-top: 0.25rem;
-  padding-top: 0.25rem;
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
   max-height: 240px;
   overflow-y: auto;
 }
 .menu-empty {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  padding: 0.4rem 0.7rem;
+  padding: var(--space-1) var(--space-2);
   margin: 0;
 }
 
@@ -1347,27 +1294,27 @@ function onNoteBlur() {
   cursor: pointer;
 }
 .meal-group-header:hover { background: var(--tint-carbs-soft); }
-.meal-group-header td { font-weight: 600; }
+.meal-group-header td { font-weight: var(--font-weight-bold); }
 .meal-group-header .caret {
   display: inline-block;
   width: 0.9rem;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
 }
 .meal-group-header .group-name { color: var(--text); }
 .meal-group-header .group-count {
-  font-weight: 400;
-  font-size: 0.72rem;
+  font-weight: var(--font-weight-light);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  margin-left: 0.4rem;
+  margin-left: var(--space-1);
 }
-.entry-name.indent { padding-left: 1rem; }
+.entry-name.indent { padding-left: var(--space-4); }
 .group-child td { background: var(--tint-carbs-softest); }
 
 .empty {
   color: var(--text-disabled);
   font-size: var(--font-size-s);
-  padding: 0.25rem 0;
+  padding: var(--space-1) 0;
   margin: 0;
 }
 
@@ -1375,140 +1322,115 @@ function onNoteBlur() {
 .quick-form {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .quick-form input {
   flex: 1;
   min-width: 0;
   max-width: 80px;
-  padding: 0.45rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.9rem;
+  height: var(--control-height-md);
+  padding: 0 var(--control-pad-x-md);
+  font-size: var(--font-size-s);
 }
-.quick-form input:focus { outline: none; border-color: var(--primary); }
-.btn-primary {
-  padding: 0.45rem 1rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
+.metric-col .quick-form,
+.compound-row .quick-form { gap: 0; }
+.metric-col .quick-form input,
+.compound-row .quick-form input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
-.btn-primary:hover { background: var(--primary-hover); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-secondary {
-  padding: 0.45rem 1rem;
-  background: var(--bg);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.85rem;
+.metric-col .quick-form .btn-primary,
+.compound-row .quick-form .btn-primary {
+  padding: 0 var(--space-2);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
-.btn-secondary:hover { color: var(--text); }
-.btn-text {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.82rem;
-  padding: 0.4rem 0.5rem;
-}
-.btn-text:hover { color: var(--text); }
 
 .logged-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .logged-value {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: var(--font-size-l);
+  font-weight: var(--font-weight-bold);
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
 /* Symptoms */
 .hint {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-3);
 }
 .symptoms-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 .symptom-row {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.6rem 0.75rem;
+  padding: var(--space-2) 0;
 }
 .symptom-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-1);
 }
 .symptom-name {
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
   color: var(--text);
 }
 .dots {
   display: flex;
-  gap: 0.3rem;
+  gap: 0;
   flex-wrap: wrap;
 }
 .dot {
-  width: 28px;
+  flex: 1;
+  min-width: 0;
   height: 28px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--text-secondary);
-  font-size: 0.68rem;
-  font-weight: 500;
+  border-radius: 0;
+  border: 1px solid var(--border);
+  margin-left: -1px;
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-mono);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: background var(--transition-fast), color var(--transition-fast);
   font-variant-numeric: tabular-nums;
   user-select: none;
   -webkit-user-select: none;
 }
+.dot:first-child { margin-left: 0; }
 .dot.copyable {
   user-select: text;
   -webkit-user-select: text;
 }
-.dot:hover { transform: scale(1.1); }
-.dot.active { color: #fff; border-color: transparent; font-weight: var(--font-weight-bold); }
-.dot.active:hover { box-shadow: var(--shadow-s); }
-.dot.dot-zero { margin-right: 0.2rem; }
+.dot:hover { background: var(--surface); color: var(--text); }
+.dot.active { color: var(--bg); border-color: transparent; }
+.dot.dot-zero { margin-right: var(--space-1); }
 
-.add-symptom { margin-top: 0.25rem; }
+.add-symptom { margin-top: var(--space-1); }
+.add-symptom > .btn-secondary {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
 
 .note-textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.9rem;
-  font-family: inherit;
-  resize: vertical;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-s);
   line-height: 1.4;
 }
-.note-textarea:focus { outline: none; border-color: var(--primary); }
-.error { color: var(--danger); font-size: 0.78rem; margin: 0.4rem 0 0; }
+.error { color: var(--danger); font-size: var(--font-size-xs); margin: var(--space-1) 0 0; }
 </style>

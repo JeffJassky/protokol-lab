@@ -72,22 +72,22 @@ function dismiss() {
 .onboarding-banner {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 1rem;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
   background: var(--primary-soft, var(--surface));
   border-bottom: 1px solid var(--primary, var(--border));
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
 }
 .ob-text { flex: 1; min-width: 0; }
 .ob-cta {
   background: var(--primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 6px;
-  padding: 0.3rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 500;
+  border-radius: var(--radius-small);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   flex: none;
 }
@@ -96,15 +96,15 @@ function dismiss() {
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 1.2rem;
+  font-size: var(--font-size-l);
   line-height: 1;
-  padding: 0 0.3rem;
+  padding: 0 var(--space-1);
   cursor: pointer;
 }
 .ob-dismiss:hover { color: var(--text); }
 
 @media (max-width: 520px) {
-  .onboarding-banner { font-size: 0.78rem; padding: 0.4rem 0.75rem; gap: 0.4rem; }
-  .ob-cta { font-size: 0.75rem; padding: 0.25rem 0.55rem; }
+  .onboarding-banner { font-size: var(--font-size-xs); padding: var(--space-1) var(--space-3); gap: var(--space-1); }
+  .ob-cta { font-size: var(--font-size-xs); padding: var(--space-1) var(--space-2); }
 }
 </style>

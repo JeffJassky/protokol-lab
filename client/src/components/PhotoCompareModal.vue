@@ -129,19 +129,19 @@ const beforeClip = computed(() => `inset(0 ${100 - split.value}% 0 0)`);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: var(--space-6);
 }
 .cmp-close {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: var(--space-4);
+  right: var(--space-4);
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
   border: none;
-  font-size: 1.4rem;
+  font-size: var(--font-size-xl);
   line-height: 1;
   cursor: pointer;
 }
@@ -151,29 +151,29 @@ const beforeClip = computed(() => `inset(0 ${100 - split.value}% 0 0)`);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   max-width: min(92vw, 980px);
   width: 100%;
 }
 .cmp-heading {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   color: rgba(255, 255, 255, 0.92);
-  font-size: 0.88rem;
+  font-size: var(--font-size-s);
 }
 .cmp-angle {
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 700;
-  font-size: 0.7rem;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-xs);
   background: rgba(255, 255, 255, 0.18);
   color: #fff;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
 }
 .cmp-dates { font-variant-numeric: tabular-nums; }
-.cmp-days { color: rgba(255, 255, 255, 0.55); margin-left: 0.35rem; }
+.cmp-days { color: rgba(255, 255, 255, 0.55); margin-left: var(--space-1); }
 
 .cmp-frame {
   position: relative;
@@ -181,7 +181,7 @@ const beforeClip = computed(() => `inset(0 ${100 - split.value}% 0 0)`);
   max-height: 78vh;
   aspect-ratio: 3 / 4;
   background: #000;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   overflow: hidden;
   cursor: ew-resize;
   user-select: none;
@@ -212,34 +212,34 @@ const beforeClip = computed(() => `inset(0 ${100 - split.value}% 0 0)`);
   transform: translate(-50%, -50%);
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: #fff;
   color: #111;
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .cmp-tag {
   position: absolute;
-  top: 0.6rem;
-  padding: 0.22rem 0.55rem;
-  border-radius: 999px;
+  top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
   pointer-events: none;
 }
-.tag-before { left: 0.6rem; }
-.tag-after { right: 0.6rem; }
+.tag-before { left: var(--space-2); }
+.tag-after { right: var(--space-2); }
 
 .cmp-hint {
   color: rgba(255, 255, 255, 0.55);
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
 }
 </style>

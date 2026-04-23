@@ -387,31 +387,300 @@ async function handleSave() {
   <div class="settings-page">
     <h2>Settings</h2>
 
-    <div class="card">
-      <h3>Appearance</h3>
-      <div class="field">
-        <label>Theme</label>
-        <div class="theme-toggle">
-          <button
-            type="button"
-            class="theme-option"
-            :class="{ active: theme === 'light' }"
-            @click="theme = 'light'"
-          >Light</button>
-          <button
-            type="button"
-            class="theme-option"
-            :class="{ active: theme === 'dark' }"
-            @click="theme = 'dark'"
-          >Dark</button>
-          <button
-            type="button"
-            class="theme-option"
-            :class="{ active: theme === 'auto' }"
-            @click="theme = 'auto'"
-          >System</button>
+    <form @submit.prevent="handleSave">
+      <div class="card">
+        <h3>Profile</h3>
+        <div class="field">
+          <label>Sex</label>
+          <div class="radio-group">
+            <label class="radio"><input type="radio" v-model="sex" value="male" /> Male</label>
+            <label class="radio"><input type="radio" v-model="sex" value="female" /> Female</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Height</label>
+          <div class="inline-fields">
+            <input type="number" v-model.number="heightFeet" min="3" max="8" class="sm" /> <span>ft</span>
+            <input type="number" v-model.number="heightInches" min="0" max="11" class="sm" /> <span>in</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="weight">Current Weight (lbs)</label>
+          <input id="weight" type="number" v-model.number="currentWeightLbs" step="0.1" required />
+        </div>
+        <div class="field">
+          <label for="goal">Goal Weight (lbs)</label>
+          <input id="goal" type="number" v-model.number="goalWeightLbs" step="0.1" />
+        </div>
+        <div class="field">
+          <label for="bmr">BMR (kcal/day)</label>
+          <input id="bmr" type="number" v-model.number="bmr" step="1" placeholder="Optional" />
+          <p class="field-hint">Basal metabolic rate — calories burned at rest. Leave blank if unknown.</p>
         </div>
       </div>
+
+      <div class="card">
+        <h3>Daily Targets</h3>
+
+        <div class="field">
+          <label for="calories">Calories</label>
+          <input id="calories" type="number" v-model.number="calories" min="400" step="50" required />
+          <p v-if="calorieDelta != null" class="field-hint calc">
+            <span :class="calorieDelta < 0 ? 'neg' : 'pos'">
+              {{ signed(calorieDelta) }} kcal/day
+            </span>
+            vs BMR ·
+            <span :class="weeklyLbs < 0 ? 'neg' : 'pos'">
+              {{ signed(weeklyLbs, 2) }} lbs/week
+            </span>
+          </p>
+          <p v-else class="field-hint">Set BMR above to see estimated weekly change.</p>
+        </div>
+
+        <!-- Single allocation bar with two drag handles:
+             handle 1 = protein|fat boundary, handle 2 = fat|carbs boundary -->
+        <div
+          class="alloc-bar"
+          ref="allocBarRef"
+          @mousedown="onAllocDown"
+          @touchstart.prevent="onAllocDown"
+        >
+          <div class="seg seg-p" :style="{ width: pctProtein + '%' }" />
+          <div class="seg seg-f" :style="{ width: pctFat + '%' }" />
+          <div class="seg seg-c" :style="{ width: pctCarbs + '%' }" />
+          <div class="handle handle-1" :style="{ left: pctProtein + '%' }" data-handle="1" />
+          <div class="handle handle-2" :style="{ left: (pctProtein + pctFat) + '%' }" data-handle="2" />
+        </div>
+
+        <div class="alloc-legend">
+          <div class="alloc-legend-item">
+            <span class="legend-dot dot-p"></span>
+            <span class="alloc-label label-p">Protein</span>
+            <span class="alloc-spacer"></span>
+            <input type="number" class="alloc-input" :value="proteinGrams" min="0" :max="maxProteinGrams" step="5" @change="proteinGrams = Math.min(Number($event.target.value), maxProteinGrams)" /><span class="alloc-unit">g</span>
+            <span class="alloc-detail">{{ proteinKcal }} kcal · {{ Math.round(pctProtein) }}%</span>
+          </div>
+          <div class="alloc-legend-item">
+            <span class="legend-dot dot-f"></span>
+            <span class="alloc-label label-f">Fat</span>
+            <span class="alloc-spacer"></span>
+            <input type="number" class="alloc-input" :value="fatGrams" min="0" :max="maxFatGrams" step="1" @change="fatGrams = Math.min(Number($event.target.value), maxFatGrams)" /><span class="alloc-unit">g</span>
+            <span class="alloc-detail">{{ fatKcal }} kcal · {{ Math.round(pctFat) }}%</span>
+          </div>
+          <div class="alloc-legend-item">
+            <span class="legend-dot dot-c"></span>
+            <span class="alloc-label label-c">Carbs</span>
+            <span class="alloc-spacer"></span>
+            <span class="alloc-computed">{{ carbsComputed }}</span><span class="alloc-unit">g</span>
+            <span class="alloc-detail">{{ carbsKcal }} kcal · {{ Math.round(pctCarbs) }}%</span>
+          </div>
+        </div>
+      </div>
+
+      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="saved" class="success">Settings saved.</p>
+      <button type="submit" class="btn-primary" :disabled="saving">
+        {{ saving ? 'Saving...' : 'Save Settings' }}
+      </button>
+    </form>
+
+    <div class="card">
+      <h3>Compounds</h3>
+      <p class="field-hint" style="margin-bottom: 0.75rem">
+        Compounds you dose on a schedule. System entries can be enabled or disabled; custom ones are fully editable.
+      </p>
+      <ul class="compound-list">
+        <li
+          v-for="c in compoundsStore.compounds"
+          :key="c._id"
+          class="compound-row"
+          :class="{ disabled: !c.enabled }"
+        >
+          <div class="compound-row-top">
+            <label class="compound-toggle">
+              <input
+                type="checkbox"
+                :checked="c.enabled"
+                @change.stop="toggleCompoundEnabled(c)"
+                @click.stop
+              />
+              <span class="compound-name">
+                {{ c.name }}
+                <span v-if="c.isSystem" class="compound-tag">system</span>
+              </span>
+            </label>
+            <button
+              v-if="!c.isSystem"
+              type="button"
+              class="compound-del"
+              @click.stop="handleDeleteCompound(c)"
+            >Delete</button>
+          </div>
+          <div v-if="draftFor(c._id)" class="compound-row-bot">
+            <label class="compound-field">
+              <span>Half-life (days)</span>
+              <input
+                type="number"
+                step="0.25"
+                min="0.1"
+                v-model.number="draftFor(c._id).halfLifeDays"
+                @change="saveCompoundDraft(c)"
+              />
+            </label>
+            <label class="compound-field">
+              <span>Interval (days)</span>
+              <input
+                type="number"
+                step="0.5"
+                min="0.5"
+                v-model.number="draftFor(c._id).intervalDays"
+                @change="saveCompoundDraft(c)"
+              />
+            </label>
+            <label class="compound-field small">
+              <span>Unit</span>
+              <span class="compound-static">{{ c.doseUnit }}</span>
+            </label>
+            <label class="compound-field small">
+              <span>Color</span>
+              <input
+                type="color"
+                v-model="draftFor(c._id).color"
+                @change="saveCompoundDraft(c)"
+              />
+            </label>
+            <span
+              v-if="compoundSaveState[c._id] === 'saved'"
+              class="compound-status ok"
+            >saved</span>
+            <span
+              v-else-if="compoundSaveState[c._id] === 'saving'"
+              class="compound-status"
+            >saving...</span>
+          </div>
+
+          <!-- Dose reminders (per-compound) -->
+          <div v-if="draftFor(c._id) && c.enabled" class="compound-reminder">
+            <button
+              type="button"
+              class="reminder-toggle"
+              @click="compoundRemindersExpanded[c._id] = !compoundRemindersExpanded[c._id]"
+            >
+              <span class="reminder-ind" :class="{ on: draftFor(c._id).reminderEnabled }" />
+              Dose reminders
+              <span class="reminder-sub">
+                <template v-if="draftFor(c._id).reminderEnabled && draftFor(c._id).reminderTimes.length">
+                  {{ draftFor(c._id).reminderTimes.join(', ') }}
+                  <template v-if="draftFor(c._id).reminderWeekdays.length">
+                    · {{ draftFor(c._id).reminderWeekdays.map((d) => WEEKDAYS[d].label).join('') }}
+                  </template>
+                </template>
+                <template v-else-if="draftFor(c._id).reminderEnabled">No times set</template>
+                <template v-else>Off</template>
+              </span>
+              <span class="reminder-chev" :class="{ open: compoundRemindersExpanded[c._id] }">▾</span>
+            </button>
+
+            <div v-if="compoundRemindersExpanded[c._id]" class="reminder-body">
+              <label class="notif-inline small">
+                <input
+                  type="checkbox"
+                  v-model="draftFor(c._id).reminderEnabled"
+                  @change="saveCompoundReminder(c)"
+                />
+                Remind me for {{ c.name }}
+              </label>
+
+              <div
+                class="reminder-field"
+                :class="{ disabled: !draftFor(c._id).reminderEnabled }"
+              >
+                <span class="reminder-label">Days</span>
+                <div class="weekday-row">
+                  <button
+                    v-for="wd in WEEKDAYS"
+                    :key="wd.value"
+                    type="button"
+                    class="weekday-btn"
+                    :class="{ active: draftFor(c._id).reminderWeekdays.includes(wd.value) }"
+                    :disabled="!draftFor(c._id).reminderEnabled"
+                    @click="toggleCompoundReminderWeekday(c._id, wd.value); saveCompoundReminder(c)"
+                  >{{ wd.label }}</button>
+                </div>
+                <span class="reminder-hint">
+                  Empty = every day.
+                </span>
+              </div>
+
+              <div
+                class="reminder-field"
+                :class="{ disabled: !draftFor(c._id).reminderEnabled }"
+              >
+                <span class="reminder-label">Times</span>
+                <div class="time-list">
+                  <div
+                    v-for="(t, idx) in draftFor(c._id).reminderTimes"
+                    :key="idx"
+                    class="time-row"
+                  >
+                    <input
+                      type="time"
+                      :value="t"
+                      :disabled="!draftFor(c._id).reminderEnabled"
+                      @change="draftFor(c._id).reminderTimes[idx] = $event.target.value; saveCompoundReminder(c)"
+                    />
+                    <button
+                      type="button"
+                      class="time-remove"
+                      :disabled="!draftFor(c._id).reminderEnabled"
+                      @click="removeCompoundReminderTime(c._id, idx); saveCompoundReminder(c)"
+                    >×</button>
+                  </div>
+                  <button
+                    type="button"
+                    class="time-add"
+                    :disabled="!draftFor(c._id).reminderEnabled"
+                    @click="addCompoundReminderTime(c._id); saveCompoundReminder(c)"
+                  >+ Add time</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </li>
+      </ul>
+
+      <div class="compound-add">
+        <h4>Add custom compound</h4>
+        <div class="compound-add-grid">
+          <label class="compound-field">
+            <span>Name</span>
+            <input type="text" v-model="newCompound.name" placeholder="e.g. Ipamorelin" />
+          </label>
+          <label class="compound-field">
+            <span>Half-life (days)</span>
+            <input type="number" step="0.25" min="0.1" v-model.number="newCompound.halfLifeDays" />
+          </label>
+          <label class="compound-field">
+            <span>Interval (days)</span>
+            <input type="number" step="0.5" min="0.5" v-model.number="newCompound.intervalDays" />
+          </label>
+          <label class="compound-field">
+            <span>Unit</span>
+            <select v-model="newCompound.doseUnit">
+              <option value="mg">mg</option>
+              <option value="mcg">mcg</option>
+              <option value="iu">iu</option>
+              <option value="ml">ml</option>
+            </select>
+          </label>
+          <label class="compound-field small">
+            <span>Color</span>
+            <input type="color" v-model="newCompound.color" />
+          </label>
+        </div>
+        <button type="button" class="btn-secondary" @click="handleAddCompound">Add compound</button>
+      </div>
+      <p v-if="compoundsError" class="error">{{ compoundsError }}</p>
     </div>
 
     <!-- Notifications --------------------------------------------------- -->
@@ -528,301 +797,32 @@ async function handleSave() {
       </template>
     </div>
 
-    <form @submit.prevent="handleSave">
-      <div class="card">
-        <h3>Profile</h3>
-        <div class="field">
-          <label>Sex</label>
-          <div class="radio-group">
-            <label class="radio"><input type="radio" v-model="sex" value="male" /> Male</label>
-            <label class="radio"><input type="radio" v-model="sex" value="female" /> Female</label>
-          </div>
-        </div>
-        <div class="field">
-          <label>Height</label>
-          <div class="inline-fields">
-            <input type="number" v-model.number="heightFeet" min="3" max="8" class="sm" /> <span>ft</span>
-            <input type="number" v-model.number="heightInches" min="0" max="11" class="sm" /> <span>in</span>
-          </div>
-        </div>
-        <div class="field">
-          <label for="weight">Current Weight (lbs)</label>
-          <input id="weight" type="number" v-model.number="currentWeightLbs" step="0.1" required />
-        </div>
-        <div class="field">
-          <label for="goal">Goal Weight (lbs)</label>
-          <input id="goal" type="number" v-model.number="goalWeightLbs" step="0.1" />
-        </div>
-        <div class="field">
-          <label for="bmr">BMR (kcal/day)</label>
-          <input id="bmr" type="number" v-model.number="bmr" step="1" placeholder="Optional" />
-          <p class="field-hint">Basal metabolic rate — calories burned at rest. Leave blank if unknown.</p>
+    <div class="card">
+      <h3>Appearance</h3>
+      <div class="field">
+        <label>Theme</label>
+        <div class="theme-toggle">
+          <button
+            type="button"
+            class="theme-option"
+            :class="{ active: theme === 'light' }"
+            @click="theme = 'light'"
+          >Light</button>
+          <button
+            type="button"
+            class="theme-option"
+            :class="{ active: theme === 'dark' }"
+            @click="theme = 'dark'"
+          >Dark</button>
+          <button
+            type="button"
+            class="theme-option"
+            :class="{ active: theme === 'auto' }"
+            @click="theme = 'auto'"
+          >System</button>
         </div>
       </div>
-
-      <div class="card">
-        <h3>Compounds</h3>
-        <p class="field-hint" style="margin-bottom: 0.75rem">
-          Compounds you dose on a schedule. System entries can be enabled or disabled; custom ones are fully editable.
-        </p>
-        <ul class="compound-list">
-          <li
-            v-for="c in compoundsStore.compounds"
-            :key="c._id"
-            class="compound-row"
-            :class="{ disabled: !c.enabled }"
-          >
-            <div class="compound-row-top">
-              <label class="compound-toggle">
-                <input
-                  type="checkbox"
-                  :checked="c.enabled"
-                  @change.stop="toggleCompoundEnabled(c)"
-                  @click.stop
-                />
-                <span class="compound-name">
-                  {{ c.name }}
-                  <span v-if="c.isSystem" class="compound-tag">system</span>
-                </span>
-              </label>
-              <button
-                v-if="!c.isSystem"
-                type="button"
-                class="compound-del"
-                @click.stop="handleDeleteCompound(c)"
-              >Delete</button>
-            </div>
-            <div v-if="draftFor(c._id)" class="compound-row-bot">
-              <label class="compound-field">
-                <span>Half-life (days)</span>
-                <input
-                  type="number"
-                  step="0.25"
-                  min="0.1"
-                  v-model.number="draftFor(c._id).halfLifeDays"
-                  @change="saveCompoundDraft(c)"
-                />
-              </label>
-              <label class="compound-field">
-                <span>Interval (days)</span>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  v-model.number="draftFor(c._id).intervalDays"
-                  @change="saveCompoundDraft(c)"
-                />
-              </label>
-              <label class="compound-field small">
-                <span>Unit</span>
-                <span class="compound-static">{{ c.doseUnit }}</span>
-              </label>
-              <label class="compound-field small">
-                <span>Color</span>
-                <input
-                  type="color"
-                  v-model="draftFor(c._id).color"
-                  @change="saveCompoundDraft(c)"
-                />
-              </label>
-              <span
-                v-if="compoundSaveState[c._id] === 'saved'"
-                class="compound-status ok"
-              >saved</span>
-              <span
-                v-else-if="compoundSaveState[c._id] === 'saving'"
-                class="compound-status"
-              >saving...</span>
-            </div>
-
-            <!-- Dose reminders (per-compound) -->
-            <div v-if="draftFor(c._id) && c.enabled" class="compound-reminder">
-              <button
-                type="button"
-                class="reminder-toggle"
-                @click="compoundRemindersExpanded[c._id] = !compoundRemindersExpanded[c._id]"
-              >
-                <span class="reminder-ind" :class="{ on: draftFor(c._id).reminderEnabled }" />
-                Dose reminders
-                <span class="reminder-sub">
-                  <template v-if="draftFor(c._id).reminderEnabled && draftFor(c._id).reminderTimes.length">
-                    {{ draftFor(c._id).reminderTimes.join(', ') }}
-                    <template v-if="draftFor(c._id).reminderWeekdays.length">
-                      · {{ draftFor(c._id).reminderWeekdays.map((d) => WEEKDAYS[d].label).join('') }}
-                    </template>
-                  </template>
-                  <template v-else-if="draftFor(c._id).reminderEnabled">No times set</template>
-                  <template v-else>Off</template>
-                </span>
-                <span class="reminder-chev" :class="{ open: compoundRemindersExpanded[c._id] }">▾</span>
-              </button>
-
-              <div v-if="compoundRemindersExpanded[c._id]" class="reminder-body">
-                <label class="notif-inline small">
-                  <input
-                    type="checkbox"
-                    v-model="draftFor(c._id).reminderEnabled"
-                    @change="saveCompoundReminder(c)"
-                  />
-                  Remind me for {{ c.name }}
-                </label>
-
-                <div
-                  class="reminder-field"
-                  :class="{ disabled: !draftFor(c._id).reminderEnabled }"
-                >
-                  <span class="reminder-label">Days</span>
-                  <div class="weekday-row">
-                    <button
-                      v-for="wd in WEEKDAYS"
-                      :key="wd.value"
-                      type="button"
-                      class="weekday-btn"
-                      :class="{ active: draftFor(c._id).reminderWeekdays.includes(wd.value) }"
-                      :disabled="!draftFor(c._id).reminderEnabled"
-                      @click="toggleCompoundReminderWeekday(c._id, wd.value); saveCompoundReminder(c)"
-                    >{{ wd.label }}</button>
-                  </div>
-                  <span class="reminder-hint">
-                    Empty = every day.
-                  </span>
-                </div>
-
-                <div
-                  class="reminder-field"
-                  :class="{ disabled: !draftFor(c._id).reminderEnabled }"
-                >
-                  <span class="reminder-label">Times</span>
-                  <div class="time-list">
-                    <div
-                      v-for="(t, idx) in draftFor(c._id).reminderTimes"
-                      :key="idx"
-                      class="time-row"
-                    >
-                      <input
-                        type="time"
-                        :value="t"
-                        :disabled="!draftFor(c._id).reminderEnabled"
-                        @change="draftFor(c._id).reminderTimes[idx] = $event.target.value; saveCompoundReminder(c)"
-                      />
-                      <button
-                        type="button"
-                        class="time-remove"
-                        :disabled="!draftFor(c._id).reminderEnabled"
-                        @click="removeCompoundReminderTime(c._id, idx); saveCompoundReminder(c)"
-                      >×</button>
-                    </div>
-                    <button
-                      type="button"
-                      class="time-add"
-                      :disabled="!draftFor(c._id).reminderEnabled"
-                      @click="addCompoundReminderTime(c._id); saveCompoundReminder(c)"
-                    >+ Add time</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </li>
-        </ul>
-
-        <div class="compound-add">
-          <h4>Add custom compound</h4>
-          <div class="compound-add-grid">
-            <label class="compound-field">
-              <span>Name</span>
-              <input type="text" v-model="newCompound.name" placeholder="e.g. Ipamorelin" />
-            </label>
-            <label class="compound-field">
-              <span>Half-life (days)</span>
-              <input type="number" step="0.25" min="0.1" v-model.number="newCompound.halfLifeDays" />
-            </label>
-            <label class="compound-field">
-              <span>Interval (days)</span>
-              <input type="number" step="0.5" min="0.5" v-model.number="newCompound.intervalDays" />
-            </label>
-            <label class="compound-field">
-              <span>Unit</span>
-              <select v-model="newCompound.doseUnit">
-                <option value="mg">mg</option>
-                <option value="mcg">mcg</option>
-                <option value="iu">iu</option>
-                <option value="ml">ml</option>
-              </select>
-            </label>
-            <label class="compound-field small">
-              <span>Color</span>
-              <input type="color" v-model="newCompound.color" />
-            </label>
-          </div>
-          <button type="button" class="btn-secondary" @click="handleAddCompound">Add compound</button>
-        </div>
-        <p v-if="compoundsError" class="error">{{ compoundsError }}</p>
-      </div>
-
-      <div class="card">
-        <h3>Daily Targets</h3>
-
-        <div class="field">
-          <label for="calories">Calories</label>
-          <input id="calories" type="number" v-model.number="calories" min="400" step="50" required />
-          <p v-if="calorieDelta != null" class="field-hint calc">
-            <span :class="calorieDelta < 0 ? 'neg' : 'pos'">
-              {{ signed(calorieDelta) }} kcal/day
-            </span>
-            vs BMR ·
-            <span :class="weeklyLbs < 0 ? 'neg' : 'pos'">
-              {{ signed(weeklyLbs, 2) }} lbs/week
-            </span>
-          </p>
-          <p v-else class="field-hint">Set BMR above to see estimated weekly change.</p>
-        </div>
-
-        <!-- Single allocation bar with two drag handles:
-             handle 1 = protein|fat boundary, handle 2 = fat|carbs boundary -->
-        <div
-          class="alloc-bar"
-          ref="allocBarRef"
-          @mousedown="onAllocDown"
-          @touchstart.prevent="onAllocDown"
-        >
-          <div class="seg seg-p" :style="{ width: pctProtein + '%' }" />
-          <div class="seg seg-f" :style="{ width: pctFat + '%' }" />
-          <div class="seg seg-c" :style="{ width: pctCarbs + '%' }" />
-          <div class="handle handle-1" :style="{ left: pctProtein + '%' }" data-handle="1" />
-          <div class="handle handle-2" :style="{ left: (pctProtein + pctFat) + '%' }" data-handle="2" />
-        </div>
-
-        <div class="alloc-legend">
-          <div class="alloc-legend-item">
-            <span class="legend-dot dot-p"></span>
-            <span class="alloc-label label-p">Protein</span>
-            <span class="alloc-spacer"></span>
-            <input type="number" class="alloc-input" :value="proteinGrams" min="0" :max="maxProteinGrams" step="5" @change="proteinGrams = Math.min(Number($event.target.value), maxProteinGrams)" /><span class="alloc-unit">g</span>
-            <span class="alloc-detail">{{ proteinKcal }} kcal · {{ Math.round(pctProtein) }}%</span>
-          </div>
-          <div class="alloc-legend-item">
-            <span class="legend-dot dot-f"></span>
-            <span class="alloc-label label-f">Fat</span>
-            <span class="alloc-spacer"></span>
-            <input type="number" class="alloc-input" :value="fatGrams" min="0" :max="maxFatGrams" step="1" @change="fatGrams = Math.min(Number($event.target.value), maxFatGrams)" /><span class="alloc-unit">g</span>
-            <span class="alloc-detail">{{ fatKcal }} kcal · {{ Math.round(pctFat) }}%</span>
-          </div>
-          <div class="alloc-legend-item">
-            <span class="legend-dot dot-c"></span>
-            <span class="alloc-label label-c">Carbs</span>
-            <span class="alloc-spacer"></span>
-            <span class="alloc-computed">{{ carbsComputed }}</span><span class="alloc-unit">g</span>
-            <span class="alloc-detail">{{ carbsKcal }} kcal · {{ Math.round(pctCarbs) }}%</span>
-          </div>
-        </div>
-      </div>
-
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="saved" class="success">Settings saved.</p>
-      <button type="submit" :disabled="saving">
-        {{ saving ? 'Saving...' : 'Save Settings' }}
-      </button>
-    </form>
+    </div>
   </div>
 </template>
 
@@ -831,85 +831,64 @@ async function handleSave() {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
 }
 .card h3 {
-  font-size: 0.95rem;
-  margin-bottom: 1rem;
+  font-size: var(--font-size-m);
+  margin-bottom: var(--space-4);
   color: var(--text);
 }
 .field {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 .field > label {
   display: block;
-  margin-bottom: 0.3rem;
-  font-size: 0.85rem;
-  font-weight: 500;
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
 }
 .field-hint {
-  margin: 0.3rem 0 0;
-  font-size: 0.72rem;
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
-.field-hint.calc { font-size: 0.78rem; font-variant-numeric: tabular-nums; }
-.field-hint.calc .neg { color: var(--danger); font-weight: 600; }
-.field-hint.calc .pos { color: var(--success); font-weight: 600; }
+.field-hint.calc { font-size: var(--font-size-s); font-variant-numeric: tabular-nums; }
+.field-hint.calc .neg { color: var(--danger); font-weight: var(--font-weight-bold); }
+.field-hint.calc .pos { color: var(--success); font-weight: var(--font-weight-bold); }
 .field input[type="number"] {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.95rem;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-m);
   width: 100%;
-  background: var(--bg);
-  color: var(--text);
-}
-.field input[type="number"]:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-focus);
 }
 .field input.sm { width: 64px; }
 .inline-fields {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--font-size-s);
 }
 .radio-group {
   display: flex;
-  gap: 1.25rem;
+  gap: var(--space-5);
 }
 .radio {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.9rem;
+  gap: var(--space-1);
+  font-size: var(--font-size-s);
   color: var(--text);
   cursor: pointer;
 }
-button[type="submit"] {
-  padding: 0.6rem 1.5rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: 8px;
-  font-size: var(--font-size-m);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-}
-button[type="submit"]:hover { background: var(--primary-hover); }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Macro allocation bar — single bar, two draggable handles */
 .alloc-bar {
   position: relative;
   display: flex;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   overflow: visible;
   margin-bottom: 1rem;
   border: 1px solid var(--border);
@@ -923,9 +902,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   min-width: 0;
   transition: width 0.05s;
 }
-.seg-p { background: var(--color-protein); border-radius: 5px 0 0 5px; }
+.seg-p { background: var(--color-protein); }
 .seg-f { background: var(--color-fat); }
-.seg-c { background: var(--color-carbs); border-radius: 0 5px 5px 0; }
+.seg-c { background: var(--color-carbs); }
 
 .handle {
   position: absolute;
@@ -936,11 +915,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   margin-top: -20px;
   background: var(--surface);
   border: 2px solid var(--border-strong);
-  border-radius: 3px;
+  border-radius: var(--radius-small);
   cursor: ew-resize;
   z-index: 2;
   box-shadow: var(--shadow-s);
-  transition: border-color 0.1s;
+  transition: border-color var(--transition-fast);
 }
 .handle:hover { border-color: var(--text-secondary); }
 
@@ -971,30 +950,25 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .alloc-input {
   width: 52px;
   padding: 0.2rem 0.35rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.82rem;
-  background: var(--bg);
-  color: var(--text);
+  font-size: var(--font-size-s);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.alloc-input:focus { outline: none; border-color: var(--primary); }
 .alloc-unit {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 .alloc-computed {
   display: inline-block;
   width: 52px;
   text-align: right;
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 .alloc-detail {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -1013,7 +987,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .compound-row {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   padding: 0.6rem 0.75rem;
   background: var(--bg);
 }
@@ -1027,29 +1001,30 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .compound-toggle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: var(--font-size-m);
   color: var(--text);
 }
-.compound-name { font-weight: 500; }
+.compound-name { font-weight: var(--font-weight-medium); }
 .compound-tag {
   display: inline-block;
   margin-left: 0.3rem;
   padding: 0 0.35rem;
-  font-size: 0.65rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-small);
   vertical-align: middle;
 }
 .compound-del {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-small);
   padding: 0.2rem 0.5rem;
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -1064,19 +1039,16 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .compound-field {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.72rem;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 .compound-field input[type="number"],
 .compound-field input[type="text"],
 .compound-field select {
   padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
   background: var(--surface);
-  color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   width: 110px;
 }
 .compound-field.small input,
@@ -1085,8 +1057,6 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   width: 40px;
   height: 28px;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 5px;
   background: transparent;
   cursor: pointer;
 }
@@ -1094,13 +1064,12 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: 0.3rem 0.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   color: var(--text-secondary);
   text-align: center;
   width: 56px;
 }
-.compound-status { font-size: 0.7rem; color: var(--text-secondary); }
+.compound-status { font-size: var(--font-size-xs); color: var(--text-secondary); }
 .compound-status.ok { color: var(--success); }
 .compound-add {
   border-top: 1px dashed var(--border);
@@ -1108,7 +1077,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   margin-top: 0.5rem;
 }
 .compound-add h4 {
-  font-size: 0.82rem;
+  font-size: var(--font-size-s);
   font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
   margin: 0 0 0.5rem;
@@ -1120,20 +1089,10 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   align-items: flex-end;
   margin-bottom: 0.5rem;
 }
-.btn-secondary {
-  padding: 0.4rem 0.9rem;
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-.btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
 
 /* Notifications */
 .notif-note {
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   color: var(--text-secondary);
   padding: 0.5rem 0;
 }
@@ -1141,8 +1100,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .notif-note code {
   background: var(--bg);
   padding: 0.05rem 0.25rem;
-  border-radius: 3px;
-  font-size: 0.82rem;
+  font-size: var(--font-size-s);
 }
 
 .notif-install {
@@ -1150,7 +1108,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   padding-bottom: 0.75rem;
   border-bottom: 1px dashed var(--border);
 }
-.notif-lead { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--text); }
+.notif-lead { margin: 0 0 0.5rem; font-size: var(--font-size-s); color: var(--text); }
 
 .notif-toggle-row {
   display: flex;
@@ -1160,17 +1118,16 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border);
 }
-.notif-title { font-size: 0.9rem; font-weight: 500; color: var(--text); }
-.notif-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.15rem; }
+.notif-title { font-size: var(--font-size-s); font-weight: var(--font-weight-medium); color: var(--text); }
+.notif-sub { font-size: var(--font-size-xs); color: var(--text-secondary); margin-top: 0.15rem; }
 .notif-toggle-btn {
   padding: 0.4rem 0.9rem;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  border-radius: 6px;
-  font-size: 0.82rem;
+  font-size: var(--font-size-s);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .notif-toggle-btn.on {
   background: var(--primary);
@@ -1191,12 +1148,12 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   grid-template-columns: 20px 1fr;
   align-items: baseline;
   gap: 0.15rem 0.5rem;
-  font-size: 0.88rem;
+  font-size: var(--font-size-s);
   color: var(--text);
   cursor: pointer;
 }
 .notif-cat input[type="checkbox"] { grid-row: 1 / span 2; align-self: start; margin-top: 3px; }
-.notif-cat-sub { grid-column: 2; font-size: 0.74rem; color: var(--text-secondary); }
+.notif-cat-sub { grid-column: 2; font-size: var(--font-size-xs); color: var(--text-secondary); }
 
 .notif-track-time {
   padding: 0.75rem 0;
@@ -1212,18 +1169,14 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.88rem;
+  font-size: var(--font-size-s);
   color: var(--text);
   cursor: pointer;
 }
-.notif-inline.small { font-size: 0.82rem; }
+.notif-inline.small { font-size: var(--font-size-s); }
 .notif-time {
   padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
 }
 .notif-time:disabled { opacity: 0.5; }
 
@@ -1234,9 +1187,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: 0.75rem 0 0.25rem;
   flex-wrap: wrap;
 }
-.notif-success { color: var(--success); font-size: 0.8rem; }
-.notif-err { color: var(--danger); font-size: 0.8rem; }
-.btn-secondary.sm { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
+.notif-success { color: var(--success); font-size: var(--font-size-s); }
+.notif-err { color: var(--danger); font-size: var(--font-size-s); }
 
 /* Per-compound reminder block */
 .compound-reminder {
@@ -1247,14 +1199,14 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .reminder-toggle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   width: 100%;
   background: none;
   border: none;
-  padding: 0.2rem 0;
+  padding: var(--space-1) 0;
   cursor: pointer;
   text-align: left;
-  font-size: 0.82rem;
+  font-size: var(--font-size-s);
   color: var(--text);
 }
 .reminder-ind {
@@ -1268,11 +1220,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .reminder-sub {
   flex: 1;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
 }
 .reminder-chev {
   color: var(--text-secondary);
-  transition: transform 0.15s;
+  transition: transform var(--transition-base);
 }
 .reminder-chev.open { transform: rotate(180deg); }
 
@@ -1286,24 +1238,24 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .reminder-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .reminder-field.disabled { opacity: 0.55; }
 .reminder-label {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-wide);
 }
-.reminder-hint { font-size: 0.7rem; color: var(--text-secondary); }
+.reminder-hint { font-size: var(--font-size-xs); color: var(--text-secondary); }
 
 .weekday-row { display: flex; gap: 0.25rem; }
 .weekday-btn {
   width: 30px;
   height: 30px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .weekday-btn.active {
   background: var(--primary);
@@ -1316,11 +1268,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .time-row { display: flex; align-items: center; gap: 0.35rem; }
 .time-row input[type="time"] {
   padding: 0.3rem 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
 }
 .time-remove {
   width: 24px;
@@ -1328,9 +1276,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-secondary);
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: var(--font-size-m);
   line-height: 1;
 }
 .time-remove:hover { color: var(--danger); border-color: var(--danger); }
@@ -1338,16 +1286,15 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   background: none;
   border: 1px dashed var(--border);
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   padding: 0.3rem 0.6rem;
-  border-radius: 5px;
   cursor: pointer;
   align-self: flex-start;
 }
 .time-add:hover { color: var(--text); border-color: var(--text-secondary); }
 .time-add:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Theme toggle */
+/* Theme toggle — segmented control */
 .theme-toggle {
   display: inline-flex;
   background: var(--bg);
@@ -1360,11 +1307,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: 0.35rem 0.8rem;
   background: none;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-small);
   font-size: var(--font-size-s);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 .theme-option:hover { color: var(--text); }
 .theme-option.active {

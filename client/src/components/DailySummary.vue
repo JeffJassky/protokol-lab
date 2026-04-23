@@ -158,29 +158,29 @@ const suggestion = computed(() => {
 .daily-summary {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.85rem 1rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-3) var(--space-4);
 }
 
 .advice-block {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-  padding-bottom: 0.75rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 .score-pill {
   display: inline-flex;
   align-items: baseline;
-  padding: 0.2rem 0.55rem 0.25rem;
-  border-radius: 999px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
   font-variant-numeric: tabular-nums;
   color: white;
   flex-shrink: 0;
 }
-.score-value { font-size: 1rem; font-weight: 700; line-height: 1; }
-.score-suffix { font-size: 0.6rem; margin-left: 0.12rem; opacity: 0.85; }
+.score-value { font-size: var(--font-size-m); font-weight: var(--font-weight-bold); line-height: 1; }
+.score-suffix { font-size: var(--font-size-xs); margin-left: 0.12rem; opacity: 0.85; }
 .band-good { background: var(--success); }
 .band-ok { background: var(--warning); }
 .band-bad { background: var(--danger); }
@@ -188,16 +188,16 @@ const suggestion = computed(() => {
 
 .suggestion { flex: 1; min-width: 0; }
 .suggestion-headline {
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
   color: var(--text);
   line-height: 1.25;
 }
 .suggestion-detail {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   line-height: 1.35;
-  margin-top: 0.2rem;
+  margin-top: var(--space-1);
 }
 .tone-good .suggestion-headline { color: var(--success); }
 .tone-fix .suggestion-headline { color: var(--text); }

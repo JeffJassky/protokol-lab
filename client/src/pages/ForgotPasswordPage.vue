@@ -37,7 +37,7 @@ async function handleSubmit() {
             <input id="email" v-model="email" type="email" required autofocus autocomplete="email" />
           </div>
           <p v-if="error" class="error">{{ error }}</p>
-          <button type="submit" :disabled="loading">
+          <button type="submit" class="btn-primary" :disabled="loading">
             {{ loading ? 'Sending...' : 'Send reset link' }}
           </button>
         </form>
@@ -70,76 +70,55 @@ async function handleSubmit() {
   max-width: 380px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2.5rem 2rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-10) var(--space-8);
 }
 .auth-card h1 {
-  font-size: 1.5rem;
+  font-size: var(--font-size-xl);
   text-align: center;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-1);
 }
 .subtitle {
   text-align: center;
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin-bottom: 1.5rem;
+  font-size: var(--font-size-s);
+  margin-bottom: var(--space-6);
   line-height: 1.4;
 }
 .field {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 .field label {
   display: block;
-  margin-bottom: 0.3rem;
-  font-size: 0.85rem;
-  font-weight: 500;
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
   color: var(--text);
 }
 .field input {
   width: 100%;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.95rem;
-  background: var(--bg);
-  color: var(--text);
-  transition: border-color 0.15s;
-}
-.field input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-focus);
-}
-button[type="submit"] {
-  width: 100%;
-  padding: 0.6rem;
-  margin-top: 0.5rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-m);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition: background 0.15s;
 }
-button[type="submit"]:hover { background: var(--primary-hover); }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-primary[type="submit"] {
+  width: 100%;
+  margin-top: var(--space-2);
+}
 .error {
   color: var(--danger);
-  font-size: 0.85rem;
-  margin-bottom: 0.5rem;
+  font-size: var(--font-size-s);
+  margin-bottom: var(--space-2);
 }
 .switch {
   text-align: center;
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   color: var(--text-secondary);
-  margin: 1.25rem 0 0;
+  margin: var(--space-5) 0 0;
 }
 .switch a {
   color: var(--primary);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .switch a:hover { text-decoration: underline; }
 </style>

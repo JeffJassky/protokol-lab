@@ -1,0 +1,196 @@
+/*
+ * Shared utility classes + base form-control styling.
+ * Imported after themes.css so component-scoped styles can still override
+ * via Vue's scoped-selector specificity boost.
+ *
+ * Goal: one place to edit button / input / field / focus-ring treatment
+ * so Dashboard, Log, Settings, etc. can't drift apart. Components should
+ * use these classes (or the token set in themes.css) rather than
+ * redefining their own button / input rules.
+ */
+
+/* ---- Base form controls ------------------------------------------- *
+ * Global rules that apply even when a component forgets to add a class.
+ * Intentionally omits height / padding — per-case sizing stays with the
+ * component so scoped overrides don't fight a global size.
+ */
+input[type='text'],
+input[type='number'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='time'],
+input[type='date'],
+input[type='url'],
+input[type='tel'],
+textarea,
+select {
+  font-family: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+/* ---- Focus ring --------------------------------------------------- *
+ * Single rule for every text-entry control. Buttons use focus-visible
+ * so mouse clicks don't show a lingering ring.
+ */
+input[type='text']:focus,
+input[type='number']:focus,
+input[type='email']:focus,
+input[type='password']:focus,
+input[type='search']:focus,
+input[type='time']:focus,
+input[type='date']:focus,
+input[type='url']:focus,
+input[type='tel']:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-focus);
+}
+
+/* Button base — terminal-sharp corners by default. Utility classes below
+ * (and component scoped styles) keep overriding when needed. */
+button {
+  border-radius: var(--radius-small);
+  font-family: inherit;
+}
+button:focus-visible {
+  outline: 2px solid var(--primary-ring);
+  outline-offset: 2px;
+}
+
+/* ---- Buttons ------------------------------------------------------ *
+ * .btn-primary / .btn-secondary / .btn-text. Apply .sm for a compact
+ * variant used in dense toolbars.
+ */
+.btn-primary,
+.btn-secondary,
+.btn-text {
+  font-family: inherit;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  height: var(--control-height-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  transition:
+    background var(--transition-base),
+    color var(--transition-base),
+    border-color var(--transition-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--text-on-primary);
+  border: 1px solid var(--primary);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-text {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  text-transform: none;
+  letter-spacing: var(--tracking-normal);
+  font-weight: var(--font-weight-light);
+  padding: 0 var(--space-2);
+}
+.btn-text:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-text:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary.sm,
+.btn-secondary.sm,
+.btn-text.sm {
+  height: var(--control-height-sm);
+  font-size: var(--font-size-xs);
+  padding: 0 var(--space-3);
+}
+
+/* ---- Eyebrow label ------------------------------------------------ *
+ * Small uppercase caption with a leading dash. Use for grouping labels
+ * above section headings. Not required on every card — reserve for top-
+ * level page sections where the label carries meaning.
+ */
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+.eyebrow::before {
+  content: '';
+  width: 20px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* ---- Field pattern ----------------------------------------------- *
+ * Wraps a label + single control. Use consistently on Settings forms
+ * so spacing, label color, and hint text match across pages.
+ */
+.field {
+  margin-bottom: var(--space-3);
+}
+.field > label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+.field-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* ---- Status text ------------------------------------------------ */
+.error {
+  color: var(--danger);
+  font-size: var(--font-size-s);
+  margin: 0;
+}
+.success {
+  color: var(--success);
+  font-size: var(--font-size-s);
+  margin: 0;
+}

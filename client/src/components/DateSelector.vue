@@ -37,13 +37,13 @@ function shift(days) {
 .date-selector {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   justify-content: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 .date-display {
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-m);
   min-width: 120px;
   text-align: center;
   color: var(--text);
@@ -51,12 +51,12 @@ function shift(days) {
 button {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-small);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: var(--font-size-m);
   color: var(--text-secondary);
-  transition: background 0.15s;
+  transition: background var(--transition-base);
 }
 button:hover { background: var(--bg); }
 </style>

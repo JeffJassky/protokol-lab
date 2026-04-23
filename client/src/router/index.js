@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import LandingPage from '../pages/LandingPage.vue';
+import FeaturesPage from '../pages/FeaturesPage.vue';
 import LoginPage from '../pages/LoginPage.vue';
 import RegisterPage from '../pages/RegisterPage.vue';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage.vue';
@@ -12,6 +13,7 @@ import FoodSearchPage from '../pages/FoodSearchPage.vue';
 
 const routes = [
   { path: '/', name: 'landing', component: LandingPage, meta: { public: true } },
+  { path: '/features', name: 'features', component: FeaturesPage, meta: { public: true } },
   { path: '/login', name: 'login', component: LoginPage, meta: { guest: true, public: true } },
   { path: '/register', name: 'register', component: RegisterPage, meta: { guest: true, public: true } },
   { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage, meta: { guest: true, public: true } },

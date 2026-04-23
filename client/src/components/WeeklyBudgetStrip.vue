@@ -37,6 +37,36 @@ const calAdjusted = computed(() => adjustedToday.value?.calories);
 const calToday = computed(() => perDay.value[6]?.calories ?? 0);
 const todayOver = computed(() => calToday.value > (calAdjusted.value ?? 0));
 
+// Interpretive note describing the week's shape. Compare what's been eaten so
+// far to a straight-line pro-rata of the week's target up through today, then
+// pick a short narrative — on track, banked surplus, or over budget.
+// Mirrors the DailySummary `suggestion` pattern but applied weekly so the
+// numbers become a sentence instead of bare arithmetic.
+const weekNote = computed(() => {
+  const w = weekTarget.value?.calories;
+  const c = consumed.value?.calories;
+  if (!w || c == null) return null;
+  // Fraction of the week that has elapsed by end-of-today (perDay[6] = today).
+  const todayIdx = 6;
+  const expected = (w * (todayIdx + 1)) / 7;
+  const diff = c - expected;
+  const absDiff = Math.round(Math.abs(diff));
+  const pct = expected ? Math.abs(diff) / expected : 0;
+  if (pct < 0.05) {
+    return { tone: 'good', body: 'On pace for your weekly target.' };
+  }
+  if (diff < 0) {
+    return {
+      tone: 'bank',
+      body: `${absDiff.toLocaleString()} kcal under pace — those roll over to the rest of the week.`,
+    };
+  }
+  return {
+    tone: 'over',
+    body: `${absDiff.toLocaleString()} kcal over pace — eat lighter to close the gap.`,
+  };
+});
+
 // Shared scale across the 4 weekly MacroBars so overage is drawn as red
 // continuation past a target line — mirrors DailySummary's behavior.
 const weekScaleMax = computed(() => {
@@ -78,15 +108,19 @@ const targetLinePct = computed(() => {
       :class="{ expanded }"
       @click="expanded = !expanded"
     >
-      <span class="wb-title">Week</span>
-      <span class="wb-value" :class="deltaClass(calDelta)">
-        {{ deltaLabel(calDelta, ' kcal') }}
-      </span>
-      <span class="wb-sep">·</span>
-      <span class="wb-title">Today</span>
-      <span class="wb-value" :class="todayOver ? 'over' : ''">
-        {{ fmt(calToday) }} / {{ fmt(calAdjusted) }} kcal
-      </span>
+      <div class="wb-stat">
+        <span class="wb-stat-label">7-day budget</span>
+        <span class="wb-stat-value">
+          {{ fmt(consumed.calories) }}<span class="wb-stat-tgt">
+            / {{ fmt(weekTarget.calories) }}</span>
+        </span>
+      </div>
+      <div class="wb-stat right">
+        <span class="wb-stat-label">{{ calDelta >= 0 ? 'Left' : 'Over' }}</span>
+        <span class="wb-stat-value" :class="deltaClass(calDelta)">
+          {{ Math.abs(Math.round(calDelta || 0)).toLocaleString() }}<span class="wb-stat-unit"> kcal</span>
+        </span>
+      </div>
       <span class="wb-caret">{{ expanded ? '▾' : '▸' }}</span>
     </button>
 
@@ -113,6 +147,11 @@ const targetLinePct = computed(() => {
           </div>
           <div class="wb-day-value">{{ day.calories ? fmt(day.calories) : '' }}</div>
         </div>
+      </div>
+
+      <div v-if="weekNote" class="wb-note" :class="`tone-${weekNote.tone}`">
+        <span class="wb-note-arrow">▸</span>
+        {{ weekNote.body }}
       </div>
 
       <div class="wb-macros">
@@ -147,41 +186,59 @@ const targetLinePct = computed(() => {
 .weekly-budget {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
 }
 
 .wb-header {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  align-items: flex-end;
+  gap: var(--space-4);
   width: 100%;
-  padding: 0.55rem 0.8rem;
+  padding: var(--space-3);
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 0.82rem;
   color: var(--text);
   text-align: left;
 }
-.wb-title {
-  font-size: 0.68rem;
+.wb-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wb-stat.right { margin-left: auto; text-align: right; align-items: flex-end; }
+.wb-stat-label {
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
 }
-.wb-value { font-weight: 600; font-variant-numeric: tabular-nums; }
-.wb-value.over { color: var(--danger); }
-.wb-value.under { color: var(--success); }
-.wb-sep { color: var(--text-secondary); }
+.wb-stat-value {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-l);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--text);
+}
+.wb-stat-tgt {
+  font-size: var(--font-size-s);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-light);
+}
+.wb-stat-unit {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-light);
+}
+.wb-stat-value.over  { color: var(--danger); }
+.wb-stat-value.under { color: var(--success); }
 .wb-caret {
-  margin-left: auto;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
+  align-self: center;
 }
 
 .wb-body {
-  padding: 0.2rem 0.8rem 0.8rem;
+  padding: var(--space-1) var(--space-3) var(--space-3);
   border-top: 1px solid var(--border);
 }
 
@@ -189,32 +246,32 @@ const targetLinePct = computed(() => {
 .wb-strip {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.3rem;
-  margin: 0.7rem 0 0.85rem;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 var(--space-3);
 }
 .wb-day {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  gap: var(--space-1);
   min-width: 0;
 }
 .wb-day-label {
-  font-size: 0.65rem;
-  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-wide);
 }
 .wb-day.is-today .wb-day-label {
   color: var(--primary);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .wb-day-track {
   position: relative;
   width: 100%;
   height: 44px;
   background: var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-small);
   overflow: hidden;
 }
 .wb-day-fill {
@@ -240,33 +297,55 @@ const targetLinePct = computed(() => {
   outline-offset: 1px;
 }
 .wb-day-value {
-  font-size: 0.65rem;
+  font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
+  color: var(--text);
+  font-weight: var(--font-weight-bold);
 }
 
+/* Interpretive note — turns the week's numbers into a sentence. */
+.wb-note {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-s);
+  line-height: 1.4;
+  background: var(--bg);
+  border-left: 2px solid var(--border);
+  color: var(--text-secondary);
+}
+.wb-note-arrow { flex-shrink: 0; }
+.wb-note.tone-good { border-left-color: var(--success); }
+.wb-note.tone-good .wb-note-arrow { color: var(--success); }
+.wb-note.tone-bank { border-left-color: var(--primary); }
+.wb-note.tone-bank .wb-note-arrow { color: var(--primary); }
+.wb-note.tone-over { border-left-color: var(--danger); }
+.wb-note.tone-over .wb-note-arrow { color: var(--danger); }
+
 /* Weekly macro bars */
-.wb-macros { margin-bottom: 0.7rem; }
+.wb-macros { margin-bottom: var(--space-3); }
 
 /* Adjusted-today row */
 .wb-adjusted {
-  padding-top: 0.55rem;
+  padding-top: var(--space-2);
   border-top: 1px dashed var(--border);
 }
 .wb-adj-label {
-  font-size: 0.65rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
-  font-weight: 600;
-  margin-bottom: 0.25rem;
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--space-1);
 }
 .wb-adj-values {
   display: flex;
-  gap: 0.7rem;
-  font-size: 0.82rem;
+  gap: var(--space-3);
+  font-size: var(--font-size-s);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
 }
 .adj-cal { color: var(--color-cal); }
 .adj-p { color: var(--color-protein); }

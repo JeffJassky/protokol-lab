@@ -1,13 +1,27 @@
 <script setup>
+import { computed } from 'vue';
 import EmojiPickerButton from './EmojiPickerButton.vue';
 
-defineProps({
+const props = defineProps({
   food: { type: Object, required: true },
   showSource: { type: Boolean, default: false },
   editableEmoji: { type: Boolean, default: false },
+  isFavorite: { type: Boolean, default: false },
+  isRecent: { type: Boolean, default: false },
 });
 
 defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
+
+// One pill per row. Priority: MEAL > FAV > RECENT > source (local/openfoodfacts).
+const tag = computed(() => {
+  if (props.food.source === 'meal') return { label: 'MEAL',   kind: 'meal'   };
+  if (props.isFavorite)              return { label: 'FAV',    kind: 'fav'    };
+  if (props.isRecent)                return { label: 'RECENT', kind: 'recent' };
+  if (props.showSource && props.food.source) {
+    return { label: props.food.source.toUpperCase(), kind: props.food.source };
+  }
+  return null;
+});
 </script>
 
 <template>
@@ -15,31 +29,28 @@ defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
     <div v-if="editableEmoji" class="row-emoji-slot" @click.stop>
       <EmojiPickerButton
         :model-value="food.emoji || ''"
-        size="sm"
+        size="lg"
+        borderless
         @update:model-value="$emit('update-emoji', food, $event)"
       />
     </div>
     <span v-else-if="food.emoji" class="row-emoji">{{ food.emoji }}</span>
     <div class="food-info">
       <span class="food-name">
-        <span v-if="food.source === 'meal'" class="meal-tag">[MEAL]</span>
-        {{ food.name }}
-        <span v-if="food.source === 'meal' && food.itemCount != null" class="meal-count">
-          ({{ food.itemCount }} item{{ food.itemCount === 1 ? '' : 's' }})
-        </span>
+        <span v-if="food.brand && food.source !== 'meal'">{{ food.brand }}&nbsp;</span>{{ food.name }}<span v-if="food.source === 'meal' && food.itemCount != null" class="meal-count"> ({{ food.itemCount }} item{{ food.itemCount === 1 ? '' : 's' }})</span>
       </span>
-      <span v-if="food.brand && food.source !== 'meal'" class="food-brand">{{ food.brand }}</span>
       <span class="food-meta">
         {{ food.servingSize || `${food.servingGrams}g` }}
-        <span v-if="showSource && food.source" class="source-badge" :class="food.source">{{ food.source }}</span>
       </span>
     </div>
     <div class="food-macros">
-      <span class="macro cal">{{ food.caloriesPer }} cal</span>
-      <span class="macro">P {{ food.proteinPer }}g</span>
-      <span class="macro">F {{ food.fatPer }}g</span>
-      <span class="macro">C {{ food.carbsPer }}g</span>
+      <span class="macro cal">{{ food.caloriesPer }} kcal</span>
+      <span class="macro macro-p">{{ food.proteinPer }}p</span>
+      <span class="macro macro-f">{{ food.fatPer }}f</span>
+      <span class="macro macro-c">{{ food.carbsPer }}c</span>
     </div>
+    <span v-if="tag" class="row-tag" :class="`kind-${tag.kind}`">{{ tag.label }}</span>
+    <button class="row-add-btn" type="button" aria-label="Add" @click.stop="$emit('select', food)">+</button>
     <slot name="actions" />
   </div>
 </template>
@@ -48,17 +59,17 @@ defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
 .food-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
-  border-radius: 8px;
-  margin: 0 -0.75rem;
-  transition: background 0.1s;
+  border-radius: var(--radius-small);
+  margin: 0 calc(var(--space-3) * -1);
+  transition: background var(--transition-fast);
 }
 .food-row:hover { background: var(--bg); }
 .row-emoji {
-  font-size: 1.25rem;
+  font-size: 1.85rem;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -69,68 +80,66 @@ defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
 }
 .food-name {
   display: block;
-  font-weight: 500;
-  font-size: 0.9rem;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-s);
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.meal-tag {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.05em;
-  color: var(--palette-blue-600);
-  background: rgba(37, 99, 235, 0.12);
-  border-radius: 3px;
-  padding: 0.05rem 0.35rem;
-  margin-right: 0.3rem;
-  vertical-align: 2px;
-}
 .meal-count {
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  font-weight: 400;
-  margin-left: 0.2rem;
-}
-.food-brand {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
+  font-weight: var(--font-weight-light);
+  margin-left: var(--space-1);
 }
 .food-meta {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
 }
-.source-badge {
-  display: inline-block;
-  border-radius: 4px;
-  padding: 0.05rem 0.35rem;
-  font-size: 0.65rem;
-  font-weight: 500;
-  margin-left: 0.3rem;
+/* Unified pill for MEAL / FAV / RECENT / LOCAL / OPENFOODFACTS tags.
+   Bordered-uppercase style lifted from the marketing food row so a single
+   visual language covers every "why am I seeing this food" state. */
+.row-tag {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-small);
+  line-height: 1.2;
+  color: var(--text-tertiary);
 }
-.source-badge.local {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-.source-badge.openfoodfacts {
-  background: rgba(22, 163, 74, 0.12);
-  color: var(--success);
-}
-.source-badge.meal {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--palette-blue-600);
-}
+.row-tag.kind-meal,
+.row-tag.kind-fav,
+.row-tag.kind-recent,
+.row-tag.kind-local,
+.row-tag.kind-openfoodfacts { color: var(--text-tertiary); opacity: 0.7; }
 .food-macros {
   display: flex;
-  gap: 0.4rem;
-  font-size: 0.78rem;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.macro.cal { font-weight: 600; color: var(--text); }
+.macro.cal { font-weight: var(--font-weight-bold); color: var(--text); }
+.macro.macro-p { color: var(--color-protein); }
+.macro.macro-f { color: var(--color-fat); }
+.macro.macro-c { color: var(--color-carbs); }
+.row-add-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--primary);
+  font-size: 2rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+.row-add-btn:hover { color: var(--primary-strong, var(--primary)); }
 </style>

@@ -5,7 +5,8 @@ import 'vue3-emoji-picker/css';
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  size: { type: String, default: 'md' }, // 'sm' | 'md'
+  size: { type: String, default: 'md' }, // 'sm' | 'md' | 'lg'
+  borderless: { type: Boolean, default: false },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -38,7 +39,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick));
 </script>
 
 <template>
-  <div class="emoji-picker-wrap" :class="`size-${size}`" ref="rootEl">
+  <div class="emoji-picker-wrap" :class="[`size-${size}`, { borderless }]" ref="rootEl">
     <button type="button" class="emoji-btn" @click="toggle">
       <span v-if="modelValue" class="emoji-glyph">{{ modelValue }}</span>
       <span v-else class="emoji-placeholder">+</span>
@@ -62,16 +63,19 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick));
   justify-content: center;
   border: 1px dashed var(--border);
   background: var(--bg);
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   cursor: pointer;
   padding: 0;
-  transition: border-color 0.1s, background 0.1s;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
-.size-md .emoji-btn { width: 38px; height: 38px; font-size: 1.35rem; }
-.size-sm .emoji-btn { width: 28px; height: 28px; font-size: 1rem; border-radius: 6px; }
+.size-md .emoji-btn { width: 38px; height: 38px; font-size: var(--font-size-l); }
+.size-sm .emoji-btn { width: 28px; height: 28px; font-size: var(--font-size-m); }
+.size-lg .emoji-btn { width: 44px; height: 44px; font-size: 1.85rem; }
 .emoji-btn:hover { border-color: var(--primary); background: var(--surface); }
+.borderless .emoji-btn { border: none; background: transparent; padding: 0; }
+.borderless .emoji-btn:hover { background: transparent; }
 .emoji-glyph { line-height: 1; }
-.emoji-placeholder { color: var(--text-secondary); font-size: 1rem; }
+.emoji-placeholder { color: var(--text-secondary); font-size: var(--font-size-m); }
 
 .emoji-popover {
   position: absolute;
@@ -80,7 +84,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick));
   z-index: 2000;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-medium);
   box-shadow: var(--shadow-m);
   overflow: hidden;
 }
@@ -88,18 +92,18 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4rem 0.6rem;
+  padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
-.popover-title { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.popover-title { font-size: var(--font-size-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
 .clear-btn {
   background: none;
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.75rem;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  padding: 0.15rem var(--space-1);
+  border-radius: var(--radius-small);
 }
 .clear-btn:hover { color: var(--danger); background: var(--danger-soft); }
 

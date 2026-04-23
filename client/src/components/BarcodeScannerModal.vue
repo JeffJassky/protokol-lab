@@ -98,28 +98,28 @@ function switchCamera(e) {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: var(--space-4);
 }
 .scanner-card {
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--radius-medium);
   width: 100%;
   max-width: 480px;
-  padding: 1rem;
+  padding: var(--space-4);
   color: var(--text);
 }
 .scanner-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
-.scanner-header h3 { margin: 0; font-size: 1rem; }
+.scanner-header h3 { margin: 0; font-size: var(--font-size-m); }
 .close-btn {
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 1.5rem;
+  font-size: var(--font-size-xl);
   cursor: pointer;
   line-height: 1;
 }
@@ -127,7 +127,7 @@ function switchCamera(e) {
 .video-wrap {
   position: relative;
   background: #000;
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   overflow: hidden;
   aspect-ratio: 4/3;
 }
@@ -143,36 +143,32 @@ function switchCamera(e) {
   top: 40%;
   height: 20%;
   border: 2px solid rgba(255, 80, 80, 0.85);
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }
 .scanner-error {
   color: var(--danger, #d33);
-  font-size: 0.85rem;
-  margin: 0.75rem 0 0;
+  font-size: var(--font-size-s);
+  margin: var(--space-3) 0 0;
 }
 .camera-select {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  font-size: 0.82rem;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--font-size-s);
   color: var(--text-secondary);
 }
 .camera-select select {
   flex: 1;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.82rem;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-s);
 }
 .hint {
   color: var(--text-secondary);
-  font-size: 0.8rem;
-  margin: 0.5rem 0 0;
+  font-size: var(--font-size-xs);
+  margin: var(--space-2) 0 0;
   text-align: center;
 }
 </style>

@@ -210,9 +210,9 @@ const visible = computed(() => {
 .onboarding-card {
   background: linear-gradient(180deg, var(--primary-soft, var(--surface)) 0%, var(--surface) 40%);
   border: 1px solid var(--primary, var(--border));
-  border-radius: 12px;
-  padding: 1rem 1rem 0.75rem;
-  margin-bottom: 1rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  margin-bottom: var(--space-4);
   box-shadow: var(--shadow-s);
 }
 
@@ -220,38 +220,38 @@ const visible = computed(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 .oc-head-left { display: flex; flex-direction: column; gap: 0.15rem; }
 .oc-header h3 {
-  font-size: 0.95rem;
+  font-size: var(--font-size-m);
   margin: 0;
   color: var(--text);
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
 }
 .oc-progress-text {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--tracking-wide);
 }
 .oc-dismiss {
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 1.4rem;
+  font-size: var(--font-size-xl);
   line-height: 1;
   cursor: pointer;
-  padding: 0 0.3rem;
+  padding: 0 var(--space-1);
 }
 .oc-dismiss:hover { color: var(--text); }
 
 .oc-progress-track {
   height: 4px;
   background: var(--border);
-  border-radius: 2px;
+  border-radius: var(--radius-small);
   overflow: hidden;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 .oc-progress-fill {
   height: 100%;
@@ -259,13 +259,13 @@ const visible = computed(() => {
   transition: width 0.35s ease;
 }
 
-.oc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.oc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .oc-step {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   background: var(--bg);
   overflow: hidden;
-  transition: border-color 0.1s;
+  transition: border-color var(--transition-fast);
 }
 .oc-step.done { opacity: 0.82; }
 .oc-step.expanded { border-color: var(--primary); }
@@ -279,9 +279,9 @@ const visible = computed(() => {
     "check title chevron"
     "check summary chevron";
   width: 100%;
-  gap: 0 0.6rem;
+  gap: 0 var(--space-2);
   align-items: center;
-  padding: 0.65rem 0.8rem;
+  padding: var(--space-2) var(--space-3);
   background: none;
   border: none;
   cursor: pointer;
@@ -295,82 +295,69 @@ const visible = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--surface);
   border: 2px solid var(--border);
   color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
 }
 .oc-step-check.done {
   background: var(--success, var(--primary));
   border-color: var(--success, var(--primary));
   color: var(--text-on-primary);
 }
-.oc-step-title { grid-area: title; font-weight: 500; font-size: 0.9rem; }
+.oc-step-title { grid-area: title; font-weight: var(--font-weight-medium); font-size: var(--font-size-s); }
 .oc-step-summary {
   grid-area: summary;
-  font-size: 0.76rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   line-height: 1.3;
 }
 .oc-step-chevron {
   grid-area: chevron;
   color: var(--text-secondary);
-  transition: transform 0.15s;
-  font-size: 1rem;
+  transition: transform var(--transition-base);
+  font-size: var(--font-size-m);
   align-self: center;
 }
 .oc-step-chevron.open { transform: rotate(180deg); }
 
 .oc-step-body {
-  padding: 0 0.8rem 0.75rem;
+  padding: 0 var(--space-3) var(--space-3);
   border-top: 1px solid var(--border);
-  padding-top: 0.65rem;
+  padding-top: var(--space-2);
   background: var(--bg);
 }
-.oc-lead { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--text); }
-.oc-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.oc-lead { margin: 0 0 var(--space-2); font-size: var(--font-size-s); color: var(--text); }
+.oc-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .oc-skip {
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-decoration: none;
 }
 .oc-skip:hover { color: var(--text); text-decoration: underline; }
 
-.oc-note { margin: 0.45rem 0 0; font-size: 0.78rem; color: var(--text-secondary); }
+.oc-note { margin: var(--space-1) 0 0; font-size: var(--font-size-xs); color: var(--text-secondary); }
 .oc-note.warn { color: var(--warning, var(--text-secondary)); }
 .oc-note.ok { color: var(--success, var(--text-secondary)); }
 
 .oc-allset {
-  margin: 0.5rem 0 0.25rem;
-  font-size: 0.82rem;
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--font-size-s);
   color: var(--success, var(--text-secondary));
   text-align: center;
 }
-
-.btn-primary {
-  padding: 0.45rem 1rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-.btn-primary:hover { background: var(--primary-hover); }
-.btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .oc-restore {
   background: var(--bg);
   border: 1px dashed var(--border);
   color: var(--text-secondary);
-  border-radius: 8px;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.78rem;
+  border-radius: var(--radius-small);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
   cursor: pointer;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 .oc-restore:hover { color: var(--text); border-color: var(--text-secondary); }
 </style>

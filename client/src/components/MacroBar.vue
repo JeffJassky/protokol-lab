@@ -40,7 +40,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   <div class="macro-bar">
     <div class="macro-header">
       <span class="macro-label">{{ label }}</span>
-      <span class="macro-values">{{ Math.round(current).toLocaleString() }} / {{ Math.round(target).toLocaleString() }}{{ unit }}</span>
+      <span class="macro-values"><span class="macro-current">{{ Math.round(current).toLocaleString() }}</span><span class="macro-budget"> / {{ Math.round(target).toLocaleString() }}{{ unit }}</span></span>
     </div>
     <div class="bar-track">
       <div class="bar-fill" :style="{ width: normalWidth + '%', background: color }" />
@@ -51,21 +51,30 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 </template>
 
 <style scoped>
-.macro-bar { margin-bottom: 0.6rem; }
+.macro-bar { margin-bottom: var(--space-2); }
 .macro-bar:last-child { margin-bottom: 0; }
 .macro-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.8rem;
-  margin-bottom: 0.25rem;
+  font-size: var(--font-size-xs);
+  margin-bottom: var(--space-1);
 }
-.macro-label { font-weight: 500; color: var(--text); }
-.macro-values { color: var(--text-secondary); }
+.macro-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+.macro-values { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.macro-current { font-weight: var(--font-weight-bold); color: var(--text); }
+.macro-budget { color: var(--text-tertiary); }
 .bar-track {
   position: relative;
   height: 8px;
   background: var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-small);
   overflow: hidden;
 }
 .bar-fill {
@@ -73,7 +82,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   left: 0;
   top: 0;
   height: 100%;
-  border-radius: 4px 0 0 4px;
+  border-radius: var(--radius-small);
   transition: width 0.3s;
 }
 .bar-over {
@@ -81,7 +90,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   top: 0;
   height: 100%;
   background: var(--danger);
-  border-radius: 0 4px 4px 0;
+  border-radius: var(--radius-small);
   transition: left 0.3s, width 0.3s;
 }
 .target-line {

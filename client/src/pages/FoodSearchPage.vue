@@ -21,6 +21,22 @@ const targetMeal = computed(() =>
   addToMealId.value ? mealsStore.meals.find((m) => m._id === addToMealId.value) : null,
 );
 
+// Favorite lookup by foodItemId. Search results come from multiple sources
+// (local foods, OpenFoodFacts, meals) so matching by foodItem id is the one
+// key that's present for the rows where "favorite" is meaningful.
+const favoriteIds = computed(() => {
+  const s = new Set();
+  for (const f of foodStore.favorites) {
+    const id = f.foodItemId?._id || f.foodItemId;
+    if (id) s.add(String(id));
+  }
+  return s;
+});
+function isFavoriteFood(food) {
+  const id = food._id || food.foodItemId?._id;
+  return id ? favoriteIds.value.has(String(id)) : false;
+}
+
 const meal = ref(route.query.meal || 'breakfast');
 const date = ref(route.query.date || new Date().toISOString().slice(0, 10));
 const validTabs = new Set(['search', 'meals']);
@@ -312,7 +328,7 @@ async function logMealToToday(m) {
     <div v-if="selectedFood" class="confirm-card">
       <h3>{{ selectedFood.name }}</h3>
       <p class="confirm-meta">
-        {{ selectedFood.caloriesPer }} cal per serving
+        {{ selectedFood.caloriesPer }} kcal per serving
         ({{ selectedFood.servingSize || `${selectedFood.servingGrams}g` }})
       </p>
       <div class="macro-row">
@@ -323,7 +339,7 @@ async function logMealToToday(m) {
       <div class="confirm-form">
         <label>Servings</label>
         <input type="number" v-model.number="servingCount" min="0.25" step="0.25" />
-        <span class="total-cal">= {{ Math.round(selectedFood.caloriesPer * servingCount) }} cal</span>
+        <span class="total-cal">= {{ Math.round(selectedFood.caloriesPer * servingCount) }} kcal</span>
       </div>
       <div class="confirm-actions">
         <button class="btn-secondary" @click="cancelSelect">Cancel</button>
@@ -363,6 +379,7 @@ async function logMealToToday(m) {
               <path stroke="currentColor" stroke-width="2" stroke-linecap="round"
                 d="M7 8v8M10 8v8M13 8v8M17 8v8" />
             </svg>
+            <span class="scan-label">SCAN</span>
           </button>
         </div>
         <p v-if="scanError" class="status scan-error">{{ scanError }}</p>
@@ -374,6 +391,7 @@ async function logMealToToday(m) {
               :key="food.offBarcode || food._id || i"
               :food="food"
               :show-source="true"
+              :is-favorite="isFavoriteFood(food)"
               :editable-emoji="food.source === 'local' || food.source === 'meal'"
               @select="selectResult"
               @update-emoji="handleRowEmojiUpdate"
@@ -388,6 +406,8 @@ async function logMealToToday(m) {
               v-for="item in foodStore.recents"
               :key="`${item.kind || 'fav'}-${item._id}`"
               :food="getFoodData(item)"
+              :is-recent="true"
+              :is-favorite="isFavoriteFood(getFoodData(item))"
               :editable-emoji="true"
               @select="selectResult(getFoodData(item))"
               @update-emoji="handleRowEmojiUpdate"
@@ -424,7 +444,8 @@ async function logMealToToday(m) {
             <div @click.stop>
               <EmojiPickerButton
                 :model-value="m.emoji || ''"
-                size="sm"
+                size="lg"
+                borderless
                 @update:model-value="updateMealEmoji(m, $event)"
               />
             </div>
@@ -441,17 +462,16 @@ async function logMealToToday(m) {
                 />
               </template>
               <template v-else>
-                <span class="meal-name" @click.stop="startRenameMeal(m)">{{ m.name }}</span>
+                <span class="meal-name" @click.stop="startRenameMeal(m)">{{ m.name }}<span class="meal-item-count"> · {{ m.items.length }} item{{ m.items.length === 1 ? '' : 's' }}</span></span>
               </template>
-              <span class="item-count">{{ m.items.length }} item{{ m.items.length === 1 ? '' : 's' }}</span>
             </div>
             <div class="meal-totals">
-              <span class="cal">{{ mealsStore.totalsFor(m).cal }} cal</span>
+              <span class="cal">{{ mealsStore.totalsFor(m).cal }} kcal</span>
               <span class="macro macro-p">{{ mealsStore.totalsFor(m).p }}p</span>
               <span class="macro macro-f">{{ mealsStore.totalsFor(m).f }}f</span>
               <span class="macro macro-c">{{ mealsStore.totalsFor(m).c }}c</span>
             </div>
-            <button class="delete-btn" @click.stop="handleDeleteMeal(m)">x</button>
+            <button class="meal-add-btn" type="button" aria-label="Log meal" :disabled="!m.items.length || adding" @click.stop="logMealToToday(m)">+</button>
           </div>
 
           <div v-if="expandedMealId === m._id" class="meal-items">
@@ -460,7 +480,7 @@ async function logMealToToday(m) {
                 <tr>
                   <th class="col-name">Item</th>
                   <th class="col-srv">Servings</th>
-                  <th class="col-num">Cal</th>
+                  <th class="col-num">Kcal</th>
                   <th class="col-num col-p">P</th>
                   <th class="col-num col-f">F</th>
                   <th class="col-num col-c">C</th>
@@ -495,6 +515,7 @@ async function logMealToToday(m) {
             <p v-else class="empty-small">No items in this meal yet.</p>
             <div class="meal-actions">
               <button class="btn-secondary" @click="startAddingFoodsToMeal(m)">+ Add food</button>
+              <button class="btn-delete-meal" type="button" @click="handleDeleteMeal(m)">Delete meal</button>
               <button class="btn-primary" :disabled="!m.items.length || adding" @click="logMealToToday(m)">
                 Log to {{ meal }}
               </button>
@@ -525,20 +546,17 @@ async function logMealToToday(m) {
 .back-btn {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-small);
+  padding: var(--space-1) var(--space-3);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   color: var(--text-secondary);
 }
 .back-btn:hover { background: var(--bg); }
 .meal-select {
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: var(--space-1) var(--space-2);
   background: var(--surface);
-  color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
 }
 .target-meal-banner {
   background: var(--tint-carbs-soft);
@@ -558,98 +576,106 @@ async function logMealToToday(m) {
   background: var(--color-carbs);
   border: none;
   color: var(--text-on-primary);
-  padding: 0.3rem 0.85rem;
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-small);
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
 }
 .banner-done:hover { background: var(--color-carbs-strong); }
 
 /* Meals tab management UI */
 .meals-toolbar {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 .create-meal-form {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   align-items: center;
 }
 .create-meal-form input {
   flex: 1;
-  padding: 0.45rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
   background: var(--surface);
-  color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--font-size-s);
 }
-.create-meal-form input:focus { outline: none; border-color: var(--primary); }
-.btn-text {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.82rem;
-  padding: 0.35rem 0.5rem;
-}
-.btn-text:hover { color: var(--text); }
 
 .meal-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  margin-bottom: 0.6rem;
-  overflow: hidden;
+  margin-bottom: -1px;
+}
+.meal-card:first-of-type {
+  border-top-left-radius: var(--radius-medium);
+  border-top-right-radius: var(--radius-medium);
+}
+.meal-card:last-of-type {
+  border-bottom-left-radius: var(--radius-medium);
+  border-bottom-right-radius: var(--radius-medium);
+  margin-bottom: 0;
 }
 .meal-summary {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 0.9rem;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
 }
 .meal-summary:hover { background: var(--bg); }
 .caret {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   width: 0.9rem;
 }
 .meal-name-block { flex: 1; min-width: 0; }
 .meal-name {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
   color: var(--text);
 }
 .meal-name:hover { color: var(--primary); }
-.row-emoji-inline { display: inline-block; margin-right: 0.35rem; font-size: 0.95rem; line-height: 1; }
+.row-emoji-inline { display: inline-block; margin-right: var(--space-1); font-size: var(--font-size-m); line-height: 1; }
 .rename-input {
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 0.2rem 0.4rem;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  padding: var(--space-1) var(--space-1);
   border: 1px solid var(--primary);
-  border-radius: 4px;
+  border-radius: var(--radius-small);
   background: var(--bg);
   color: var(--text);
   width: 100%;
   max-width: 280px;
 }
 .rename-input:focus { outline: none; }
-.item-count {
-  display: block;
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-  margin-top: 0.1rem;
+.meal-item-count {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular, 400);
+  color: var(--text-tertiary);
+  margin-left: var(--space-1);
 }
+.meal-add-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--primary);
+  font-size: 2rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+.meal-add-btn:hover:not(:disabled) { color: var(--primary-strong, var(--primary)); }
+.meal-add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .meal-totals {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   align-items: center;
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.meal-totals .cal { font-weight: var(--font-weight-bold); color: var(--color-cal); }
+.meal-totals .cal { font-weight: var(--font-weight-bold); color: var(--text); }
 .meal-totals .macro-p { color: var(--color-protein); }
 .meal-totals .macro-f { color: var(--color-fat); }
 .meal-totals .macro-c { color: var(--color-carbs); }
@@ -659,34 +685,36 @@ async function logMealToToday(m) {
   color: var(--text-disabled);
   cursor: pointer;
   font-size: var(--font-size-s);
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  padding: var(--space-1);
+  border-radius: var(--radius-small);
 }
 .delete-btn:hover { color: var(--danger); background: var(--danger-soft); }
 
 .meal-items {
-  padding: 0.75rem 0.9rem 0.9rem;
+  padding: var(--space-3) var(--space-3) var(--space-3);
   border-top: 1px solid var(--border);
   background: var(--bg);
+  border-bottom-left-radius: var(--radius-medium);
+  border-bottom-right-radius: var(--radius-medium);
 }
 .items-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: var(--font-size-s);
   font-variant-numeric: tabular-nums;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 .items-table th {
-  font-weight: 500;
-  font-size: 0.66rem;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
-  padding: 0.3rem 0.4rem;
+  padding: var(--space-1) var(--space-1);
   border-bottom: 1px solid var(--border);
 }
 .items-table td {
-  padding: 0.4rem 0.4rem;
+  padding: var(--space-1) var(--space-1);
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
@@ -701,17 +729,14 @@ async function logMealToToday(m) {
 .col-srv { text-align: center; width: 4rem; }
 .col-srv input {
   width: 3.2rem;
-  padding: 0.15rem 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  padding: 0.15rem var(--space-1);
   background: var(--surface);
-  color: var(--text);
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   text-align: center;
 }
 .col-num { text-align: right; width: 2.6rem; padding-left: 0.2rem; padding-right: 0.2rem; }
 .col-del { width: 1.75rem; text-align: right; }
-.items-table td.col-num:not(.col-p):not(.col-f):not(.col-c) { color: var(--color-cal); font-weight: var(--font-weight-bold); }
+.items-table td.col-num:not(.col-p):not(.col-f):not(.col-c) { color: var(--text); font-weight: var(--font-weight-bold); }
 .items-table td.col-p { color: var(--color-protein); }
 .items-table td.col-f { color: var(--color-fat); }
 .items-table td.col-c { color: var(--color-carbs); }
@@ -721,162 +746,142 @@ async function logMealToToday(m) {
 
 .meal-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   justify-content: space-between;
+  align-items: center;
 }
-.empty-small { color: var(--text-secondary); font-size: 0.8rem; padding: 0.25rem 0; margin: 0; }
+.btn-delete-meal {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+}
+.btn-delete-meal:hover { color: var(--danger); }
+.empty-small { color: var(--text-secondary); font-size: var(--font-size-xs); padding: var(--space-1) 0; margin: 0; }
 
 .tabs {
   display: flex;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
   border-bottom: 2px solid var(--border);
 }
 .tabs button {
   flex: 1;
-  padding: 0.6rem;
+  padding: var(--space-2);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: var(--font-size-s);
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: color var(--transition-base), border-color var(--transition-base);
 }
 .tabs button.active {
   color: var(--primary);
   border-bottom-color: var(--primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .section-label {
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
-  margin: 0.25rem 0 0.4rem;
+  margin: var(--space-1) 0 var(--space-1);
 }
 .search-row {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 .search-input {
   flex: 1;
-  padding: 0.6rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.95rem;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-m);
   background: var(--surface);
-  color: var(--text);
 }
 .scan-btn {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   cursor: pointer;
   color: var(--text-secondary);
 }
 .scan-btn:hover { color: var(--primary); border-color: var(--primary); }
-.scan-error { color: var(--danger, #d33); padding: 0.25rem 0; }
-.search-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-focus);
+.scan-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
 }
+.scan-error { color: var(--danger, #d33); padding: var(--space-1) 0; }
 
 .results-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: var(--radius-medium);
 }
 .results-card .food-row { margin: 0; border-radius: 0; }
+.results-card > :first-child { border-top-left-radius: var(--radius-medium); border-top-right-radius: var(--radius-medium); }
+.results-card > :last-child { border-bottom-left-radius: var(--radius-medium); border-bottom-right-radius: var(--radius-medium); }
 
 .status {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-size-s);
   text-align: center;
-  padding: 1.5rem 0;
+  padding: var(--space-6) 0;
 }
 
 .confirm-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.5rem;
+  border-radius: var(--radius-medium);
+  padding: var(--space-6);
 }
-.confirm-card h3 { margin: 0 0 0.25rem; font-size: 1.1rem; }
-.confirm-meta { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem; }
+.confirm-card h3 { margin: 0 0 var(--space-1); font-size: var(--font-size-l); }
+.confirm-meta { color: var(--text-secondary); font-size: var(--font-size-s); margin-bottom: var(--space-2); }
 .macro-row {
   display: flex;
-  gap: 1rem;
-  font-size: 0.8rem;
+  gap: var(--space-4);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 .confirm-form {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
 }
 .confirm-form label {
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
 }
 .confirm-form input {
   width: 80px;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.95rem;
-  background: var(--bg);
-  color: var(--text);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-m);
 }
-.confirm-form input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-.total-cal { font-weight: 600; color: var(--text); font-size: 0.95rem; }
+.total-cal { font-weight: var(--font-weight-bold); color: var(--text); font-size: var(--font-size-m); }
 
-.confirm-actions { display: flex; gap: 0.5rem; }
-.btn-secondary {
-  padding: 0.5rem 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-.btn-primary {
-  padding: 0.5rem 1.25rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: var(--font-weight-medium);
-  font-size: 0.9rem;
-}
-.btn-primary:hover { background: var(--primary-hover); }
-.btn-primary:disabled { opacity: 0.6; }
+.confirm-actions { display: flex; gap: var(--space-2); }
 
 .fav-btn {
   background: none;
   border: none;
-  font-size: 1.2rem;
+  font-size: var(--font-size-l);
   cursor: pointer;
   color: var(--text-disabled);
-  padding: 0.2rem;
+  padding: var(--space-1);
 }
 .fav-btn.active { color: var(--warning); }
 </style>

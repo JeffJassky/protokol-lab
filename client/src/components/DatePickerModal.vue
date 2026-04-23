@@ -187,13 +187,13 @@ const weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: var(--space-4);
 }
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-large);
-  padding: 1.25rem;
+  padding: var(--space-5);
   width: 100%;
   max-width: 360px;
   box-shadow: var(--shadow-l);
@@ -202,45 +202,45 @@ const weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-1);
 }
-.modal-header h3 { margin: 0; font-size: 1rem; }
+.modal-header h3 { margin: 0; font-size: var(--font-size-m); }
 .close-btn {
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: var(--font-size-m);
   cursor: pointer;
   color: var(--text-secondary);
-  padding: 0.25rem 0.4rem;
-  border-radius: 4px;
+  padding: var(--space-1);
+  border-radius: var(--radius-small);
 }
 .close-btn:hover { background: var(--bg); color: var(--text); }
 
 .hint {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 
 .calendar-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
 }
 .nav-btn {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   width: 28px;
   height: 28px;
   cursor: pointer;
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--font-size-m);
   line-height: 1;
 }
 .nav-btn:hover { background: var(--bg); }
-.month-label { font-weight: 600; font-size: 0.9rem; }
+.month-label { font-weight: var(--font-weight-bold); font-size: var(--font-size-s); }
 
 .calendar-grid {
   display: grid;
@@ -249,22 +249,22 @@ const weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 }
 .weekday {
   text-align: center;
-  font-size: 0.65rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.35rem 0;
+  letter-spacing: var(--tracking-wide);
+  padding: var(--space-1) 0;
 }
 .day-cell {
   background: var(--bg);
   border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0.5rem 0;
+  border-radius: var(--radius-small);
+  padding: var(--space-2) 0;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: var(--font-size-s);
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  transition: background 0.1s;
+  transition: background var(--transition-fast);
 }
 .day-cell:hover { background: var(--border); }
 .day-cell.other-month { color: var(--text-disabled); background: transparent; }
@@ -277,44 +277,14 @@ const weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 .day-cell.selected.today { box-shadow: 0 0 0 2px var(--primary-ring); }
 
 .modal-footer {
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
-.count { font-size: 0.75rem; color: var(--text-secondary); }
-.footer-actions { display: flex; gap: 0.4rem; align-items: center; }
-.btn-text {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.78rem;
-  padding: 0.3rem 0.4rem;
-}
-.btn-text:hover { color: var(--text); }
-.btn-secondary {
-  padding: 0.4rem 0.85rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-}
-.btn-primary {
-  padding: 0.4rem 0.85rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-small);
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: var(--font-weight-medium);
-}
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+.count { font-size: var(--font-size-xs); color: var(--text-secondary); }
+.footer-actions { display: flex; gap: var(--space-1); align-items: center; }
 </style>

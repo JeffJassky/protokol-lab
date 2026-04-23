@@ -144,13 +144,13 @@ async function handleSave() {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: var(--space-4);
 }
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-large);
-  padding: 1.25rem;
+  padding: var(--space-5);
   width: 100%;
   max-width: 420px;
   box-shadow: var(--shadow-l);
@@ -159,77 +159,67 @@ async function handleSave() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
-.modal-header h3 { margin: 0; font-size: 1rem; }
+.modal-header h3 { margin: 0; font-size: var(--font-size-m); }
 .close-btn {
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: var(--font-size-m);
   cursor: pointer;
   color: var(--text-secondary);
-  padding: 0.25rem 0.4rem;
-  border-radius: 4px;
+  padding: var(--space-1);
+  border-radius: var(--radius-small);
 }
 .close-btn:hover { background: var(--bg); color: var(--text); }
 
-.field { margin-bottom: 0.65rem; }
+.field { margin-bottom: var(--space-2); }
 .field label {
   display: block;
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
-  margin-bottom: 0.2rem;
+  margin-bottom: var(--space-1);
 }
 .field input {
   width: 100%;
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.88rem;
+  padding: var(--space-2) var(--space-2);
+  font-size: var(--font-size-s);
 }
-.field input:focus { outline: none; border-color: var(--primary); }
 
 .field-row {
   display: flex;
-  gap: 0.65rem;
+  gap: var(--space-2);
 }
 .name-row {
   display: flex;
-  gap: 0.65rem;
+  gap: var(--space-2);
   align-items: flex-end;
 }
 .name-row .name-col { flex: 1; min-width: 0; }
 .name-row .name-col label,
 .name-row .emoji-col label {
   display: block;
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
-  margin-bottom: 0.2rem;
+  margin-bottom: var(--space-1);
 }
 .name-row .name-col input {
   width: 100%;
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.88rem;
+  padding: var(--space-2) var(--space-2);
+  font-size: var(--font-size-s);
 }
-.name-row .name-col input:focus { outline: none; border-color: var(--primary); }
 .field-row .field { flex: 1; min-width: 0; }
 
 .section-label {
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
-  font-weight: 500;
-  margin-bottom: 0.4rem;
-  margin-top: 0.25rem;
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--space-1);
+  margin-top: var(--space-1);
 }
 
 .macros { flex-wrap: wrap; }
@@ -240,35 +230,14 @@ async function handleSave() {
 .f-label { color: var(--color-fat) !important; }
 .c-label { color: var(--color-carbs) !important; }
 
-.error { color: var(--danger); font-size: 0.8rem; margin: 0.5rem 0; }
+.error { color: var(--danger); font-size: var(--font-size-s); margin: var(--space-2) 0; }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border);
 }
-.btn-secondary {
-  padding: 0.45rem 0.9rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-.btn-primary {
-  padding: 0.45rem 0.9rem;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-small);
-  cursor: pointer;
-  font-size: var(--font-size-s);
-  font-weight: var(--font-weight-medium);
-}
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
 </style>

@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { usePushStore } from '../stores/push.js';
 import { useFonts } from '../composables/useFonts.js';
+import { useTheme } from '../composables/useTheme.js';
 import ChatDrawer from './ChatDrawer.vue';
 import OnboardingBanner from './OnboardingBanner.vue';
 
@@ -15,6 +16,10 @@ const router = useRouter();
 const showChat = ref(false);
 
 const { display, body, mono, DISPLAY_FONTS, BODY_FONTS, MONO_FONTS } = useFonts();
+const theme = useTheme();
+function toggleTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark';
+}
 
 onMounted(async () => {
   const uid = auth.user?._id || auth.user?.id;
@@ -73,6 +78,50 @@ async function handleLogout() {
               </option>
             </select>
           </label>
+          <button
+            class="theme-toggle"
+            type="button"
+            :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+            :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+            @click="toggleTheme"
+          >
+            <svg
+              v-if="theme === 'dark'"
+              class="theme-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" />
+              <path d="M12 20v2" />
+              <path d="m4.93 4.93 1.41 1.41" />
+              <path d="m17.66 17.66 1.41 1.41" />
+              <path d="M2 12h2" />
+              <path d="M20 12h2" />
+              <path d="m4.93 19.07 1.41-1.41" />
+              <path d="m17.66 6.34 1.41-1.41" />
+            </svg>
+            <svg
+              v-else
+              class="theme-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          </button>
         </div>
         <button class="logout-btn" @click="handleLogout">Logout</button>
       </div>
@@ -103,30 +152,30 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
+  padding: 0 var(--space-6);
   height: 56px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex: none;
 }
 .brand {
-  font-weight: 700;
-  font-size: 1.05rem;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-m);
   color: var(--text);
   text-decoration: none;
 }
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 .nav-links a {
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 0.875rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
+  font-size: var(--font-size-s);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-small);
+  transition: background var(--transition-base), color var(--transition-base);
 }
 .nav-links a:hover {
   background: var(--bg);
@@ -140,40 +189,59 @@ async function handleLogout() {
 .font-pickers {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  margin-left: 0.5rem;
-  padding-left: 0.6rem;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  padding-left: var(--space-2);
   border-left: 1px solid var(--border);
 }
 .font-picker {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   padding: 0.15rem 0.3rem 0.15rem 0.45rem;
   cursor: pointer;
-  transition: border-color 0.1s;
+  transition: border-color var(--transition-fast);
 }
 .font-picker:hover { border-color: var(--border-strong); }
 .font-picker-tag {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   font-weight: var(--font-weight-bold);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--tracking-wide);
 }
 .font-picker select {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   padding: 0.15rem 0.2rem;
   cursor: pointer;
   max-width: 110px;
   outline: none;
 }
 .font-picker select:hover { color: var(--text); }
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+}
+.theme-toggle:hover .theme-icon { color: var(--text); }
+.theme-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
 @media (max-width: 900px) {
   .font-pickers { display: none; }
 }
@@ -182,12 +250,12 @@ async function handleLogout() {
   background: none;
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  padding: 0.3rem 0.75rem;
-  border-radius: 6px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-small);
   cursor: pointer;
-  font-size: 0.8rem;
-  margin-left: 0.5rem;
-  transition: background 0.15s;
+  font-size: var(--font-size-xs);
+  margin-left: var(--space-2);
+  transition: background var(--transition-base);
 }
 .logout-btn:hover {
   background: var(--bg);
@@ -200,7 +268,7 @@ async function handleLogout() {
 .content {
   flex: 1;
   min-width: 0;
-  padding: 1.5rem;
+  padding: var(--space-6);
   overflow-y: auto;
 }
 .content > :deep(*) {
@@ -216,22 +284,22 @@ async function handleLogout() {
 
 .chat-fab {
   position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  bottom: var(--space-6);
+  right: var(--space-6);
   width: 52px;
   height: 52px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--primary);
   color: var(--text-on-primary);
   border: none;
-  font-size: 1.4rem;
+  font-size: var(--font-size-xl);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 16px var(--primary-ring);
   z-index: 70;
-  transition: background 0.15s, transform 0.15s;
+  transition: background var(--transition-base), transform var(--transition-base);
 }
 .chat-fab:hover {
   background: var(--primary-hover);
