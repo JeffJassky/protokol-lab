@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Default title + description. Per-route pages override via @unhead/vue. -->
+    <title>Pricing — Free, Premium from $6.58/mo, Unlimited | Protokol Lab</title>
+    <meta name="description" content="Protokol Lab pricing: Free forever, Premium at $9.99/mo or $79/year ($6.58/mo, save ~35%), Unlimited at $19.99/mo or $149/year. 14-day free trial on paid plans. AI chat, correlation charts, cloud sync, data export.">
+    <link rel="canonical" href="https://protokollab.com/pricing">
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Protokol Lab">
+    <meta property="og:title" content="Pricing — Free, Premium from $6.58/mo, Unlimited | Protokol Lab">
+    <meta property="og:description" content="Protokol Lab pricing: Free forever, Premium at $9.99/mo or $79/year ($6.58/mo, save ~35%), Unlimited at $19.99/mo or $149/year. 14-day free trial on paid plans. AI chat, correlation charts, cloud sync, data export.">
+    <meta property="og:url" content="https://protokollab.com/pricing">
+    <meta property="og:image" content="https://protokollab.com/og/pricing.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="en_US">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pricing — Free, Premium from $6.58/mo, Unlimited | Protokol Lab">
+    <meta name="twitter:description" content="Protokol Lab pricing: Free forever, Premium at $9.99/mo or $79/year ($6.58/mo, save ~35%), Unlimited at $19.99/mo or $149/year. 14-day free trial on paid plans. AI chat, correlation charts, cloud sync, data export.">
+    <meta name="twitter:image" content="https://protokollab.com/og/pricing.png">
+
+    <!-- App / PWA -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <meta name="theme-color" content="#0b0f0c" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Protokol">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+    <!-- Fonts — IBM Plex Mono for body, JetBrains Mono for display/data. See styles/themes.css. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap">
+
+    <!-- Structured data: Organization + WebSite. Applies site-wide.
+         Per-page schema (Product, FAQPage, Article, MedicalWebApplication) is injected by @unhead/vue. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://protokollab.com/#organization",
+          "name": "Protokol Lab",
+          "url": "https://protokollab.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://protokollab.com/icons/icon-512.png",
+            "width": 512,
+            "height": 512
+          },
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://protokollab.com/#website",
+          "url": "https://protokollab.com/",
+          "name": "Protokol Lab",
+          "description": "GLP-1 tracker for Tirzepatide, Semaglutide, and compounded peptides.",
+          "publisher": { "@id": "https://protokollab.com/#organization" },
+          "inLanguage": "en-US"
+        },
+        {
+          "@type": "MedicalWebPage",
+          "@id": "https://protokollab.com/#medical",
+          "url": "https://protokollab.com/",
+          "about": [
+            { "@type": "Drug", "name": "Tirzepatide", "alternateName": ["Mounjaro", "Zepbound"] },
+            { "@type": "Drug", "name": "Semaglutide", "alternateName": ["Ozempic", "Wegovy", "Rybelsus"] }
+          ],
+          "audience": { "@type": "PeopleAudience", "suggestedMinAge": 18 }
+        }
+      ]
+    }
+    </script>
+
+    <script>
+      // Resolve theme before Vue mounts so first paint matches saved/system preference.
+      // Must stay in sync with useTheme.js (storageKey 'vt-theme', attribute 'data-theme').
+      (function () {
+        try {
+          var saved = localStorage.getItem('vt-theme');
+          var pref = saved || 'auto';
+          var resolved = pref;
+          if (pref === 'auto') {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (_) { /* ignore */ }
+      })();
+    </script>
+    <script type="module" crossorigin="" src="/assets/index-CROz_qzb.js"></script>
+    <link rel="stylesheet" crossorigin="" href="/assets/index-EYhKbJ_b.css">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Protokol Lab Premium","description":"GLP-1 tracker premium: AI chat, correlation charts, rolling weekly targets, unlimited custom compounds, cloud sync, data export.","brand":{"@type":"Brand","name":"Protokol Lab"},"offers":[{"@type":"Offer","name":"Premium Monthly","price":"9.99","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://protokollab.com/pricing"},{"@type":"Offer","name":"Premium Yearly","price":"79","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://protokollab.com/pricing"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Protokol Lab Unlimited","description":"Everything in Premium plus uncapped AI chat, longer conversation context, uncapped food image recognition, priority support.","brand":{"@type":"Brand","name":"Protokol Lab"},"offers":[{"@type":"Offer","name":"Unlimited Monthly","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock"},{"@type":"Offer","name":"Unlimited Yearly","price":"149","priceCurrency":"USD","availability":"https://schema.org/InStock"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://protokollab.com/"},{"@type":"ListItem","position":2,"name":"Pricing","item":"https://protokollab.com/pricing"}]}</script></head>
+  <body>
+    <div id="app" data-v-app=""><div data-v-615b54c2="" data-v-7e6a9b5a="" class="mkt-root"><div data-v-615b54c2="" class="scanlines" aria-hidden="true"></div><div data-v-615b54c2="" class="nav"><div data-v-615b54c2="" class="wrap nav-inner"><span data-v-615b54c2="" class="logo" role="button" tabindex="0"><svg viewBox="0 0 64 64" width="22" height="22" class="logo-mark" aria-hidden="true" data-v-615b54c2=""><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></circle><line x1="32" y1="2" x2="32" y2="18" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="2" y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><circle cx="32" cy="32" r="7" fill="var(--primary)" data-v-615b54c2=""></circle></svg> Protokol Lab </span><nav data-v-615b54c2="" class="nav-links" aria-label="Primary"><a data-v-615b54c2="" href="/features" class="nav-link">Features</a><a data-v-615b54c2="" href="/ai" class="nav-link">AI</a><a data-v-615b54c2="" href="/compounds" class="nav-link">Compounds</a><a data-v-615b54c2="" href="/pricing" class="nav-link">Pricing</a><a data-v-615b54c2="" href="/faq" class="nav-link">FAQ</a><a data-v-615b54c2="" href="/blog" class="nav-link">Blog</a></nav><button data-v-615b54c2="" class="nav-cta">Sign in</button></div></div><section data-v-7e6a9b5a="" class="mkt-page"><div data-v-7e6a9b5a="" class="wrap"><div data-v-7e6a9b5a="" class="mkt-eyebrow">Pricing</div><h1 data-v-7e6a9b5a="" class="mkt-h1">Simple.<br data-v-7e6a9b5a=""><span data-v-7e6a9b5a="" class="accent">Honest. Cheap.</span></h1><p data-v-7e6a9b5a="" class="mkt-lead"> Free forever for the core tracker. Premium and Unlimited unlock the AI coach, correlation charts, unlimited custom compounds, cloud sync, and full data export. 14-day free trial on paid plans — cancel before it ends and you're not charged. </p><div data-v-7e6a9b5a="" class="price-toggle" role="tablist" aria-label="Billing interval"><button data-v-7e6a9b5a="" type="button" class="price-toggle-btn" role="tab" aria-selected="false">Monthly</button><button data-v-7e6a9b5a="" type="button" class="price-toggle-btn active" role="tab" aria-selected="true">Yearly <span data-v-7e6a9b5a="" class="save-tag">save 34%</span></button></div><div data-v-7e6a9b5a="" class="price-cards"><div data-v-7e6a9b5a="" class="price-card"><div data-v-7e6a9b5a="" class="price-kind">Free</div><div data-v-7e6a9b5a="" class="price-amount">$0<span data-v-7e6a9b5a="" class="per"> / forever</span></div><p data-v-7e6a9b5a="" class="price-desc">Enough to actually run your week. No credit card, no trial timer.</p><ul data-v-7e6a9b5a="" class="price-feats"><li data-v-7e6a9b5a="">Food log, meals, barcode scan</li><li data-v-7e6a9b5a="">Weight and waist tracking</li><li data-v-7e6a9b5a="">Symptoms and day notes</li><li data-v-7e6a9b5a="">Dose tracking with half-life curves</li><li data-v-7e6a9b5a="">Up to 3 compounds</li><li data-v-7e6a9b5a="">Progress photos with side-by-side compare</li></ul><button data-v-7e6a9b5a="" class="mkt-btn-secondary wide">Get started</button></div><div data-v-7e6a9b5a="" class="price-card featured"><div data-v-7e6a9b5a="" class="price-kind accent">Premium</div><div data-v-7e6a9b5a="" class="price-amount">$6.58<span data-v-7e6a9b5a="" class="per"> / month</span></div><p data-v-7e6a9b5a="" class="price-desc">Everything in Free, plus the tools that turn your data into answers.</p><ul data-v-7e6a9b5a="" class="price-feats"><li data-v-7e6a9b5a="">AI chat that reads your full log</li><li data-v-7e6a9b5a="">Rolling 7-day macro targets</li><li data-v-7e6a9b5a="">Correlation charts, any two metrics</li><li data-v-7e6a9b5a="">Deeper dose charts and stats</li><li data-v-7e6a9b5a="">Up to 20 custom compounds</li><li data-v-7e6a9b5a="">Saved meals, cloud sync, data export</li></ul><button data-v-7e6a9b5a="" class="mkt-btn-primary wide">Start 14-day free trial →</button><div data-v-7e6a9b5a="" class="price-trial-note">Billed as $79/year — save $41</div></div><div data-v-7e6a9b5a="" class="price-card"><div data-v-7e6a9b5a="" class="price-kind">Unlimited</div><div data-v-7e6a9b5a="" class="price-amount">$12.42<span data-v-7e6a9b5a="" class="per"> / month</span></div><p data-v-7e6a9b5a="" class="price-desc">Everything in Premium, AI uncapped. For users who live in the chat.</p><ul data-v-7e6a9b5a="" class="price-feats"><li data-v-7e6a9b5a="">Unlimited AI messages per day</li><li data-v-7e6a9b5a="">Longer conversation context</li><li data-v-7e6a9b5a="">Food image recognition, uncapped</li><li data-v-7e6a9b5a="">Unlimited custom compounds</li><li data-v-7e6a9b5a="">Priority support</li></ul><button data-v-7e6a9b5a="" class="mkt-btn-secondary wide">Start 14-day free trial →</button><div data-v-7e6a9b5a="" class="price-trial-note">Billed as $149/year — save $91</div></div></div><!----><h2 data-v-7e6a9b5a="" class="mkt-h2">What's in each tier</h2><table data-v-7e6a9b5a="" class="mkt-table"><thead data-v-7e6a9b5a=""><tr data-v-7e6a9b5a=""><th data-v-7e6a9b5a="">Feature</th><th data-v-7e6a9b5a="">Free</th><th data-v-7e6a9b5a="">Premium</th><th data-v-7e6a9b5a="">Unlimited</th></tr></thead><tbody data-v-7e6a9b5a=""><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Dose tracking with half-life curves</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Food log, barcode scan, meals</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Weight, waist, symptoms, notes</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Progress photos</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Custom compounds</td><td data-v-7e6a9b5a="">3</td><td data-v-7e6a9b5a="">20</td><td data-v-7e6a9b5a="">Unlimited</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">AI chat coach</td><td data-v-7e6a9b5a="">—</td><td data-v-7e6a9b5a="">60 msgs/day</td><td data-v-7e6a9b5a="">Unlimited</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Rolling 7-day macro targets</td><td data-v-7e6a9b5a="">—</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Correlation charts</td><td data-v-7e6a9b5a="">—</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Food image recognition</td><td data-v-7e6a9b5a="">—</td><td data-v-7e6a9b5a="">Limited</td><td data-v-7e6a9b5a="">Unlimited</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Cloud sync + data export</td><td data-v-7e6a9b5a="">—</td><td data-v-7e6a9b5a="">✓</td><td data-v-7e6a9b5a="">✓</td></tr><tr data-v-7e6a9b5a=""><td data-v-7e6a9b5a="">Priority support</td><td data-v-7e6a9b5a="">—</td><td data-v-7e6a9b5a="">—</td><td data-v-7e6a9b5a="">✓</td></tr></tbody></table><h2 data-v-7e6a9b5a="" class="mkt-h2">Pricing FAQ</h2><div data-v-7e6a9b5a="" class="faq-item"><h3 data-v-7e6a9b5a="" class="faq-q">Is there a free trial?</h3><p data-v-7e6a9b5a="" class="faq-body">Yes. Both Premium and Unlimited include a 14-day free trial. Your card is collected upfront and charged at trial end. Cancel any time before trial ends and you're not charged.</p></div><div data-v-7e6a9b5a="" class="faq-item"><h3 data-v-7e6a9b5a="" class="faq-q">Can I cancel anytime?</h3><p data-v-7e6a9b5a="" class="faq-body">Yes. Cancel from Settings. Access continues through the end of the paid period. No hidden fees.</p></div><div data-v-7e6a9b5a="" class="faq-item"><h3 data-v-7e6a9b5a="" class="faq-q">Can I switch between Premium and Unlimited?</h3><p data-v-7e6a9b5a="" class="faq-body">Yes. Upgrades are prorated immediately. Downgrades take effect at the end of the current billing cycle.</p></div><div data-v-7e6a9b5a="" class="faq-item"><h3 data-v-7e6a9b5a="" class="faq-q">Does Free work with Mounjaro, Zepbound, Ozempic, Wegovy?</h3><p data-v-7e6a9b5a="" class="faq-body">Yes. Free includes full dose tracking with half-life curves for all built-in GLP-1 compounds.</p></div><div data-v-7e6a9b5a="" class="faq-item"><h3 data-v-7e6a9b5a="" class="faq-q">Do I need Premium to track compounded peptides?</h3><p data-v-7e6a9b5a="" class="faq-body">No. Free supports up to 3 custom compounds — enough for most compounded GLP-1 users. Premium raises the cap to 20, Unlimited is unlimited.</p></div><div data-v-7e6a9b5a="" class="faq-item"><h3 data-v-7e6a9b5a="" class="faq-q">How do you handle refunds?</h3><p data-v-7e6a9b5a="" class="faq-body">Cancel before your 14-day trial ends and you pay nothing. After that, we'll refund on request within 7 days of an accidental renewal — email support.</p></div></div></section><footer class="mkt-footer" data-v-615b54c2=""><div class="wrap" data-v-615b54c2=""><div class="footer-grid" data-v-615b54c2=""><div data-v-615b54c2=""><div class="logo footer-logo" data-v-615b54c2=""><svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true" data-v-615b54c2=""><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></circle><line x1="32" y1="2" x2="32" y2="18" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="2" y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><circle cx="32" cy="32" r="7" fill="var(--primary)" data-v-615b54c2=""></circle></svg> Protokol Lab </div><div class="footer-blurb" data-v-615b54c2=""> The GLP-1 tracker for Tirzepatide, Semaglutide, and compounded peptides. Dose half-life curves, weekly rolling budgets, agentic AI. </div></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Product</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/features" data-v-615b54c2="">Features</a></li><li data-v-615b54c2=""><a href="/ai" data-v-615b54c2="">AI</a></li><li data-v-615b54c2=""><a href="/compounds" data-v-615b54c2="">Compounds</a></li><li data-v-615b54c2=""><a href="/pricing" data-v-615b54c2="">Pricing</a></li></ul></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Resources</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/faq" data-v-615b54c2="">FAQ</a></li><li data-v-615b54c2=""><a href="/blog" data-v-615b54c2="">Blog</a></li><li data-v-615b54c2=""><a href="/compare" data-v-615b54c2="">Compare trackers</a></li><li data-v-615b54c2=""><a href="/medical-advisory" data-v-615b54c2="">Medical advisory</a></li></ul></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Company</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/about" data-v-615b54c2="">About</a></li><li data-v-615b54c2=""><a href="/terms" data-v-615b54c2="">Terms</a></li><li data-v-615b54c2=""><a href="/privacy" data-v-615b54c2="">Privacy</a></li></ul></div></div><div class="footer-disclaimer" data-v-615b54c2=""> Protokol Lab is an organizational and mathematical modeling tool. It is not a medical device and does not provide medical advice, diagnosis, treatment, dosing recommendations, or titration suggestions. Protokol Lab publishes pharmacokinetic defaults only for FDA-approved medications; users who track other substances supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track. Protokol Lab does not sell, ship, distribute, refer users to, or endorse any pharmacy, telehealth provider, compounding facility, or substance. Consult a licensed medical professional before making any decision about your medication or health. </div></div></footer></div></div>
+  
+
+</body></html>

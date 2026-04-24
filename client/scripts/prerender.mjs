@@ -26,6 +26,11 @@ import { spaRoutes } from '../src/marketing-meta.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(__dirname, '..', 'dist');
+// Prerendered output lives OUTSIDE dist/ so it survives rebuilds and can be
+// committed to git. Production deploys (DigitalOcean, etc.) cannot run
+// Puppeteer due to missing Chromium system libs, so we bake these HTMLs
+// into the repo at build time locally and the server reads them at runtime.
+const PRERENDERED = path.resolve(__dirname, '..', 'prerendered');
 const PORT = 4321 + Math.floor(Math.random() * 100);
 
 const MIME = {
@@ -94,11 +99,14 @@ async function snapshot(page, route) {
 }
 
 function writeRoute(route, html) {
-  const outDir = route === '/' ? DIST : path.join(DIST, route.replace(/^\//, ''));
+  // "/" → prerendered/index.html
+  // "/pricing" → prerendered/pricing/index.html
+  const slug = route === '/' ? '' : route.replace(/^\//, '');
+  const outDir = slug ? path.join(PRERENDERED, slug) : PRERENDERED;
   const outFile = path.join(outDir, 'index.html');
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(outFile, html, 'utf8');
-  console.log(`  ✓ wrote ${path.relative(DIST, outFile)}`);
+  console.log(`  ✓ wrote ${path.relative(path.resolve(__dirname, '..'), outFile)}`);
 }
 
 async function main() {
@@ -113,13 +121,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Preserve the un-hydrated shell so Express can fall back to it for
-  // SPA-only routes (auth, app, 404s) after prerender overwrites index.html.
-  const shellPath = path.join(DIST, 'index.html');
-  const shellBackup = path.join(DIST, 'index.shell.html');
-  if (!fs.existsSync(shellBackup)) {
-    fs.copyFileSync(shellPath, shellBackup);
-  }
+  fs.mkdirSync(PRERENDERED, { recursive: true });
 
   const server = await start();
   console.log(`[prerender] static server on :${PORT}`);
@@ -136,7 +138,7 @@ async function main() {
       const html = await snapshot(page, route);
       writeRoute(route, html);
     }
-    console.log(`[prerender] ${routes.length} routes written`);
+    console.log(`[prerender] ${routes.length} routes written to ${path.relative(path.resolve(__dirname, '..'), PRERENDERED)}/`);
   } finally {
     await browser.close();
     server.close();

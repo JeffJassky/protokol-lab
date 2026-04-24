@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Default title + description. Per-route pages override via @unhead/vue. -->
+    <title>AI Coach — Agentic Assistant for GLP-1 Tracking | Protokol Lab</title>
+    <meta name="description" content="Protokol Lab's AI is not a chatbot. It has tools — reads your full log, searches the web, creates custom foods, and writes entries directly into your day. Multi-thread history. Built for Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound.">
+    <link rel="canonical" href="https://protokollab.com/ai">
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Protokol Lab">
+    <meta property="og:title" content="AI Coach — Agentic Assistant for GLP-1 Tracking | Protokol Lab">
+    <meta property="og:description" content="Protokol Lab's AI is not a chatbot. It has tools — reads your full log, searches the web, creates custom foods, and writes entries directly into your day. Multi-thread history. Built for Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound.">
+    <meta property="og:url" content="https://protokollab.com/ai">
+    <meta property="og:image" content="https://protokollab.com/og/ai.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="en_US">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="AI Coach — Agentic Assistant for GLP-1 Tracking | Protokol Lab">
+    <meta name="twitter:description" content="Protokol Lab's AI is not a chatbot. It has tools — reads your full log, searches the web, creates custom foods, and writes entries directly into your day. Multi-thread history. Built for Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound.">
+    <meta name="twitter:image" content="https://protokollab.com/og/ai.png">
+
+    <!-- App / PWA -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <meta name="theme-color" content="#0b0f0c" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Protokol">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+    <!-- Fonts — IBM Plex Mono for body, JetBrains Mono for display/data. See styles/themes.css. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap">
+
+    <!-- Structured data: Organization + WebSite. Applies site-wide.
+         Per-page schema (Product, FAQPage, Article, MedicalWebApplication) is injected by @unhead/vue. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://protokollab.com/#organization",
+          "name": "Protokol Lab",
+          "url": "https://protokollab.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://protokollab.com/icons/icon-512.png",
+            "width": 512,
+            "height": 512
+          },
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://protokollab.com/#website",
+          "url": "https://protokollab.com/",
+          "name": "Protokol Lab",
+          "description": "GLP-1 tracker for Tirzepatide, Semaglutide, and compounded peptides.",
+          "publisher": { "@id": "https://protokollab.com/#organization" },
+          "inLanguage": "en-US"
+        },
+        {
+          "@type": "MedicalWebPage",
+          "@id": "https://protokollab.com/#medical",
+          "url": "https://protokollab.com/",
+          "about": [
+            { "@type": "Drug", "name": "Tirzepatide", "alternateName": ["Mounjaro", "Zepbound"] },
+            { "@type": "Drug", "name": "Semaglutide", "alternateName": ["Ozempic", "Wegovy", "Rybelsus"] }
+          ],
+          "audience": { "@type": "PeopleAudience", "suggestedMinAge": 18 }
+        }
+      ]
+    }
+    </script>
+
+    <script>
+      // Resolve theme before Vue mounts so first paint matches saved/system preference.
+      // Must stay in sync with useTheme.js (storageKey 'vt-theme', attribute 'data-theme').
+      (function () {
+        try {
+          var saved = localStorage.getItem('vt-theme');
+          var pref = saved || 'auto';
+          var resolved = pref;
+          if (pref === 'auto') {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (_) { /* ignore */ }
+      })();
+    </script>
+    <script type="module" crossorigin="" src="/assets/index-CROz_qzb.js"></script>
+    <link rel="stylesheet" crossorigin="" href="/assets/index-EYhKbJ_b.css">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://protokollab.com/"},{"@type":"ListItem","position":2,"name":"AI","item":"https://protokollab.com/ai"}]}</script></head>
+  <body>
+    <div id="app" data-v-app=""><div data-v-615b54c2="" class="mkt-root"><div data-v-615b54c2="" class="scanlines" aria-hidden="true"></div><div data-v-615b54c2="" class="nav"><div data-v-615b54c2="" class="wrap nav-inner"><span data-v-615b54c2="" class="logo" role="button" tabindex="0"><svg viewBox="0 0 64 64" width="22" height="22" class="logo-mark" aria-hidden="true" data-v-615b54c2=""><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></circle><line x1="32" y1="2" x2="32" y2="18" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="2" y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><circle cx="32" cy="32" r="7" fill="var(--primary)" data-v-615b54c2=""></circle></svg> Protokol Lab </span><nav data-v-615b54c2="" class="nav-links" aria-label="Primary"><a data-v-615b54c2="" href="/features" class="nav-link">Features</a><a data-v-615b54c2="" href="/ai" class="nav-link">AI</a><a data-v-615b54c2="" href="/compounds" class="nav-link">Compounds</a><a data-v-615b54c2="" href="/pricing" class="nav-link">Pricing</a><a data-v-615b54c2="" href="/faq" class="nav-link">FAQ</a><a data-v-615b54c2="" href="/blog" class="nav-link">Blog</a></nav><button data-v-615b54c2="" class="nav-cta">Sign in</button></div></div><section class="mkt-page"><div class="wrap"><div class="mkt-eyebrow">AI · Agentic assistant</div><h1 class="mkt-h1">An assistant<br><span class="accent">that does the work.</span></h1><p class="mkt-lead"> Most trackers give you a chat window and call it AI. Protokol Lab's AI has tools. It reads your full log — every food, dose, weigh-in, symptom, and note — searches the web for anything new, creates custom foods, and writes entries directly into your day. Describe what you ate. It handles the rest. </p><h2 class="mkt-h2">What it can actually do</h2><div class="mkt-card-grid"><div class="mkt-card"><h3>Reads your data</h3><p>Every food entry, dose, weigh-in, symptom rating, and day note is available as context. No copy-pasting.</p></div><div class="mkt-card"><h3>Searches the web</h3><p>New restaurant, new supplement, any nutrition fact — the AI runs a Google search and grounds the answer in what it finds.</p></div><div class="mkt-card"><h3>Creates custom foods</h3><p>If you eat something not in your library, the AI can build a custom food entry with accurate macros and save it for next time.</p></div><div class="mkt-card"><h3>Writes log entries</h3><p>"I just ate a Sweetgreen Kale Caesar" — it logs it to the right meal slot, counting toward your daily and weekly totals.</p></div><div class="mkt-card"><h3>Multi-thread history</h3><p>Keep "Dose escalation plan" separate from "Nausea tolerance" from "Hitting protein on low-appetite days." Each thread keeps its own context.</p></div><div class="mkt-card"><h3>Dose-aware answers</h3><p>It knows where you are in your tirzepatide or semaglutide cycle and can reason about why appetite is suppressed today or expected tomorrow.</p></div></div><h2 class="mkt-h2">Example: real round-trip</h2><div class="mkt-callout"><strong>You:</strong> I just ate a Sweetgreen Kale Caesar at lunch.<br><br><strong>AI (tool trail):</strong><br> • Reading request<br> ⚙ Checking your food library<br> ✓ Not in library yet<br> ⚙ Searching the web for nutrition info<br> ✓ Found · 560 cal · 40g P · 31g F · 42g C<br> ⚙ Saving as a custom food<br> ✓ Added to your library<br> ⚙ Writing the entry to today<br> ✓ Logged to lunch<br><br><strong>AI:</strong> Logged. You're at 1,240 cal, 340 to go for the day. Protein's at 92g — you'll want another shake before bed to hit 180. </div><h2 class="mkt-h2">How it's built</h2><p class="mkt-p"> The AI is a Gemini-based agent with tool-calling. It has structured access to your data via API, runs bounded iteration loops per message (no runaway tool use), and can ground web searches through Google Search integration when a nutrition fact isn't in your library. </p><p class="mkt-p"> Messages are rate-limited to protect against abuse, and agent iteration counts are capped per-message for determinism. Full per-plan limits live on the <a href="/pricing">Pricing</a> page. </p><h2 class="mkt-h2">Privacy</h2><p class="mkt-p"> The AI has read/write access only to your own data. We do not train on your logs. Chat threads stay in your account and export with the rest of your data when you ask for it. </p><h2 class="mkt-h2">Available on Premium and Unlimited</h2><p class="mkt-p"> AI chat is a Premium feature. Unlimited raises daily message caps and context windows. <a href="/pricing">See pricing →</a></p><div class="mkt-cta-row"><a href="/register" class="mkt-btn-primary">Start free trial →</a><a href="/features" class="mkt-btn-secondary">See all features</a></div></div></section><footer class="mkt-footer" data-v-615b54c2=""><div class="wrap" data-v-615b54c2=""><div class="footer-grid" data-v-615b54c2=""><div data-v-615b54c2=""><div class="logo footer-logo" data-v-615b54c2=""><svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true" data-v-615b54c2=""><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></circle><line x1="32" y1="2" x2="32" y2="18" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="2" y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><circle cx="32" cy="32" r="7" fill="var(--primary)" data-v-615b54c2=""></circle></svg> Protokol Lab </div><div class="footer-blurb" data-v-615b54c2=""> The GLP-1 tracker for Tirzepatide, Semaglutide, and compounded peptides. Dose half-life curves, weekly rolling budgets, agentic AI. </div></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Product</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/features" data-v-615b54c2="">Features</a></li><li data-v-615b54c2=""><a href="/ai" data-v-615b54c2="">AI</a></li><li data-v-615b54c2=""><a href="/compounds" data-v-615b54c2="">Compounds</a></li><li data-v-615b54c2=""><a href="/pricing" data-v-615b54c2="">Pricing</a></li></ul></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Resources</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/faq" data-v-615b54c2="">FAQ</a></li><li data-v-615b54c2=""><a href="/blog" data-v-615b54c2="">Blog</a></li><li data-v-615b54c2=""><a href="/compare" data-v-615b54c2="">Compare trackers</a></li><li data-v-615b54c2=""><a href="/medical-advisory" data-v-615b54c2="">Medical advisory</a></li></ul></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Company</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/about" data-v-615b54c2="">About</a></li><li data-v-615b54c2=""><a href="/terms" data-v-615b54c2="">Terms</a></li><li data-v-615b54c2=""><a href="/privacy" data-v-615b54c2="">Privacy</a></li></ul></div></div><div class="footer-disclaimer" data-v-615b54c2=""> Protokol Lab is an organizational and mathematical modeling tool. It is not a medical device and does not provide medical advice, diagnosis, treatment, dosing recommendations, or titration suggestions. Protokol Lab publishes pharmacokinetic defaults only for FDA-approved medications; users who track other substances supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track. Protokol Lab does not sell, ship, distribute, refer users to, or endorse any pharmacy, telehealth provider, compounding facility, or substance. Consult a licensed medical professional before making any decision about your medication or health. </div></div></footer></div></div>
+  
+
+</body></html>

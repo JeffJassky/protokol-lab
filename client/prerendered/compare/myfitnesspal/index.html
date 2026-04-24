@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Default title + description. Per-route pages override via @unhead/vue. -->
+    <title>Protokol Lab vs MyFitnessPal — GLP-1 Tracker Comparison</title>
+    <meta name="description" content="Honest comparison: Protokol Lab vs MyFitnessPal. Feature matrix, pricing, pros and cons, and when to pick each. The legacy calorie counter — massive food database, generic use case.">
+    <link rel="canonical" href="https://protokollab.com/compare/myfitnesspal">
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Protokol Lab">
+    <meta property="og:title" content="Protokol Lab vs MyFitnessPal — GLP-1 Tracker Comparison">
+    <meta property="og:description" content="Honest comparison: Protokol Lab vs MyFitnessPal. Feature matrix, pricing, pros and cons, and when to pick each. The legacy calorie counter — massive food database, generic use case.">
+    <meta property="og:url" content="https://protokollab.com/compare/myfitnesspal">
+    <meta property="og:image" content="https://protokollab.com/og/compare.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="en_US">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Protokol Lab vs MyFitnessPal — GLP-1 Tracker Comparison">
+    <meta name="twitter:description" content="Honest comparison: Protokol Lab vs MyFitnessPal. Feature matrix, pricing, pros and cons, and when to pick each. The legacy calorie counter — massive food database, generic use case.">
+    <meta name="twitter:image" content="https://protokollab.com/og/compare.png">
+
+    <!-- App / PWA -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <meta name="theme-color" content="#0b0f0c" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Protokol">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+    <!-- Fonts — IBM Plex Mono for body, JetBrains Mono for display/data. See styles/themes.css. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap">
+
+    <!-- Structured data: Organization + WebSite. Applies site-wide.
+         Per-page schema (Product, FAQPage, Article, MedicalWebApplication) is injected by @unhead/vue. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://protokollab.com/#organization",
+          "name": "Protokol Lab",
+          "url": "https://protokollab.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://protokollab.com/icons/icon-512.png",
+            "width": 512,
+            "height": 512
+          },
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://protokollab.com/#website",
+          "url": "https://protokollab.com/",
+          "name": "Protokol Lab",
+          "description": "GLP-1 tracker for Tirzepatide, Semaglutide, and compounded peptides.",
+          "publisher": { "@id": "https://protokollab.com/#organization" },
+          "inLanguage": "en-US"
+        },
+        {
+          "@type": "MedicalWebPage",
+          "@id": "https://protokollab.com/#medical",
+          "url": "https://protokollab.com/",
+          "about": [
+            { "@type": "Drug", "name": "Tirzepatide", "alternateName": ["Mounjaro", "Zepbound"] },
+            { "@type": "Drug", "name": "Semaglutide", "alternateName": ["Ozempic", "Wegovy", "Rybelsus"] }
+          ],
+          "audience": { "@type": "PeopleAudience", "suggestedMinAge": 18 }
+        }
+      ]
+    }
+    </script>
+
+    <script>
+      // Resolve theme before Vue mounts so first paint matches saved/system preference.
+      // Must stay in sync with useTheme.js (storageKey 'vt-theme', attribute 'data-theme').
+      (function () {
+        try {
+          var saved = localStorage.getItem('vt-theme');
+          var pref = saved || 'auto';
+          var resolved = pref;
+          if (pref === 'auto') {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (_) { /* ignore */ }
+      })();
+    </script>
+    <script type="module" crossorigin="" src="/assets/index-CROz_qzb.js"></script>
+    <link rel="stylesheet" crossorigin="" href="/assets/index-EYhKbJ_b.css">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Can I just use MyFitnessPal and ignore the GLP-1 stuff?","acceptedAnswer":{"@type":"Answer","text":"You can, and many people do at first. The problem shows up around week 2: you have three 900-calorie days from peak suppression and two 2,400-calorie rebound days, and MyFitnessPal flags four of seven days as failures even though your weekly total is perfect. That pattern is why people switch."}},{"@type":"Question","name":"Is Protokol Lab cheaper than MyFitnessPal Premium?","acceptedAnswer":{"@type":"Answer","text":"Yes. MyFitnessPal Premium runs around $19.99/month. Protokol Lab Premium is $9.99/month monthly, or $79/year ($6.58/mo effective) — roughly a third of MFP Premium, with GLP-1-specific features MFP does not offer."}},{"@type":"Question","name":"Does Protokol Lab have a food database as big as MyFitnessPal?","acceptedAnswer":{"@type":"Answer","text":"No — MyFitnessPal's database has a multi-year lead on breadth. Protokol Lab's food library is large and growing, with barcode scanning, custom foods, and an AI that can pull nutrition for unusual items via web search. For 95% of everyday meals you'll find what you need."}},{"@type":"Question","name":"Can I import my MyFitnessPal history?","acceptedAnswer":{"@type":"Answer","text":"MyFitnessPal offers a data export that Protokol Lab can parse into your food log and weight history. Dose history has to be re-entered since MFP does not track it."}},{"@type":"Question","name":"Does Protokol Lab have ads?","acceptedAnswer":{"@type":"Answer","text":"No. The free tier is ad-free. Revenue comes from Premium subscriptions, not ad sales."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://protokollab.com/"},{"@type":"ListItem","position":2,"name":"Compare","item":"https://protokollab.com/compare"},{"@type":"ListItem","position":3,"name":"MyFitnessPal","item":"https://protokollab.com/compare/myfitnesspal"}]}</script></head>
+  <body>
+    <div id="app" data-v-app=""><div data-v-615b54c2="" data-v-dcb73ab7="" class="mkt-root"><div data-v-615b54c2="" class="scanlines" aria-hidden="true"></div><div data-v-615b54c2="" class="nav"><div data-v-615b54c2="" class="wrap nav-inner"><span data-v-615b54c2="" class="logo" role="button" tabindex="0"><svg viewBox="0 0 64 64" width="22" height="22" class="logo-mark" aria-hidden="true" data-v-615b54c2=""><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></circle><line x1="32" y1="2" x2="32" y2="18" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="2" y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><circle cx="32" cy="32" r="7" fill="var(--primary)" data-v-615b54c2=""></circle></svg> Protokol Lab </span><nav data-v-615b54c2="" class="nav-links" aria-label="Primary"><a data-v-615b54c2="" href="/features" class="nav-link">Features</a><a data-v-615b54c2="" href="/ai" class="nav-link">AI</a><a data-v-615b54c2="" href="/compounds" class="nav-link">Compounds</a><a data-v-615b54c2="" href="/pricing" class="nav-link">Pricing</a><a data-v-615b54c2="" href="/faq" class="nav-link">FAQ</a><a data-v-615b54c2="" href="/blog" class="nav-link">Blog</a></nav><button data-v-615b54c2="" class="nav-cta">Sign in</button></div></div><section data-v-dcb73ab7="" class="mkt-page"><div data-v-dcb73ab7="" class="wrap"><div data-v-dcb73ab7="" class="mkt-eyebrow"> Comparison · <a data-v-dcb73ab7="" href="/compare" class="eyebrow-link">All comparisons</a></div><h1 data-v-dcb73ab7="" class="mkt-h1"> Protokol Lab<br data-v-dcb73ab7=""><span data-v-dcb73ab7="" class="accent">vs MyFitnessPal.</span></h1><p data-v-dcb73ab7="" class="mkt-lead">The legacy calorie counter — massive food database, generic use case.</p><h2 data-v-dcb73ab7="" class="mkt-h2">What MyFitnessPal does well</h2><ul data-v-dcb73ab7="" class="mkt-ul"><li data-v-dcb73ab7="">Enormous crowdsourced food database — almost any food you can think of has at least one entry.</li><li data-v-dcb73ab7="">Barcode scanning and recent/favorite food workflows are mature and fast.</li><li data-v-dcb73ab7="">Recipe builder and saved meals cover common cooking patterns.</li><li data-v-dcb73ab7="">Integrations with most smart scales, fitness trackers, and fitness apps.</li></ul><h2 data-v-dcb73ab7="" class="mkt-h2">Where MyFitnessPal falls short for GLP-1 users</h2><ul data-v-dcb73ab7="" class="mkt-ul"><li data-v-dcb73ab7="">Zero awareness of GLP-1 pharmacology. No dose tracking, no half-life curves, no symptom overlay.</li><li data-v-dcb73ab7="">Daily calorie resets fight the GLP-1 appetite cycle — low-appetite days read as "under goal" failures.</li><li data-v-dcb73ab7="">Food database has significant duplicate and inaccurate entries from the crowdsourced model.</li><li data-v-dcb73ab7="">Aggressive freemium friction: features move behind paywall, ad load increased, macro editing gated.</li></ul><h2 data-v-dcb73ab7="" class="mkt-h2">Feature matrix</h2><table data-v-dcb73ab7="" class="mkt-table cmp-matrix"><thead data-v-dcb73ab7=""><tr data-v-dcb73ab7=""><th data-v-dcb73ab7="">Feature</th><th data-v-dcb73ab7="">MyFitnessPal</th><th data-v-dcb73ab7="">Protokol Lab</th></tr></thead><tbody data-v-dcb73ab7=""><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Dose tracking with half-life curves <!----></td><td data-v-dcb73ab7="" class="cmp-cell no">✗</td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Rolling 7-day calorie budget <!----></td><td data-v-dcb73ab7="" class="cmp-cell no">✗</td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Food barcode scanning <!----></td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Food database size <div data-v-dcb73ab7="" class="cmp-note">MFP has a multi-year lead on crowdsourced breadth</div></td><td data-v-dcb73ab7="" class="cmp-cell str">Very large</td><td data-v-dcb73ab7="" class="cmp-cell str">Large</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Symptom severity 0–10 scale <!----></td><td data-v-dcb73ab7="" class="cmp-cell no">✗</td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Custom compounds (user-defined) <!----></td><td data-v-dcb73ab7="" class="cmp-cell no">✗</td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Agentic AI assistant <!----></td><td data-v-dcb73ab7="" class="cmp-cell no">✗</td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Ads in free tier <!----></td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td><td data-v-dcb73ab7="" class="cmp-cell no">✗</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Data export (full history, free) <!----></td><td data-v-dcb73ab7="" class="cmp-cell partial">◐</td><td data-v-dcb73ab7="" class="cmp-cell ok">✓</td></tr><tr data-v-dcb73ab7=""><td data-v-dcb73ab7="">Pricing <!----></td><td data-v-dcb73ab7="" class="cmp-cell str">Free + ~$19.99/mo</td><td data-v-dcb73ab7="" class="cmp-cell str">Free + $6.58/mo</td></tr></tbody></table><div data-v-dcb73ab7="" class="cmp-when"><div data-v-dcb73ab7="" class="cmp-when-card"><h3 data-v-dcb73ab7="" class="cmp-when-h">Use MyFitnessPal if…</h3><p data-v-dcb73ab7="" class="mkt-p">You're not on a GLP-1, you want the largest possible food database, and you're okay with daily calorie resets and a generic weight-loss frame.</p></div><div data-v-dcb73ab7="" class="cmp-when-card accent"><h3 data-v-dcb73ab7="" class="cmp-when-h">Use Protokol Lab if…</h3><p data-v-dcb73ab7="" class="mkt-p">You're on Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound, or a compounded peptide and you want a tracker that treats your week as a week — not seven separate days where four of them look like you failed. Plus dose tracking, symptom tracking, and an AI that reads it all together.</p></div></div><h2 data-v-dcb73ab7="" class="mkt-h2">FAQ</h2><div data-v-dcb73ab7="" class="faq-item"><h3 data-v-dcb73ab7="" class="faq-q">Can I just use MyFitnessPal and ignore the GLP-1 stuff?</h3><p data-v-dcb73ab7="" class="faq-body">You can, and many people do at first. The problem shows up around week 2: you have three 900-calorie days from peak suppression and two 2,400-calorie rebound days, and MyFitnessPal flags four of seven days as failures even though your weekly total is perfect. That pattern is why people switch.</p></div><div data-v-dcb73ab7="" class="faq-item"><h3 data-v-dcb73ab7="" class="faq-q">Is Protokol Lab cheaper than MyFitnessPal Premium?</h3><p data-v-dcb73ab7="" class="faq-body">Yes. MyFitnessPal Premium runs around $19.99/month. Protokol Lab Premium is $9.99/month monthly, or $79/year ($6.58/mo effective) — roughly a third of MFP Premium, with GLP-1-specific features MFP does not offer.</p></div><div data-v-dcb73ab7="" class="faq-item"><h3 data-v-dcb73ab7="" class="faq-q">Does Protokol Lab have a food database as big as MyFitnessPal?</h3><p data-v-dcb73ab7="" class="faq-body">No — MyFitnessPal's database has a multi-year lead on breadth. Protokol Lab's food library is large and growing, with barcode scanning, custom foods, and an AI that can pull nutrition for unusual items via web search. For 95% of everyday meals you'll find what you need.</p></div><div data-v-dcb73ab7="" class="faq-item"><h3 data-v-dcb73ab7="" class="faq-q">Can I import my MyFitnessPal history?</h3><p data-v-dcb73ab7="" class="faq-body">MyFitnessPal offers a data export that Protokol Lab can parse into your food log and weight history. Dose history has to be re-entered since MFP does not track it.</p></div><div data-v-dcb73ab7="" class="faq-item"><h3 data-v-dcb73ab7="" class="faq-q">Does Protokol Lab have ads?</h3><p data-v-dcb73ab7="" class="faq-body">No. The free tier is ad-free. Revenue comes from Premium subscriptions, not ad sales.</p></div><div data-v-dcb73ab7="" class="mkt-cta-row"><a data-v-dcb73ab7="" href="/register" class="mkt-btn-primary">Try Protokol Lab free →</a><a data-v-dcb73ab7="" href="/pricing" class="mkt-btn-secondary">See pricing</a><a data-v-dcb73ab7="" href="https://myfitnesspal.com" rel="nofollow noopener" target="_blank" class="cmp-ext"> Visit MyFitnessPal ↗ </a></div><div data-v-dcb73ab7="" class="cmp-related"><h3 data-v-dcb73ab7="" class="mkt-h3">Other comparisons</h3><ul data-v-dcb73ab7="" class="cmp-related-list"><li data-v-dcb73ab7=""><a data-v-dcb73ab7="" href="/compare/macrofactor">Protokol Lab vs MacroFactor</a></li></ul></div></div></section><footer class="mkt-footer" data-v-615b54c2=""><div class="wrap" data-v-615b54c2=""><div class="footer-grid" data-v-615b54c2=""><div data-v-615b54c2=""><div class="logo footer-logo" data-v-615b54c2=""><svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true" data-v-615b54c2=""><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></circle><line x1="32" y1="2" x2="32" y2="18" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="2" y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" data-v-615b54c2=""></line><circle cx="32" cy="32" r="7" fill="var(--primary)" data-v-615b54c2=""></circle></svg> Protokol Lab </div><div class="footer-blurb" data-v-615b54c2=""> The GLP-1 tracker for Tirzepatide, Semaglutide, and compounded peptides. Dose half-life curves, weekly rolling budgets, agentic AI. </div></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Product</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/features" data-v-615b54c2="">Features</a></li><li data-v-615b54c2=""><a href="/ai" data-v-615b54c2="">AI</a></li><li data-v-615b54c2=""><a href="/compounds" data-v-615b54c2="">Compounds</a></li><li data-v-615b54c2=""><a href="/pricing" data-v-615b54c2="">Pricing</a></li></ul></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Resources</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/faq" data-v-615b54c2="">FAQ</a></li><li data-v-615b54c2=""><a href="/blog" data-v-615b54c2="">Blog</a></li><li data-v-615b54c2=""><a href="/compare" data-v-615b54c2="">Compare trackers</a></li><li data-v-615b54c2=""><a href="/medical-advisory" data-v-615b54c2="">Medical advisory</a></li></ul></div><div class="footer-col" data-v-615b54c2=""><h4 data-v-615b54c2="">Company</h4><ul data-v-615b54c2=""><li data-v-615b54c2=""><a href="/about" data-v-615b54c2="">About</a></li><li data-v-615b54c2=""><a href="/terms" data-v-615b54c2="">Terms</a></li><li data-v-615b54c2=""><a href="/privacy" data-v-615b54c2="">Privacy</a></li></ul></div></div><div class="footer-disclaimer" data-v-615b54c2=""> Protokol Lab is an organizational and mathematical modeling tool. It is not a medical device and does not provide medical advice, diagnosis, treatment, dosing recommendations, or titration suggestions. Protokol Lab publishes pharmacokinetic defaults only for FDA-approved medications; users who track other substances supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track. Protokol Lab does not sell, ship, distribute, refer users to, or endorse any pharmacy, telehealth provider, compounding facility, or substance. Consult a licensed medical professional before making any decision about your medication or health. </div></div></footer></div></div>
+  
+
+</body></html>
