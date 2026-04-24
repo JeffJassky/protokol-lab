@@ -381,9 +381,9 @@ const aiTrail = [
           </h1>
           <p class="hero-lead">
             Log macros, doses, weight, symptoms, and photos in one app. Built
-            for Tirzepatide, Semaglutide, compounded peptides, and research
-            compounds — with half-life curves, weekly rolling budgets, and an AI
-            that reads your whole history.
+            for Tirzepatide, Semaglutide, and compounded versions of both —
+            with half-life curves, weekly rolling budgets, and an AI that
+            reads your whole history.
           </p>
           <div class="hero-ctas">
             <button class="btn-primary" @click="goRegister">
@@ -654,8 +654,8 @@ const aiTrail = [
               right now — and why your appetite comes and goes the way it does.
               One-tap presets for Tirzepatide (Mounjaro, Zepbound),
               Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide, and
-              Dulaglutide. Compounded peptides and research compounds —
-              retatrutide, cagrilintide, or anything else — take two fields:
+              Dulaglutide. Compounded versions of those peptides, or anything
+              else you need to track, add as a custom compound in two fields:
               a name and a half-life. The curve draws itself.
             </p>
             <ul class="feat-bullets section-bullets">

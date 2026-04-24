@@ -10,7 +10,6 @@ Allow: /compounds
 Allow: /faq
 Allow: /about
 Allow: /medical-advisory
-Allow: /advanced
 Allow: /blog
 Disallow: /admin
 Disallow: /admin/

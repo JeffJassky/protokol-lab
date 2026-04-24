@@ -36,14 +36,24 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://protokollab.com/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://protokollab.com/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
     <loc>https://protokollab.com/medical-advisory</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://protokollab.com/advanced</loc>
+    <loc>https://protokollab.com/compare</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>https://protokollab.com/blog</loc>
@@ -67,6 +77,36 @@
   </url>
   <url>
     <loc>https://protokollab.com/blog/ozempic-vs-wegovy-vs-compounded-semaglutide.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://protokollab.com/compare/shotsy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://protokollab.com/compare/myfitnesspal</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://protokollab.com/compare/glapp-io</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://protokollab.com/compare/dosediary</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://protokollab.com/compare/macrofactor</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://protokollab.com/compare/meagain</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

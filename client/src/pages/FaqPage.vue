@@ -14,11 +14,11 @@ const faqs = [
   },
   {
     q: 'Can I track compounded tirzepatide or compounded semaglutide?',
-    a: 'Yes. Compounded GLP-1s contain the same peptide as the brand-name versions — same molecule, same pharmacokinetics. Use the built-in Tirzepatide or Semaglutide preset. If your compounding pharmacy provides a unique mix (for example, tirzepatide + cagrilintide), add a custom compound with your preferred name and half-life.',
+    a: 'Yes. Compounded GLP-1s contain the same peptide as the brand-name versions — same molecule, same pharmacokinetics. Use the built-in Tirzepatide or Semaglutide preset. For any non-standard formulation, add a custom compound by entering a name and a half-life.',
   },
   {
-    q: 'Can I track retatrutide, cagrilintide, or other research peptides?',
-    a: 'Yes. Add a custom compound with its name, half-life in days, and injection schedule. Protokol Lab supports bolus, subcutaneous, and depot absorption profiles — pick the shape that matches the peptide. Retatrutide and cagrilintide both behave like weekly sub-Q peptides; survodutide is similar.',
+    q: 'Can I track custom or compounded compounds?',
+    a: 'Yes. For any compound outside the FDA-approved list that Protokol Lab ships by default, users can add a custom compound by entering a name and a half-life. Bolus, subcutaneous, and depot absorption profiles are supported. Protokol Lab does not publish pharmacokinetic defaults for compounds that are not FDA-approved; users supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track. Protokol Lab does not sell, ship, or refer users to pharmacies or compounding facilities for any substance.',
   },
   {
     q: 'How accurate is the half-life curve?',
@@ -58,11 +58,11 @@ const faqs = [
   },
   {
     q: 'Does Protokol Lab support stacked compounds?',
-    a: 'Yes. Run multiple active compounds simultaneously — their curves are summed correctly. Useful for combining tirzepatide with retatrutide, adding cagrilintide to a semaglutide schedule, or layering any research peptide stack.',
+    a: 'Yes. Run multiple active compounds simultaneously — their curves are summed correctly at every time point, so the active-level chart reflects the full schedule rather than just the most recent injection.',
   },
   {
     q: 'Can I track compounded tirzepatide from a telehealth service?',
-    a: 'Yes. The peptide is the same whether it comes from a brand-name pharmacy or a licensed compounding pharmacy via telehealth (Henry Meds, Mochi, Eden, etc). Use the built-in Tirzepatide preset. Protokol Lab does not endorse specific pharmacies — obtain medication through a licensed prescriber.',
+    a: 'Yes. The peptide is the same whether it comes from a brand-name pharmacy or a licensed compounding pharmacy. Use the built-in Tirzepatide preset and log your prescribed mg per injection. Protokol Lab does not endorse or refer users to specific pharmacies, telehealth services, or compounding facilities — obtain medication through a licensed prescriber.',
   },
 ];
 
@@ -91,8 +91,8 @@ useRouteSeo({
         <h1 class="mkt-h1">Questions,<br /><span class="accent">answered.</span></h1>
         <p class="mkt-lead">
           Everything we get asked about tracking GLP-1s on Protokol Lab —
-          Mounjaro, Zepbound, Ozempic, Wegovy, compounded peptides, research
-          compounds, half-life accuracy, privacy, and pricing.
+          Mounjaro, Zepbound, Ozempic, Wegovy, compounded semaglutide and
+          tirzepatide, half-life accuracy, privacy, and pricing.
         </p>
 
         <div v-for="(f, i) in faqs" :key="i" class="faq-item">

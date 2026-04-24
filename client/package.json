@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run sitemap && npm run og && vite build && npm run prerender",
-    "build:no-prerender": "npm run sitemap && npm run og && vite build",
+    "build": "npm run sitemap && npm run og && vite build && npm run prerender && npm run inject-blog-nav",
+    "build:no-prerender": "npm run sitemap && npm run og && vite build && npm run inject-blog-nav",
     "prerender": "node scripts/prerender.mjs",
+    "inject-blog-nav": "node scripts/inject-blog-nav.mjs",
     "og": "node scripts/generate-og.mjs",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "preview": "vite preview"

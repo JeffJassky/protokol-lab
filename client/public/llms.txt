@@ -1,6 +1,6 @@
 # Protokol Lab
 
-> The tracker built for GLP-1s. Log doses with pharmacokinetic half-life curves, weekly rolling calorie budgets that forgive low-appetite days, symptoms, weight, and progress photos — all in one app. Works with every major GLP-1: Tirzepatide (Mounjaro, Zepbound), Semaglutide (Ozempic, Wegovy, Rybelsus), compounded peptides, and research compounds like retatrutide and cagrilintide.
+> The tracker built for GLP-1s. Log doses with pharmacokinetic half-life curves, weekly rolling calorie budgets that forgive low-appetite days, symptoms, weight, and progress photos — all in one app. Works with every FDA-approved GLP-1: Tirzepatide (Mounjaro, Zepbound), Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide (Saxenda, Victoza), and Dulaglutide (Trulicity), plus compounded versions of those peptides.
 
 Protokol Lab is an organizational and mathematical modeling tool. It does not provide medical advice, diagnose conditions, or recommend the consumption of any substance. Users are solely responsible for how they interpret their own data.
 
@@ -19,7 +19,7 @@ Protokol Lab is an organizational and mathematical modeling tool. It does not pr
 
 - People taking FDA-approved GLP-1 medications: Ozempic, Wegovy, Mounjaro, Zepbound, Rybelsus, Saxenda, Victoza.
 - People on compounded tirzepatide or compounded semaglutide from a licensed compounding pharmacy.
-- Advanced users tracking research peptides: retatrutide, cagrilintide, survodutide, and custom compounds with user-supplied half-lives.
+- Users who need to track custom compounds (compounded formulations, clinical-trial prescriptions, etc.) using user-supplied half-lives.
 - Anyone switching from MyFitnessPal, Cronometer, or Lose It who wants a tracker that actually understands GLP-1 physiology.
 
 ## Supported Compounds (Built-in Library)
@@ -30,11 +30,9 @@ Protokol Lab is an organizational and mathematical modeling tool. It does not pr
 | Semaglutide | Ozempic, Wegovy, Rybelsus | ~7 days | Sub-Q weekly / oral daily |
 | Liraglutide | Saxenda, Victoza | ~13 hours | Sub-Q, daily |
 | Dulaglutide | Trulicity | ~5 days | Sub-Q, weekly |
-| Retatrutide | (research) | ~6 days | Sub-Q, weekly |
-| Cagrilintide | (research) | ~7 days | Sub-Q, weekly |
-| Custom | — | user-defined | user-defined |
+| Custom | user-defined | user-defined | user-defined |
 
-Adding your own is two fields: a name and a half-life. The curve draws itself.
+Protokol Lab publishes pharmacokinetic defaults only for FDA-approved GLP-1 receptor agonists. For any other compound — a compounded formulation, a substance prescribed under a clinical trial — users add a custom compound by entering a name and a half-life. Users supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track. Protokol Lab does not sell, ship, distribute, refer users to, or endorse any pharmacy, telehealth provider, compounding facility, or substance.
 
 ## Pricing
 
@@ -50,8 +48,8 @@ Yes. Mounjaro and Zepbound are both tirzepatide. Ozempic and Wegovy are both sem
 ### Can I track compounded GLP-1s?
 Yes. Use the built-in Tirzepatide or Semaglutide preset for compounded versions of those peptides, or add a custom compound with any name and half-life.
 
-### Can I track retatrutide, cagrilintide, or other research peptides?
-Yes. Add a custom compound with the peptide's name, half-life (days), and dose schedule. The kinetic model supports bolus, subcutaneous, and depot absorption profiles.
+### Can I track custom or compounded compounds?
+For any compound outside the FDA-approved GLP-1s Protokol Lab ships by default, users can add a custom compound by entering a name and a half-life. The kinetic model supports bolus, subcutaneous, and depot absorption profiles. Protokol Lab does not publish pharmacokinetic defaults for compounds that are not FDA-approved; users supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track.
 
 ### How accurate is the half-life curve?
 Protokol Lab uses the Bateman equation — the standard two-compartment pharmacokinetic model for extravascular absorption. Defaults are based on published PK data: tirzepatide ~5 days (Urva et al., Lancet 2020), semaglutide ~7 days (Lau et al., J Med Chem 2015). Users can override half-life per compound to match individual metabolism or compounded formulations.
@@ -84,7 +82,7 @@ Yes. Full history export as JSON or CSV, anytime, no paywall, no support ticket.
 Add a custom compound in seconds: name, half-life (days), dose schedule, and optionally a kinetic shape (bolus, subcutaneous, depot). The PK curve is generated automatically.
 
 ### Does Protokol Lab support multiple simultaneous compounds (stacks)?
-Yes. Model multiple active compounds at once — their curves are stacked correctly. Useful for combining tirzepatide with retatrutide or adding cagrilintide.
+Yes. Model multiple active compounds at once — their curves are summed correctly at every time point, so the active-level chart reflects the full schedule rather than just the most recent injection.
 
 ## Marketing URLs
 
@@ -96,7 +94,6 @@ Yes. Model multiple active compounds at once — their curves are stacked correc
 - [FAQ](https://protokollab.com/faq) — common questions about GLP-1 tracking, compounded peptides, privacy, and features.
 - [About](https://protokollab.com/about) — who built Protokol Lab and why.
 - [Medical Advisory](https://protokollab.com/medical-advisory) — disclaimer, clinical references, and peer-reviewed sources.
-- [Advanced / Research Peptides](https://protokollab.com/advanced) — for users tracking retatrutide, cagrilintide, survodutide, and custom peptide stacks.
 - [Blog](https://protokollab.com/blog) — educational articles on GLP-1 physiology, dose timing, nausea management, and calorie strategies.
 
 ## Blog
@@ -110,5 +107,5 @@ Yes. Model multiple active compounds at once — their curves are stacked correc
 
 - Urva S, et al. "Effects of renal impairment on the pharmacokinetics of the dual GIP and GLP-1 receptor agonist tirzepatide." *Clinical Pharmacokinetics* (2021). Tirzepatide t½ ≈ 5 days.
 - Lau J, et al. "Discovery of the Once-Weekly Glucagon-Like Peptide-1 (GLP-1) Analogue Semaglutide." *Journal of Medicinal Chemistry* (2015). Semaglutide t½ ≈ 7 days.
-- Jastreboff AM, et al. "Triple–Hormone-Receptor Agonist Retatrutide for Obesity — A Phase 2 Trial." *New England Journal of Medicine* (2023). Retatrutide PK.
-- Lau J, et al. "Cagrilintide PK." Novo Nordisk clinical program data.
+- Agersø H, et al. "The pharmacokinetics, pharmacodynamics, safety and tolerability of NN2211, a new long-acting GLP-1 derivative." *Diabetologia* (2002). Liraglutide t½ ≈ 13 hours.
+- Barrington P, et al. "Dulaglutide pharmacokinetics and pharmacodynamics." *Diabetes, Obesity and Metabolism* (2011). Dulaglutide t½ ≈ 5 days.

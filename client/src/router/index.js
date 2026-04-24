@@ -7,8 +7,9 @@ import AiPage from '../pages/AiPage.vue';
 import CompoundsPage from '../pages/CompoundsPage.vue';
 import FaqPage from '../pages/FaqPage.vue';
 import AboutPage from '../pages/AboutPage.vue';
+import TermsPage from '../pages/TermsPage.vue';
+import PrivacyPage from '../pages/PrivacyPage.vue';
 import MedicalAdvisoryPage from '../pages/MedicalAdvisoryPage.vue';
-import AdvancedPage from '../pages/AdvancedPage.vue';
 import BlogIndexPage from '../pages/BlogIndexPage.vue';
 import CompareIndexPage from '../pages/CompareIndexPage.vue';
 import ComparisonPage from '../pages/ComparisonPage.vue';
@@ -38,8 +39,9 @@ const routes = [
   { path: '/compounds', name: 'compounds', component: CompoundsPage, meta: { public: true, marketing: true } },
   { path: '/faq', name: 'faq', component: FaqPage, meta: { public: true, marketing: true } },
   { path: '/about', name: 'about', component: AboutPage, meta: { public: true, marketing: true } },
+  { path: '/terms', name: 'terms', component: TermsPage, meta: { public: true, marketing: true } },
+  { path: '/privacy', name: 'privacy', component: PrivacyPage, meta: { public: true, marketing: true } },
   { path: '/medical-advisory', name: 'medical-advisory', component: MedicalAdvisoryPage, meta: { public: true, marketing: true } },
-  { path: '/advanced', name: 'advanced', component: AdvancedPage, meta: { public: true, marketing: true } },
   { path: '/blog', name: 'blog', component: BlogIndexPage, meta: { public: true, marketing: true } },
   { path: '/compare', name: 'compare', component: CompareIndexPage, meta: { public: true, marketing: true } },
   { path: '/compare/:slug', name: 'comparison', component: ComparisonPage, meta: { public: true, marketing: true } },

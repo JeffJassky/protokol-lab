@@ -1,5 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router';
+import { MARKETING_NAV } from '../marketing-nav.js';
 
 const router = useRouter();
 const goLogin = () => router.push('/login');
@@ -25,12 +26,7 @@ const goHome = () => router.push('/');
           Protokol Lab
         </span>
         <nav class="nav-links" aria-label="Primary">
-          <a href="/features" class="nav-link">Features</a>
-          <a href="/ai" class="nav-link">AI</a>
-          <a href="/compounds" class="nav-link">Compounds</a>
-          <a href="/pricing" class="nav-link">Pricing</a>
-          <a href="/faq" class="nav-link">FAQ</a>
-          <a href="/blog" class="nav-link">Blog</a>
+          <a v-for="l in MARKETING_NAV" :key="l.href" :href="l.href" class="nav-link">{{ l.label }}</a>
         </nav>
         <button class="nav-cta" @click="goLogin">Sign in</button>
       </div>
@@ -74,25 +70,31 @@ const goHome = () => router.push('/');
             <ul>
               <li><a href="/faq">FAQ</a></li>
               <li><a href="/blog">Blog</a></li>
+              <li><a href="/compare">Compare trackers</a></li>
               <li><a href="/medical-advisory">Medical advisory</a></li>
-              <li><a href="/advanced">Research peptides</a></li>
             </ul>
           </div>
           <div class="footer-col">
             <h4>Company</h4>
             <ul>
               <li><a href="/about">About</a></li>
-              <li><a href="/medical-advisory">Terms &amp; privacy</a></li>
+              <li><a href="/terms">Terms</a></li>
+              <li><a href="/privacy">Privacy</a></li>
             </ul>
           </div>
         </div>
         <div class="footer-disclaimer">
-          Protokol Lab is an organizational and mathematical modeling tool. It
-          does not provide medical advice, diagnose conditions, or recommend
-          the consumption of any substance. Users are solely responsible for
-          how they interpret their own data. Protokol Lab does not sell,
-          distribute, or endorse any compound listed in its library. Consult a
-          licensed medical professional before making decisions about your
+          Protokol Lab is an organizational and mathematical modeling tool.
+          It is not a medical device and does not provide medical advice,
+          diagnosis, treatment, dosing recommendations, or titration
+          suggestions. Protokol Lab publishes pharmacokinetic defaults only
+          for FDA-approved medications; users who track other substances
+          supply their own values and assume full responsibility for the
+          accuracy of those values and for the legality of any substance
+          they track. Protokol Lab does not sell, ship, distribute, refer
+          users to, or endorse any pharmacy, telehealth provider,
+          compounding facility, or substance. Consult a licensed medical
+          professional before making any decision about your medication or
           health.
         </div>
       </div>

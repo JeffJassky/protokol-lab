@@ -65,8 +65,8 @@ const CORE_FAQS = [
     a: 'Yes. Mounjaro and Zepbound are both tirzepatide. Ozempic and Wegovy are both semaglutide. Pick the compound from the built-in library and Protokol Lab handles the half-life modeling automatically.' },
   { q: 'Can I track compounded GLP-1s?',
     a: 'Yes. Use the built-in tirzepatide or semaglutide preset for compounded versions, or add a custom compound with any name and half-life.' },
-  { q: 'Can I track retatrutide, cagrilintide, or other research peptides?',
-    a: 'Yes. Add a custom compound with a name, half-life, and dose schedule. Bolus, subcutaneous, and depot absorption profiles are supported.' },
+  { q: 'Can I track custom or compounded compounds?',
+    a: 'Yes. For FDA-approved GLP-1s, Protokol Lab ships pre-loaded pharmacokinetic defaults. For anything else — compounded versions, or compounds prescribed under a clinical trial — users can add a custom compound by entering a name and a half-life. Protokol Lab does not publish PK defaults for unapproved compounds; users supply their own values and assume responsibility for accuracy.' },
   { q: 'How accurate is the half-life curve?',
     a: 'Protokol Lab uses the Bateman equation — the standard two-compartment pharmacokinetic model for extravascular absorption. Defaults match published PK: tirzepatide ~5 days (Urva et al., 2021), semaglutide ~7 days (Lau et al., 2015). Half-life can be overridden per compound.' },
   { q: 'Is my health data private?',
@@ -195,13 +195,13 @@ export const MARKETING_META = {
   '/compounds': {
     title: 'GLP-1 Compound Library — Half-Lives, PK, and Dose Schedules | Protokol Lab',
     description:
-      'Pharmacokinetics reference for every major GLP-1 receptor agonist: Tirzepatide (Mounjaro, Zepbound), Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide, Dulaglutide, and research peptides retatrutide and cagrilintide. Half-lives, absorption profiles, dose intervals, and cited PK sources.',
+      'Pharmacokinetics reference for every FDA-approved GLP-1 receptor agonist: Tirzepatide (Mounjaro, Zepbound), Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide (Saxenda, Victoza), and Dulaglutide (Trulicity). Half-lives, absorption profiles, dose intervals, and cited PK sources.',
     og: {
       variant: 'compounds',
       eyebrow: 'Compound library · PK defaults',
       titleLines: ['Every GLP-1,', 'modeled correctly.'],
       accent: 'modeled correctly.',
-      subtitle: 'Tirzepatide, Semaglutide, liraglutide, dulaglutide, retatrutide, cagrilintide. Bateman equation + cited PK.',
+      subtitle: 'Tirzepatide, Semaglutide, liraglutide, dulaglutide — PK defaults for every FDA-approved GLP-1.',
       chartVariant: 'compounds',
     },
     sitemap: { priority: 0.8, changefreq: 'monthly' },
@@ -228,13 +228,13 @@ export const MARKETING_META = {
   '/faq': {
     title: 'GLP-1 Tracker FAQ — Mounjaro, Zepbound, Ozempic, Wegovy, Compounded Peptides | Protokol Lab',
     description:
-      'Common questions about tracking GLP-1s with Protokol Lab: supported compounds (tirzepatide, semaglutide, compounded peptides, retatrutide, cagrilintide), half-life accuracy, weekly vs daily calorie budgets, AI coach capabilities, privacy, offline mode, pricing, and refunds.',
+      'Common questions about tracking GLP-1s with Protokol Lab: supported compounds (tirzepatide, semaglutide, liraglutide, dulaglutide, compounded versions), half-life accuracy, weekly vs daily calorie budgets, AI coach capabilities, privacy, offline mode, pricing, and refunds.',
     og: {
       variant: 'faq',
       eyebrow: 'FAQ · answered',
       titleLines: ['Questions,', 'answered.'],
       accent: 'answered.',
-      subtitle: 'Mounjaro, Zepbound, Ozempic, Wegovy, compounded peptides, research compounds, half-life accuracy, privacy, offline mode, pricing.',
+      subtitle: 'Mounjaro, Zepbound, Ozempic, Wegovy, compounded semaglutide and tirzepatide, half-life accuracy, privacy, offline mode, pricing.',
       chartVariant: 'faq',
     },
     sitemap: { priority: 0.8, changefreq: 'monthly' },
@@ -268,6 +268,36 @@ export const MARKETING_META = {
     ],
   },
 
+  '/terms': {
+    title: 'Terms of Service | Protokol Lab',
+    description: 'Protokol Lab Terms of Service: what the product is, subscription billing, cancellation, refunds, acceptable use, disclaimers, liability, and contact.',
+    og: {
+      variant: 'legal',
+      eyebrow: 'Legal · Terms of Service',
+      titleLines: ['Terms of', 'Service.'],
+      accent: 'Service.',
+      subtitle: 'Subscription billing, acceptable use, disclaimers, liability, governing law, and contact.',
+      chartVariant: 'pk',
+    },
+    sitemap: { priority: 0.4, changefreq: 'yearly' },
+    schema: [breadcrumb('/terms', 'Terms')],
+  },
+
+  '/privacy': {
+    title: 'Privacy Policy | Protokol Lab',
+    description: 'Protokol Lab Privacy Policy: what data we collect, who processes it, retention, your rights (GDPR, CCPA, FIPA), and contact. We do not sell or share your health data with advertisers.',
+    og: {
+      variant: 'legal',
+      eyebrow: 'Legal · Privacy Policy',
+      titleLines: ['Privacy', 'Policy.'],
+      accent: 'Policy.',
+      subtitle: "What we collect, who processes it, your rights, and our commitments. We don't sell your health data.",
+      chartVariant: 'pk',
+    },
+    sitemap: { priority: 0.4, changefreq: 'yearly' },
+    schema: [breadcrumb('/privacy', 'Privacy')],
+  },
+
   '/medical-advisory': {
     title: 'Medical Advisory & Clinical References | Protokol Lab',
     description:
@@ -289,27 +319,10 @@ export const MARKETING_META = {
         citation: [
           { '@type': 'CreativeWork', name: 'Urva S, et al. Clinical Pharmacokinetics (2021)' },
           { '@type': 'CreativeWork', name: 'Lau J, et al. Journal of Medicinal Chemistry (2015)' },
-          { '@type': 'CreativeWork', name: 'Jastreboff AM, et al. NEJM (2023) — retatrutide phase 2' },
         ],
       },
       breadcrumb('/medical-advisory', 'Medical Advisory'),
     ],
-  },
-
-  '/advanced': {
-    title: 'Research Peptides & Advanced Stacks — Retatrutide, Cagrilintide | Protokol Lab',
-    description:
-      'Advanced tracking for research peptides and custom GLP-1 stacks: retatrutide, cagrilintide, survodutide, tirzepatide + cagrilintide combinations. Custom half-lives, depot/sub-Q/bolus kinetic shapes, multi-compound curve stacking.',
-    og: {
-      variant: 'advanced',
-      eyebrow: 'Advanced · research peptides',
-      titleLines: ['Custom compounds,', 'stacked correctly.'],
-      accent: 'stacked correctly.',
-      subtitle: 'Retatrutide, cagrilintide, survodutide, tirzepatide + cagrilintide. Custom half-lives, depot/sub-Q/bolus kinetics.',
-      chartVariant: 'compounds',
-    },
-    sitemap: { priority: 0.6, changefreq: 'monthly' },
-    schema: [breadcrumb('/advanced', 'Advanced')],
   },
 
   '/compare': {
@@ -403,6 +416,46 @@ export const MARKETING_META = {
     sitemap: { priority: 0.7, changefreq: 'monthly' },
   },
 };
+
+// ----- Per-competitor /compare/<slug> entries ----------------------------
+// Generated from comparisons.js so adding a competitor = one place (the
+// comparisons registry). Each path is its own prerender/sitemap target with
+// a route-specific title + FAQPage schema.
+for (const cmp of Object.values(COMPARISONS)) {
+  MARKETING_META[`/compare/${cmp.slug}`] = {
+    title: `Protokol Lab vs ${cmp.name} — GLP-1 Tracker Comparison`,
+    description: `Honest comparison of Protokol Lab vs ${cmp.name} for GLP-1 tracking. Feature matrix, pricing, and when to pick each. ${cmp.tagline}`,
+    og: {
+      variant: 'compare',
+      eyebrow: `vs ${cmp.name}`,
+      titleLines: ['Protokol Lab', `vs ${cmp.name}.`],
+      accent: `vs ${cmp.name}.`,
+      subtitle: `Feature matrix, pricing, and when to pick each. ${cmp.tagline}`,
+      chartVariant: 'pk',
+    },
+    sitemap: { priority: 0.7, changefreq: 'monthly' },
+    schema: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: (cmp.faqs || []).map((f) => ({
+          '@type': 'Question',
+          name: f.q,
+          acceptedAnswer: { '@type': 'Answer', text: f.a },
+        })),
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home',    item: `${ORIGIN}/` },
+          { '@type': 'ListItem', position: 2, name: 'Compare', item: `${ORIGIN}/compare` },
+          { '@type': 'ListItem', position: 3, name: cmp.name,  item: `${ORIGIN}/compare/${cmp.slug}` },
+        ],
+      },
+    ],
+  };
+}
 
 // ----- Helper accessors ---------------------------------------------------
 

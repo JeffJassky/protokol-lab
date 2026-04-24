@@ -15,19 +15,38 @@ useRouteSeo();
 
         <div class="mkt-callout">
           Protokol Lab is an organizational and mathematical modeling tool. It
-          does not provide medical advice, diagnose conditions, or recommend
+          does not provide medical advice, diagnose conditions, prescribe
+          treatment, recommend doses, suggest titration schedules, or endorse
           the consumption of any substance. It is not a medical device under
           FDA regulation and is not a covered entity under HIPAA. Consult a
-          licensed medical professional before making any decisions about your
+          licensed medical professional before making any decision about your
           medication or health.
         </div>
 
+        <h2 class="mkt-h2">Scope of the product</h2>
+        <p class="mkt-p">
+          Protokol Lab is a tracker. It helps users record food, weight,
+          doses, symptoms, and notes, and visualizes those records. It does
+          not substitute for professional medical advice, consultation,
+          diagnosis, or treatment. Users assume full and unmitigated
+          responsibility for their individual dosing decisions and schedule
+          adherence.
+        </p>
+        <p class="mkt-p">
+          Protokol Lab does not sell, ship, distribute, refer users to, or
+          endorse any pharmacy, telehealth provider, compounding facility, or
+          substance.
+        </p>
+
         <h2 class="mkt-h2">Pharmacokinetic defaults</h2>
         <p class="mkt-p">
-          Built-in compound half-lives reflect published peer-reviewed
-          pharmacokinetic data. Users may override each half-life to match
-          individual metabolism, compounded formulations, or clinical
-          measurements.
+          Built-in compound half-lives are provided only for FDA-approved
+          GLP-1 receptor agonists and reflect published peer-reviewed data.
+          Protokol Lab does not publish pharmacokinetic defaults for compounds
+          that are not FDA-approved. Users who choose to track other
+          substances must supply their own half-life values and assume full
+          responsibility for the accuracy of those values and for the
+          legality of any substance they choose to track.
         </p>
         <table class="mkt-table">
           <thead><tr><th>Compound</th><th>Default t½</th><th>Source</th></tr></thead>
@@ -36,8 +55,6 @@ useRouteSeo();
             <tr><td>Semaglutide</td><td>~7 days</td><td>Lau J, et al. <em>Journal of Medicinal Chemistry</em> (2015)</td></tr>
             <tr><td>Liraglutide</td><td>~13 hours</td><td>Agersø H, et al. <em>Diabetologia</em> (2002)</td></tr>
             <tr><td>Dulaglutide</td><td>~5 days</td><td>Barrington P, et al. <em>Diabetes, Obesity and Metabolism</em> (2011)</td></tr>
-            <tr><td>Retatrutide</td><td>~6 days</td><td>Jastreboff AM, et al. <em>NEJM</em> (2023)</td></tr>
-            <tr><td>Cagrilintide</td><td>~7 days</td><td>Enebo LB, et al. <em>The Lancet</em> (2021)</td></tr>
           </tbody>
         </table>
 
@@ -54,11 +71,16 @@ useRouteSeo();
           elimination rate (ln(2) / t½). Stacked doses are summed linearly —
           a reasonable approximation below receptor saturation.
         </p>
+        <p class="mkt-p">
+          Pharmacokinetic charts are mathematical estimates for informational
+          purposes only and do not reflect real-time biological or serum
+          diagnostics.
+        </p>
 
         <h2 class="mkt-h2">Limitations</h2>
         <ul class="mkt-ul">
-          <li>Individual PK varies with weight, renal function, and genetics. Population averages may not match personal kinetics.</li>
-          <li>Active-level curves are mathematical — they do not account for receptor desensitization, antibody response, or dose-dependent clearance.</li>
+          <li>Individual pharmacokinetics vary with weight, renal function, and genetics. Population averages may not match personal kinetics.</li>
+          <li>Active-level curves are mathematical estimates — they do not account for receptor desensitization, antibody response, or dose-dependent clearance.</li>
           <li>Symptom correlations are observational, not causal.</li>
           <li>Calorie and macro data depend on user-provided food entries. Brand-name nutrition databases update faster than our library; verify totals if precision matters clinically.</li>
         </ul>
