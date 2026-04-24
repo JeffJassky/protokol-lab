@@ -97,7 +97,7 @@
       (function () {
         try {
           var saved = localStorage.getItem('vt-theme');
-          var pref = saved || 'auto';
+          var pref = saved || 'dark';
           var resolved = pref;
           if (pref === 'auto') {
             resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

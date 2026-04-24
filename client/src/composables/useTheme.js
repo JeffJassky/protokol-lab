@@ -10,6 +10,6 @@ export function useTheme() {
     attribute: 'data-theme',
     selector: 'html',
     emitAuto: false,
-    initialValue: 'auto',
+    initialValue: 'dark',
   });
 }
