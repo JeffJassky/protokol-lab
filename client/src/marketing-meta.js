@@ -39,6 +39,8 @@
  *                 Prerender skips these; OG + sitemap still process them.
  */
 
+import { COMPARISONS } from './comparisons.js';
+
 export const ORIGIN = 'https://protokollab.com';
 
 // ----- Shared helpers for building schema ---------------------------------
@@ -308,6 +310,22 @@ export const MARKETING_META = {
     },
     sitemap: { priority: 0.6, changefreq: 'monthly' },
     schema: [breadcrumb('/advanced', 'Advanced')],
+  },
+
+  '/compare': {
+    title: 'GLP-1 Tracker Comparisons — Shotsy, MyFitnessPal, Glapp, MacroFactor | Protokol Lab',
+    description:
+      'Honest head-to-heads: Protokol Lab vs Shotsy, MeAgain, Glapp.io, DoseDiary, MyFitnessPal, MacroFactor. Feature matrices, pricing, and when to pick each.',
+    og: {
+      variant: 'compare',
+      eyebrow: 'Comparisons · alternatives',
+      titleLines: ['Protokol Lab vs', 'every other tracker.'],
+      accent: 'every other tracker.',
+      subtitle: 'Honest feature matrices and pricing against Shotsy, MyFitnessPal, Glapp.io, MacroFactor, DoseDiary, and MeAgain.',
+      chartVariant: 'pk',
+    },
+    sitemap: { priority: 0.8, changefreq: 'monthly' },
+    schema: [breadcrumb('/compare', 'Compare')],
   },
 
   '/blog': {

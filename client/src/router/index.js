@@ -10,6 +10,8 @@ import AboutPage from '../pages/AboutPage.vue';
 import MedicalAdvisoryPage from '../pages/MedicalAdvisoryPage.vue';
 import AdvancedPage from '../pages/AdvancedPage.vue';
 import BlogIndexPage from '../pages/BlogIndexPage.vue';
+import CompareIndexPage from '../pages/CompareIndexPage.vue';
+import ComparisonPage from '../pages/ComparisonPage.vue';
 import LoginPage from '../pages/LoginPage.vue';
 import RegisterPage from '../pages/RegisterPage.vue';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage.vue';
@@ -39,6 +41,8 @@ const routes = [
   { path: '/medical-advisory', name: 'medical-advisory', component: MedicalAdvisoryPage, meta: { public: true, marketing: true } },
   { path: '/advanced', name: 'advanced', component: AdvancedPage, meta: { public: true, marketing: true } },
   { path: '/blog', name: 'blog', component: BlogIndexPage, meta: { public: true, marketing: true } },
+  { path: '/compare', name: 'compare', component: CompareIndexPage, meta: { public: true, marketing: true } },
+  { path: '/compare/:slug', name: 'comparison', component: ComparisonPage, meta: { public: true, marketing: true } },
   { path: '/login', name: 'login', component: LoginPage, meta: { guest: true, public: true } },
   { path: '/register', name: 'register', component: RegisterPage, meta: { guest: true, public: true } },
   { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage, meta: { guest: true, public: true } },
