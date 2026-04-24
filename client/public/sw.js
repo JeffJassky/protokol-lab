@@ -1,6 +1,6 @@
-// Body Optimizer service worker — handles Web Push + notification clicks.
+// Protokol Lab service worker — handles Web Push + notification clicks.
 // Bumped CACHE_VERSION to invalidate old SW when the handler shape changes.
-const CACHE_VERSION = 'bo-sw-v1';
+const CACHE_VERSION = 'pl-sw-v1';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -16,11 +16,11 @@ self.addEventListener('push', (event) => {
     try {
       payload = event.data.json();
     } catch {
-      payload = { title: 'Body Optimizer', body: event.data.text() };
+      payload = { title: 'Protokol Lab', body: event.data.text() };
     }
   }
 
-  const title = payload.title || 'Body Optimizer';
+  const title = payload.title || 'Protokol Lab';
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icons/icon-192.png',

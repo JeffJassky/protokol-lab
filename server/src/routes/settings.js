@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import UserSettings from '../models/UserSettings.js';
+import { childLogger } from '../lib/logger.js';
 
+const log = childLogger('settings');
 const router = Router();
 
 router.get('/', async (req, res) => {
   const settings = await UserSettings.findOne({ userId: req.userId });
+  (req.log || log).debug({ hasSettings: Boolean(settings) }, 'settings: fetched');
   res.json({ settings });
 });
 
@@ -29,12 +32,18 @@ router.put('/', async (req, res) => {
     { upsert: true, returnDocument: 'after', runValidators: true },
   );
 
+  (req.log || log).info(
+    {
+      sex, heightInches, goalWeightLbs, timezone,
+      trackReminderEnabled: settings.trackReminder?.enabled,
+      trackReminderTime: settings.trackReminder?.time,
+    },
+    'settings: full update',
+  );
+
   res.json({ settings });
 });
 
-// Lightweight endpoint for the client to push just timezone / reminder prefs
-// without having to round-trip the full profile. Used by the onboarding flow
-// when the user enables notifications.
 router.patch('/notifications', async (req, res) => {
   const { timezone, trackReminder } = req.body || {};
   const update = {};
@@ -49,6 +58,10 @@ router.patch('/notifications', async (req, res) => {
     { userId: req.userId },
     { $set: update },
     { new: true },
+  );
+  (req.log || log).info(
+    { timezone, trackReminderEnabled: settings?.trackReminder?.enabled, trackReminderTime: settings?.trackReminder?.time },
+    'settings: notifications patched',
   );
   res.json({ settings });
 });

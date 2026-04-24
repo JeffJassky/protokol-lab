@@ -20,17 +20,20 @@ import chatRoutes from './routes/chat.js';
 import notesRoutes from './routes/notes.js';
 import photosRoutes from './routes/photos.js';
 import pushRoutes, { publicPushRouter } from './routes/push.js';
+import stripeRoutes, { publicStripeRouter } from './routes/stripe.js';
+import adminRoutes from './routes/admin.js';
 import { requireAuth } from './middleware/requireAuth.js';
+import { requireAdmin } from './middleware/requireAdmin.js';
 import { runStartupBackup } from './services/backup.js';
 import { initPush } from './services/push.js';
 import { startScheduler, stopScheduler } from './services/scheduler.js';
+import { logger, httpLogger, childLogger, errContext } from './lib/logger.js';
 
+const log = childLogger('boot');
 const app = express();
 const PORT = process.env.PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
 
-// Trust the first proxy in front of us so req.ip / rate limit keys reflect the
-// real client. Set TRUST_PROXY to a different hop count if chained further.
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 
 app.use(helmet());
@@ -40,8 +43,29 @@ const corsOrigin = isProd
   : true;
 app.use(cors({ origin: corsOrigin, credentials: true }));
 
+// Stripe webhook must see the raw request body to verify the signature.
+// Mounted at an exact path BEFORE express.json() so the global JSON parser
+// doesn't consume the buffer. Other /api/stripe routes parse JSON normally.
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), publicStripeRouter);
+
 app.use(express.json());
 app.use(cookieParser());
+
+// Per-request logger w/ reqId. Must be before routes so req.log exists
+// everywhere downstream. Exposes res header `x-request-id` for client tracing.
+app.use(httpLogger);
+
+// Mongo connection events — track drops/reconnects that would otherwise be
+// silent and surface as mystery 500s.
+mongoose.connection.on('disconnected', () => {
+  childLogger('db').warn('mongoose disconnected');
+});
+mongoose.connection.on('reconnected', () => {
+  childLogger('db').info('mongoose reconnected');
+});
+mongoose.connection.on('error', (err) => {
+  childLogger('db').error(errContext(err), 'mongoose error');
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -63,6 +87,8 @@ app.use('/api/compounds', requireAuth, compoundsRoutes);
 app.use('/api/chat', requireAuth, chatRoutes);
 app.use('/api/notes', requireAuth, notesRoutes);
 app.use('/api/photos', requireAuth, photosRoutes);
+app.use('/api/stripe', requireAuth, stripeRoutes);
+app.use('/api/admin', requireAuth, requireAdmin, adminRoutes);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, '../../client/dist');
@@ -72,23 +98,24 @@ app.use((req, res, next) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
-// Swallow errors surfaced by async route handlers so stack traces don't leak
-// to clients. Express 5 forwards rejected promises here automatically.
+// Central error handler — logs full stack w/ correlation fields, returns
+// generic 500 body so stack traces don't leak.
 app.use((err, req, res, _next) => {
-  console.error('[error]', req.method, req.path, err);
+  const reqLog = req.log || log;
+  reqLog.error(
+    { ...errContext(err), method: req.method, path: req.path, userId: req.userId ? String(req.userId) : undefined },
+    'unhandled route error',
+  );
   if (res.headersSent) return;
   res.status(err.status || 500).json({ error: 'Internal server error' });
 });
 
-// Exit on uncaught errors — without this, the process zombies while still
-// holding the port, and `node --watch` can spawn a second copy that collides
-// with the first on restart.
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
+  logger.fatal(errContext(err), 'uncaughtException — exiting');
   process.exit(1);
 });
 process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
+  logger.fatal(errContext(err), 'unhandledRejection — exiting');
   process.exit(1);
 });
 
@@ -97,18 +124,23 @@ let shuttingDown = false;
 const shutdown = async (signal) => {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`Received ${signal}, shutting down...`);
-  // Force-exit if clean shutdown stalls (e.g. hung connections).
+  log.info({ signal }, 'shutdown requested');
   const forceExit = setTimeout(() => {
-    console.error('Graceful shutdown timed out, forcing exit.');
+    log.error('graceful shutdown timed out — forcing exit');
     process.exit(1);
   }, 3000).unref();
   try {
-    if (server) await new Promise((resolve) => server.close(resolve));
+    if (server) {
+      log.debug('closing http server');
+      await new Promise((resolve) => server.close(resolve));
+    }
+    log.debug('stopping scheduler');
     await stopScheduler();
+    log.debug('disconnecting mongo');
     await mongoose.disconnect();
+    log.info('shutdown complete');
   } catch (err) {
-    console.error('Error during shutdown:', err);
+    log.error(errContext(err), 'error during shutdown');
   } finally {
     clearTimeout(forceExit);
     process.exit(0);
@@ -118,19 +150,23 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 try {
+  log.info({ port: PORT, env: process.env.NODE_ENV || 'development', logLevel: logger.level }, 'starting server');
+  const connectStart = Date.now();
   await mongoose.connect(process.env.MONGODB_URI);
-  console.log('Connected to MongoDB');
+  log.info({ durationMs: Date.now() - connectStart }, 'mongo connected');
+
   runStartupBackup();
   initPush();
   await startScheduler();
+
   server = app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    log.info({ port: PORT, url: `http://localhost:${PORT}` }, 'http listening');
   });
   server.on('error', (err) => {
-    console.error('Server listen error:', err.message);
+    log.fatal(errContext(err), 'http server error');
     process.exit(1);
   });
 } catch (err) {
-  console.error('Failed to start:', err);
+  log.fatal(errContext(err), 'startup failed');
   process.exit(1);
 }

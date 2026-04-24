@@ -1,10 +1,51 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth.js';
+import { startCheckout } from '../api/stripe.js';
 
 const router = useRouter();
-const goRegister = () => router.push('/register');
+const auth = useAuthStore();
+const checkoutErr = ref('');
+
+// Route a visitor through whichever signup path matches their intent.
+//   goRegister()                         → free account flow
+//   goRegister('premium', 'monthly')     → trial flow for a specific plan
+// Logged-in visitors skip register entirely and go straight to Stripe; the
+// paid intent is otherwise lost to the router's guest-redirect guard on
+// /register.
+async function goRegister(planId, interval) {
+  checkoutErr.value = '';
+  if (!planId) {
+    router.push('/register');
+    return;
+  }
+  if (auth.user) {
+    try {
+      await startCheckout(planId, interval || 'monthly');
+    } catch (err) {
+      checkoutErr.value = err.message || 'Could not open checkout';
+    }
+    return;
+  }
+  router.push({
+    path: '/register',
+    query: { plan: planId, interval: interval || 'monthly' },
+  });
+}
+
 const goLogin = () => router.push('/login');
+
+// Sub-Q Bateman PK: ka ~ 6h absorption, ke from half-life in days.
+// Matches the `subq` profile in SettingsPage — rises over a few hours,
+// then decays at the compound's elimination rate.
+function subqDose(t, mg, halfLifeDays) {
+  if (t < 0) return 0;
+  const ka = Math.LN2 / 0.25;
+  const ke = Math.LN2 / halfLifeDays;
+  if (Math.abs(ka - ke) < 1e-6) return mg * ke * t * Math.exp(-ke * t);
+  return mg * (ka / (ka - ke)) * (Math.exp(-ke * t) - Math.exp(-ka * t));
+}
 
 // ---- Hero composite chart ------------------------------------------------
 const hero = computed(() => {
@@ -18,9 +59,9 @@ const hero = computed(() => {
   });
   const mgSteps = [2,2,2.5,2.5,3,3,3.5,3.5,4,4,4,4,4,4,4,4];
   const doses = [7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82].map((day, i) => ({ day, mg: mgSteps[i] }));
-  const k = Math.log(2) / 6;
+  const halfLife = 5;
   const pk = Array.from({ length: days }, (_, i) => {
-    let a = 0; for (const d of doses) if (d.day <= i) a += d.mg * Math.exp(-k * (i - d.day));
+    let a = 0; for (const d of doses) a += subqDose(i - d.day, d.mg, halfLife);
     return a;
   });
   const ix = (i) => pad.l + (i / (days - 1)) * W0;
@@ -49,9 +90,9 @@ const pkMini = computed(() => {
   const dosesBase = [5,12,19,26,33,40,47,54,61,68];
   const mgs =       [2,2, 3, 3, 4, 4, 4, 5, 5, 5];
   const doses = dosesBase.map((d, i) => ({ day: d, mg: mgs[i] }));
-  const k = Math.log(2) / 6;
+  const halfLife = 5;
   const pk = Array.from({ length: days }, (_, i) => {
-    let a = 0; for (const d of doses) if (d.day <= i) a += d.mg * Math.exp(-k * (i - d.day));
+    let a = 0; for (const d of doses) a += subqDose(i - d.day, d.mg, halfLife);
     return a;
   });
   const ix = (i) => pad.l + (i / (days - 1)) * W0;
@@ -63,13 +104,20 @@ const pkMini = computed(() => {
   const gridYs = [0.25, 0.5, 0.75].map(f => pad.t + f * H0);
   return {
     W, H, pad, pkMax, path, area, gridYs, activeNow,
-    doses: doses.map(d => ({ ...d, x: ix(d.day), y: py(d.mg * Math.exp(-k * 0)) })),
+    doses: doses.map((d) => {
+      let peak = 0;
+      for (let t = 0; t < 2; t += 0.05) peak = Math.max(peak, subqDose(t, d.mg, halfLife));
+      return { ...d, x: ix(d.day), y: py(peak) };
+    }),
     padB: pad.t + H0,
     right: W - pad.r,
   };
 });
 
 // ---- Rolling 7-day strip ------------------------------------------------
+// Mirrors WeeklyBudgetStrip: vertical bars split at the daily target line —
+// a normal fill segment up to target, a red overage segment above it,
+// plus per-macro weekly progress with "remaining today" annotations.
 const rolling = computed(() => {
   const days = [
     { d: 'Wed', cal: 2040, tgt: 2100 },
@@ -83,25 +131,31 @@ const rolling = computed(() => {
   const weekTgt = 2100 * 7;
   const weekCons = days.reduce((a, b) => a + b.cal, 0);
   const left = weekTgt - weekCons;
+  const scaleMax = Math.max(...days.map((d) => d.cal), 2100) * 1.1;
+  const macros = [
+    { key: 'p', label: 'Protein', color: 'var(--color-protein)', pct: 68, note: '58g left today' },
+    { key: 'f', label: 'Fat',     color: 'var(--color-fat)',     pct: 81, note: '12g left today' },
+    { key: 'c', label: 'Carbs',   color: 'var(--color-carbs)',   pct: 74, note: '38g left today' },
+  ];
   return {
-    days: days.map(d => ({
+    days: days.map((d) => ({
       ...d,
-      h: Math.round((d.cal / 2600) * 100),
-      targetPct: Math.round((d.tgt / 2600) * 100),
+      normalPct: Math.round((Math.min(d.cal, d.tgt) / scaleMax) * 100),
+      overPct: Math.round((Math.max(0, d.cal - d.tgt) / scaleMax) * 100),
+      targetPct: Math.round((d.tgt / scaleMax) * 100),
       over: d.cal > d.tgt,
     })),
     weekTgt: weekTgt.toLocaleString(),
     weekCons: weekCons.toLocaleString(),
     leftAbs: Math.abs(left).toLocaleString(),
+    macros,
   };
 });
 
 // ---- Compound library (used by Feature 01) ------------------------------
 const compoundLib = [
+  { name: 'Tirzepatide',    t: '5.0 d', active: true },
   { name: 'Semaglutide',    t: '7.0 d' },
-  { name: 'Tirzepatide',    t: '5.0 d' },
-  { name: 'Retatrutide',    t: '6.0 d', active: true },
-  { name: 'BPC-157',        t: '4 hrs' },
   { name: 'Custom...',      t: '—',     custom: true },
 ];
 
@@ -149,15 +203,15 @@ function dotColor(n) {
 
 // ---- Agentic AI tool trail (Feature 03) ---------------------------------
 const aiTrail = [
-  { icon: '•',  text: 'Understanding request',                           kind: 'status' },
-  { icon: '⚙',  text: 'search_food_items("sweetgreen kale caesar")',     kind: 'call'   },
-  { icon: '✓',  text: 'No match in database',                             kind: 'result' },
-  { icon: '⚙',  text: 'googleSearch("sweetgreen kale caesar nutrition")', kind: 'call'   },
-  { icon: '✓',  text: 'Found: 560 cal · 40g P · 31g F · 42g C',          kind: 'result' },
-  { icon: '⚙',  text: 'create_food_item(name: "Sweetgreen Kale Caesar")', kind: 'call'   },
-  { icon: '✓',  text: 'Created custom food · saved to library',           kind: 'result' },
-  { icon: '⚙',  text: 'log_food_entry(meal: "lunch", qty: 1)',            kind: 'call'   },
-  { icon: '✓',  text: 'Logged to today · lunch',                          kind: 'result' },
+  { icon: '•', text: 'Reading request',                            kind: 'status' },
+  { icon: '⚙', text: 'Checking your food library',                 kind: 'call'   },
+  { icon: '✓', text: 'Not in library yet',                         kind: 'result' },
+  { icon: '⚙', text: 'Searching the web for nutrition info',       kind: 'call'   },
+  { icon: '✓', text: 'Found · 560 cal · 40g P · 31g F · 42g C',    kind: 'result' },
+  { icon: '⚙', text: 'Saving as a custom food',                    kind: 'call'   },
+  { icon: '✓', text: 'Added to your library',                      kind: 'result' },
+  { icon: '⚙', text: 'Writing the entry to today',                 kind: 'call'   },
+  { icon: '✓', text: 'Logged to lunch',                            kind: 'result' },
 ];
 </script>
 
@@ -227,8 +281,7 @@ const aiTrail = [
     <section class="hero wrap">
       <div>
         <div class="eyebrow eyebrow-green">
-          <span class="dot-live"></span> For Semaglutide · Tirzepatide ·
-          Retatrutide
+          <span class="dot-live"></span> For Tirzepatide · Semaglutide
         </div>
         <h1>
           Best tracker<br />
@@ -248,7 +301,7 @@ const aiTrail = [
           <div class="hero-meta-row">
             <span class="dot-live"></span> Works offline
           </div>
-          <div class="hero-meta-row">Free to start · $2.99/mo premium</div>
+          <div class="hero-meta-row">Free to start · $4.99/mo premium</div>
           <div class="hero-meta-row">No ads · your data stays yours</div>
         </div>
       </div>
@@ -411,9 +464,9 @@ const aiTrail = [
               Every compound.<br /><span class="accent">Your schedule.</span>
             </h3>
             <p class="feat-body">
-              One-tap presets for Semaglutide, Tirzepatide, Retatrutide, and
-              more. Adding your own is two fields: a name and a half-life. The
-              curve draws itself.
+              One-tap presets for Tirzepatide, Semaglutide, and more. Adding
+              your own is two fields: a name and a half-life. The curve draws
+              itself.
             </p>
             <ul class="feat-bullets">
               <li>
@@ -446,7 +499,7 @@ const aiTrail = [
                   <span class="term-dot"></span><span class="term-dot"></span
                   ><span class="term-dot"></span>
                 </div>
-                <span class="term-title">compound · retatrutide · t½ 6d</span>
+                <span class="term-title">compound · tirzepatide · t½ 5d</span>
               </div>
               <div class="term-body" style="height: 400px;">
                 <!-- CompoundMini -->
@@ -468,7 +521,7 @@ const aiTrail = [
                     <div>
                       <div class="mini-eyebrow">Compound</div>
                       <div class="pk-name">
-                        Retatrutide <span class="pk-t">· t½ = 6.0 days</span>
+                        Tirzepatide <span class="pk-t">· t½ = 5.0 days</span>
                       </div>
                     </div>
                     <div class="right">
@@ -673,11 +726,16 @@ const aiTrail = [
                       :key="day.d"
                       class="rolling-col"
                     >
-                      <div class="rolling-track">
+                      <div class="rolling-track" :class="{ today: day.today }">
                         <div
                           class="rolling-fill"
-                          :class="{ today: day.today, over: day.over && !day.today }"
-                          :style="{ height: day.h + '%' }"
+                          :class="{ today: day.today }"
+                          :style="{ height: day.normalPct + '%' }"
+                        ></div>
+                        <div
+                          v-if="day.overPct > 0"
+                          class="rolling-over"
+                          :style="{ bottom: day.targetPct + '%', height: day.overPct + '%' }"
                         ></div>
                         <div
                           class="rolling-target"
@@ -693,6 +751,24 @@ const aiTrail = [
                     <span class="arrow">▸</span> Couldn't eat much Thu–Fri.
                     Those calories rolled over.
                     <span class="dim">Week still on track.</span>
+                  </div>
+                  <div class="rolling-macros">
+                    <div
+                      v-for="m in rolling.macros"
+                      :key="m.key"
+                      class="rolling-macro"
+                    >
+                      <div class="rolling-macro-head">
+                        <span class="rolling-macro-label">{{ m.label }}</span>
+                        <span class="rolling-macro-note">{{ m.note }}</span>
+                      </div>
+                      <div class="rolling-macro-bar">
+                        <div
+                          class="rolling-macro-fill"
+                          :style="{ width: m.pct + '%', background: m.color }"
+                        ></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -957,7 +1033,7 @@ const aiTrail = [
             </div>
             <div class="fg-title">The scale lies. Photos don't.</div>
             <div class="fg-body">
-              Monthly shots, kept private on your device. Swipe between any two
+              Monthly shots attached to your account. Swipe between any two
               months to see what actually changed.
             </div>
             <div class="mini-ui">
@@ -1006,8 +1082,11 @@ const aiTrail = [
         <div class="section-head center">
           <div class="eyebrow center">Pricing</div>
           <h2>Simple. Honest. Cheap.</h2>
+          <p class="pricing-sub">
+            Try any paid plan free for 14 days. Cancel anytime before the trial ends — no charge.
+          </p>
         </div>
-        <div class="price-cards">
+        <div class="price-cards three">
           <div class="price-card">
             <div class="price-kind">Free</div>
             <div class="price-amount">
@@ -1022,7 +1101,7 @@ const aiTrail = [
               <li>Symptoms and notes</li>
               <li>Dose tracking with half-life curves</li>
               <li>Rolling 7-day calorie budget</li>
-              <li>Progress photos (on-device)</li>
+              <li>Progress photos with side-by-side compare</li>
             </ul>
             <button class="btn-secondary wide" @click="goRegister">
               Get started
@@ -1031,7 +1110,7 @@ const aiTrail = [
           <div class="price-card featured">
             <div class="price-kind accent">Premium</div>
             <div class="price-amount">
-              $2.99<span class="per"> / month</span>
+              $9.99<span class="per"> / month</span>
             </div>
             <div class="price-desc">
               Everything in Free, plus the tools that turn your data into
@@ -1042,12 +1121,33 @@ const aiTrail = [
               <li>Correlation charts, any two metrics</li>
               <li>Deeper dose charts and stats</li>
               <li>Unlimited custom compounds</li>
-              <li>Cloud sync and encrypted backup</li>
+              <li>Cloud sync across devices</li>
               <li>Export all your data, anytime</li>
             </ul>
-            <button class="btn-primary wide" @click="goRegister">
-              Start premium →
+            <button class="btn-primary wide" @click="goRegister('premium', 'monthly')">
+              Start 14-day free trial →
             </button>
+            <div class="price-trial-note">$79/year — save $41</div>
+          </div>
+          <div class="price-card">
+            <div class="price-kind">Unlimited</div>
+            <div class="price-amount">
+              $19.99<span class="per"> / month</span>
+            </div>
+            <div class="price-desc">
+              Everything in Premium, with the AI coach uncapped. For heavy
+              users who live in the chat.
+            </div>
+            <ul class="price-feats">
+              <li>Unlimited AI messages per day</li>
+              <li>Longer conversation context</li>
+              <li>Food image recognition, uncapped</li>
+              <li>Priority support</li>
+            </ul>
+            <button class="btn-secondary wide" @click="goRegister('unlimited', 'monthly')">
+              Start 14-day free trial →
+            </button>
+            <div class="price-trial-note">$149/year — save $91</div>
           </div>
         </div>
       </div>
@@ -1419,13 +1519,24 @@ section.hero { padding: 72px 0 96px; }
 .rolling-unit { font-size: 10px; color: var(--text-tertiary); font-weight: 400; }
 .rolling-bars { display: flex; align-items: flex-end; gap: 5px; height: 90px; }
 .rolling-col { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
-.rolling-track { height: 70px; display: flex; align-items: flex-end; position: relative; }
-.rolling-fill { width: 100%; background: var(--color-cal); opacity: 0.75; }
-.rolling-fill.over { background: var(--color-carbs); }
+.rolling-track {
+  position: relative; height: 70px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  overflow: hidden;
+}
+.rolling-track.today { outline: 1.5px solid var(--primary); outline-offset: -1.5px; }
+.rolling-fill {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--color-cal); opacity: 0.75;
+}
 .rolling-fill.today { background: var(--primary); opacity: 1; }
+.rolling-over {
+  position: absolute; left: 0; right: 0;
+  background: var(--color-carbs);
+}
 .rolling-target {
   position: absolute; left: 0; right: 0; height: 1px;
-  background: var(--text); opacity: 0.25;
+  background: var(--text); opacity: 0.45;
 }
 .rolling-label {
   font-size: 9px; font-family: var(--font-mono); color: var(--text-tertiary); text-align: center;
@@ -1437,6 +1548,25 @@ section.hero { padding: 72px 0 96px; }
 }
 .rolling-note .arrow { color: var(--primary); }
 .rolling-note .dim { color: var(--text-tertiary); }
+
+.rolling-macros {
+  margin-top: 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.rolling-macro-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 10px; margin-bottom: 3px;
+}
+.rolling-macro-label {
+  color: var(--text); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px;
+}
+.rolling-macro-note {
+  color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px;
+}
+.rolling-macro-bar {
+  height: 3px; background: var(--surface-raised);
+}
+.rolling-macro-fill { height: 100%; }
 
 /* ---- Agentic AI mini (Feature 03) --------------------------------- */
 .aichat { padding: 14px; background: var(--surface-alt); font-size: 12px; line-height: 1.55; }
@@ -1600,8 +1730,23 @@ section.hero { padding: 72px 0 96px; }
 
 /* ---- Pricing ------------------------------------------------------ */
 .pricing { padding: 96px 0; }
+.pricing-sub {
+  color: var(--text-secondary);
+  font-size: 14px;
+  max-width: 520px;
+  margin: 12px auto 0;
+  line-height: 1.5;
+}
 .price-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 860px; margin: 0 auto; }
+.price-cards.three { grid-template-columns: 1fr 1fr 1fr; max-width: 1080px; }
 .price-card { background: var(--surface); border: 1px solid var(--border); padding: 36px; }
+.price-trial-note {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+}
 .price-card.featured { border-color: var(--primary); position: relative; }
 .price-card.featured::before {
   content: 'RECOMMENDED';
@@ -1663,7 +1808,7 @@ footer {
   .feat-row, .feat-row.reverse { grid-template-columns: 1fr; gap: 36px; }
   .feat-row.reverse .feat-text { order: 1; }
   .feat-row.reverse .feat-visual { order: 2; }
-  .fg, .price-cards { grid-template-columns: 1fr; }
+  .fg, .price-cards, .price-cards.three { grid-template-columns: 1fr; }
   .fg-cell { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
 }

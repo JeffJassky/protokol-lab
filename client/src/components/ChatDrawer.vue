@@ -350,8 +350,30 @@ const setupTrailObserver = (shadow) => {
   trailObserver.observe(shadow, { childList: true, subtree: true });
 };
 
+const PLAN_DISPLAY_NAMES = { premium: 'Premium', unlimited: 'Unlimited' };
+
+const formatChatHttpError = async (res) => {
+  let data = null;
+  try { data = await res.json(); } catch { /* non-JSON body */ }
+
+  if (data?.error === 'chat_limit_exceeded' && data?.message) {
+    let msg = data.message;
+    if (data.upgradeAvailable && data.upgradePlanId) {
+      const label = PLAN_DISPLAY_NAMES[data.upgradePlanId] || data.upgradePlanId;
+      msg += ` Upgrade to ${label} for higher limits.`;
+    }
+    return msg;
+  }
+  if (res.status === 401) return 'Your session expired. Please sign in again.';
+  return data?.message || data?.error || `Request failed (${res.status})`;
+};
+
 const streamChat = (body, signals) => {
-  const payload = { messages: body.messages };
+  const tid = activeThreadId.value;
+  const payload = {
+    messages: body.messages,
+    threadId: tid && !String(tid).startsWith('temp-') ? tid : null,
+  };
   const controller = new AbortController();
   signals.stopClicked.listener = () => controller.abort();
 
@@ -372,7 +394,8 @@ const streamChat = (body, signals) => {
     }
 
     if (!res.ok || !res.body) {
-      await signals.onResponse({ error: `Request failed (${res.status})` });
+      const msg = await formatChatHttpError(res);
+      await signals.onResponse({ error: msg });
       signals.onClose();
       return;
     }

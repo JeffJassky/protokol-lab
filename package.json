@@ -1,8 +1,8 @@
 {
-  "name": "vitality-tracker",
+  "name": "protokol-lab",
   "version": "0.1.0",
   "private": true,
-  "description": "Calorie tracking and vitality optimization app",
+  "description": "Protokol Lab — protocol tracking, macro analytics, and AI coach.",
   "scripts": {
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "npm run dev --prefix client",

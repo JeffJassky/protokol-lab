@@ -29,6 +29,16 @@ const trend = computed(() => {
   return { W, H, pad, dots, line, right: W - pad.r, padB: pad.t + H0, slope: (slope * 7).toFixed(2) };
 });
 
+// Sub-Q Bateman PK — matches the `subq` profile in SettingsPage. Rises over
+// a few hours (ka ~ 6h absorption), then decays at the elimination rate.
+function subqDose(t, mg, halfLifeDays) {
+  if (t < 0) return 0;
+  const ka = Math.LN2 / 0.25;
+  const ke = Math.LN2 / halfLifeDays;
+  if (Math.abs(ka - ke) < 1e-6) return mg * ke * t * Math.exp(-ke * t);
+  return mg * (ka / (ka - ke)) * (Math.exp(-ke * t) - Math.exp(-ka * t));
+}
+
 // ---- Stacked doses PK ---------------------------------------------------
 const stackedPK = computed(() => {
   const W = 520, H = 190;
@@ -36,16 +46,15 @@ const stackedPK = computed(() => {
   const W0 = W - pad.l - pad.r, H0 = H - pad.t - pad.b;
   const days = 56;
   const dosesA = [0, 7, 14, 21, 28, 35, 42, 49];
-  const dosesB = [3, 17, 31, 45];
-  const mgA = 2.5, mgB = 1.5;
-  const kA = Math.log(2) / 6;
-  const kB = Math.log(2) / 4;
+  const dosesB = [3, 10, 17, 24, 31, 38, 45, 52];
+  const mgA = 2.5, mgB = 1.0;
+  const halfA = 5, halfB = 7;
   const pkA = Array.from({ length: days }, (_, i) => {
-    let a = 0; for (const d of dosesA) if (d <= i) a += mgA * Math.exp(-kA * (i - d));
+    let a = 0; for (const d of dosesA) a += subqDose(i - d, mgA, halfA);
     return a;
   });
   const pkB = Array.from({ length: days }, (_, i) => {
-    let a = 0; for (const d of dosesB) if (d <= i) a += mgB * Math.exp(-kB * (i - d));
+    let a = 0; for (const d of dosesB) a += subqDose(i - d, mgB, halfB);
     return a;
   });
   const ix = (i) => pad.l + (i / (days - 1)) * W0;
@@ -55,6 +64,42 @@ const stackedPK = computed(() => {
   const pB = pkB.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
   const aArea = `${pA} L${ix(days - 1).toFixed(1)},${pad.t + H0} L${ix(0).toFixed(1)},${pad.t + H0} Z`;
   return { W, H, pad, pA, pB, aArea, right: W - pad.r, padB: pad.t + H0, yMax: yMax.toFixed(1) };
+});
+
+// ---- Kinetics shape profiles (for the shapes explainer card) -----------
+// Matches SettingsPage.profileSparkline: single dose, per-shape absorption +
+// elimination, normalized to each shape's own peak so the silhouettes read.
+const kineticsProfiles = computed(() => {
+  const shapes = [
+    { value: 'bolus', label: 'Bolus', blurb: 'Instant peak, then exponential decay. IV-like or anything that hits peak almost immediately.' },
+    { value: 'subq',  label: 'Sub-Q', blurb: 'Rises over a few hours, then decays. Default for self-injected peptides and GLP-1s.', isDefault: true },
+    { value: 'depot', label: 'Depot', blurb: 'Slow release — lower peak, much longer tail. Long-acting weeklies and oil-based formulations.' },
+  ];
+  const W = 200, H = 56, PAD = 4;
+  const N = 80, tMax = 6;
+  const halfLife = 1;
+  const ke = Math.LN2 / halfLife;
+  const ABS = { subq: 0.25, depot: 1 };
+  return shapes.map((s) => {
+    const ka = s.value === 'bolus' ? null : Math.LN2 / ABS[s.value];
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const t = (i / (N - 1)) * tMax;
+      let y;
+      if (s.value === 'bolus') y = Math.exp(-ke * t);
+      else if (Math.abs(ka - ke) < 1e-6) y = ke * t * Math.exp(-ke * t);
+      else y = (ka / (ka - ke)) * (Math.exp(-ke * t) - Math.exp(-ka * t));
+      pts.push({ t, y });
+    }
+    const maxY = Math.max(...pts.map((p) => p.y)) || 1;
+    const path = pts.map((p, i) => {
+      const x = PAD + (p.t / tMax) * (W - 2 * PAD);
+      const y = H - PAD - (p.y / maxY) * (H - 2 * PAD);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    const area = `${path} L${(W - PAD).toFixed(2)},${(H - PAD).toFixed(2)} L${PAD.toFixed(2)},${(H - PAD).toFixed(2)} Z`;
+    return { ...s, path, area, W, H };
+  });
 });
 
 // ---- Score sparkline ----------------------------------------------------
@@ -121,26 +166,24 @@ const dayNotes = [
 ];
 
 const compounds = [
-  { name: 'Semaglutide', t: '7.0 d', active: false },
-  { name: 'Tirzepatide', t: '5.0 d', active: false },
-  { name: 'Retatrutide', t: '6.0 d', active: true  },
-  { name: 'BPC-157',     t: '4 hrs', active: false },
+  { name: 'Tirzepatide',  t: '5.0 d', shape: 'sub-q', every: '7d', active: true  },
+  { name: 'Semaglutide',  t: '7.0 d', shape: 'depot', every: '7d', active: false },
 ];
 
 const schedule = [
-  { label: 'Retatrutide', freq: 'Weekly · Sun 8:00am',     color: 'var(--color-fat)' },
-  { label: 'BPC-157',     freq: 'Daily · 7:30am · 7:30pm', color: 'var(--primary)' },
-  { label: 'Weight',      freq: 'Daily · 7:00am',          color: 'var(--text)' },
+  { label: 'Tirzepatide', freq: 'Every 7d · Wed 8:00am',  color: 'var(--color-fat)' },
+  { label: 'Semaglutide', freq: 'Every 7d · Sun 8:00am',  color: 'var(--color-protein)' },
+  { label: 'Weight',      freq: 'Daily · 7:00am',         color: 'var(--text)' },
 ];
 
 const scheduleGrid = (() => {
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const rows = [
-    // Retatrutide weekly Sun
+    // Tirzepatide weekly Wed
+    [0, 0, 1, 0, 0, 0, 0],
+    // Semaglutide weekly Sun
     [0, 0, 0, 0, 0, 0, 1],
-    // BPC-157 daily 2x
-    [2, 2, 2, 2, 2, 2, 2],
-    // Weight daily 1x
+    // Weight daily
     [1, 1, 1, 1, 1, 1, 1],
   ];
   return { days, rows };
@@ -161,15 +204,15 @@ function dotColor(n) {
 }
 
 const aiTrail = [
-  { icon: '•',  text: 'Understanding request',                           kind: 'status' },
-  { icon: '⚙',  text: 'search_food_items("sweetgreen kale caesar")',     kind: 'call'   },
-  { icon: '✓',  text: 'No match in database',                             kind: 'result' },
-  { icon: '⚙',  text: 'googleSearch("sweetgreen kale caesar nutrition")', kind: 'call'   },
-  { icon: '✓',  text: 'Found: 560 cal · 40g P · 31g F · 42g C',          kind: 'result' },
-  { icon: '⚙',  text: 'create_food_item(name: "Sweetgreen Kale Caesar")', kind: 'call'   },
-  { icon: '✓',  text: 'Created custom food · saved to library',           kind: 'result' },
-  { icon: '⚙',  text: 'log_food_entry(meal: "lunch", qty: 1)',            kind: 'call'   },
-  { icon: '✓',  text: 'Logged to today · lunch',                          kind: 'result' },
+  { icon: '•', text: 'Reading request',                            kind: 'status' },
+  { icon: '⚙', text: 'Checking your food library',                 kind: 'call'   },
+  { icon: '✓', text: 'Not in library yet',                         kind: 'result' },
+  { icon: '⚙', text: 'Searching the web for nutrition info',       kind: 'call'   },
+  { icon: '✓', text: 'Found · 560 cal · 40g P · 31g F · 42g C',    kind: 'result' },
+  { icon: '⚙', text: 'Saving as a custom food',                    kind: 'call'   },
+  { icon: '✓', text: 'Added to your library',                      kind: 'result' },
+  { icon: '⚙', text: 'Writing the entry to today',                 kind: 'call'   },
+  { icon: '✓', text: 'Logged to lunch',                            kind: 'result' },
 ];
 
 const threads = [
@@ -199,11 +242,10 @@ const goal = {
 const months = ['Dec', 'Jan', 'Feb', 'Mar', 'Apr'];
 
 const platformRows = [
-  { k: 'Offline mode',        v: 'Enabled', ok: true  },
-  { k: 'Pending sync',        v: '0 changes', ok: true  },
-  { k: 'Last sync',           v: '2 min ago', ok: true },
-  { k: 'Encrypted backup',    v: 'On',         ok: true  },
-  { k: 'Data export',         v: 'JSON · CSV', ok: true  },
+  { k: 'Offline mode',        v: 'Enabled',    ok: true },
+  { k: 'Pending sync',        v: '0 changes',  ok: true },
+  { k: 'Last sync',           v: '2 min ago',  ok: true },
+  { k: 'Data export',         v: 'JSON · CSV', ok: true },
 ];
 </script>
 
@@ -625,11 +667,11 @@ const platformRows = [
           <!-- Photos -->
           <div class="card">
             <div class="card-head">
-              <span class="card-title">Progress photos · on-device</span>
+              <span class="card-title">Progress photos · monthly</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Monthly shots, kept local on your device. Swipe between any
+              Monthly shots attached to your account. Swipe between any
               two months to see what actually changed when the scale is
               being boring.
             </div>
@@ -665,21 +707,68 @@ const platformRows = [
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Common GLP-1s preloaded. Adding your own is two fields —
-              a name and a half-life. The curve draws itself.
+              Common GLP-1s preloaded. Adding your own takes four fields —
+              name, half-life, interval, and kinetics shape. The curve
+              draws itself.
             </div>
             <div class="mini">
               <div v-for="c in compounds" :key="c.name" class="compound-row" :class="{ active: c.active }">
                 <span class="compound-name">{{ c.name }}</span>
-                <span class="compound-t">t½ {{ c.t }}</span>
+                <span class="compound-meta">
+                  <span class="compound-shape">{{ c.shape }}</span>
+                  <span class="compound-t">t½ {{ c.t }}</span>
+                  <span class="compound-every">every {{ c.every }}</span>
+                </span>
               </div>
               <div class="custom-form">
                 <div class="mini-eyebrow">Add custom</div>
                 <div class="form-line">
                   <span class="form-field"><span class="form-label">name</span><span class="form-val">Tesofensine</span></span>
                   <span class="form-field"><span class="form-label">t½</span><span class="form-val">9.0 d</span></span>
+                </div>
+                <div class="form-line">
+                  <span class="form-field"><span class="form-label">interval</span><span class="form-val">7 d</span></span>
+                  <span class="form-field"><span class="form-label">shape</span><span class="form-val">sub-q</span></span>
                   <span class="form-submit">+ add</span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kinetics shapes -->
+          <div class="card wide">
+            <div class="card-head">
+              <span class="card-title">Kinetics shapes · bolus / sub-Q / depot</span>
+              <span class="card-tag">CORE</span>
+            </div>
+            <div class="card-body">
+              Not every compound absorbs the same way. Pick the profile
+              that matches how yours hits — the curve adjusts. Sub-Q is
+              the default for self-injected peptides; depot for
+              long-acting oil-based weeklies; bolus for anything that
+              peaks immediately.
+            </div>
+            <div class="mini kinetics-grid">
+              <div
+                v-for="k in kineticsProfiles"
+                :key="k.value"
+                class="kinetics-cell"
+                :class="{ 'is-default': k.isDefault }"
+              >
+                <div class="kinetics-head">
+                  <span class="kinetics-label">{{ k.label }}</span>
+                  <span v-if="k.isDefault" class="kinetics-default">DEFAULT</span>
+                </div>
+                <svg :viewBox="`0 0 ${k.W} ${k.H}`" class="block-svg kinetics-svg">
+                  <path :d="k.area" fill="rgba(230,184,85,0.12)" />
+                  <path
+                    :d="k.path"
+                    fill="none"
+                    stroke="var(--color-fat)"
+                    stroke-width="1.5"
+                  />
+                </svg>
+                <div class="kinetics-blurb">{{ k.blurb }}</div>
               </div>
             </div>
           </div>
@@ -697,8 +786,8 @@ const platformRows = [
             </div>
             <div class="mini">
               <div class="stack-legend">
-                <span class="s-fat">━ Retatrutide · t½ 6d</span>
-                <span class="s-green">━ BPC-157 · t½ 4h</span>
+                <span class="s-fat">━ Tirzepatide · t½ 5d</span>
+                <span class="s-green">━ Semaglutide · t½ 7d</span>
               </div>
               <svg :viewBox="`0 0 ${stackedPK.W} ${stackedPK.H}`" class="block-svg">
                 <path :d="stackedPK.aArea" fill="rgba(230,184,85,0.14)" />
@@ -759,17 +848,17 @@ const platformRows = [
               <div class="push-mock">
                 <div class="push-top">
                   <span class="push-app">Protokol Lab</span>
-                  <span class="push-time">7:30 AM</span>
+                  <span class="push-time">8:00 AM</span>
                 </div>
                 <div class="push-body">
-                  <b>BPC-157 due</b><br />
-                  Tap to log. Expected dose: 250mcg.
+                  <b>Tirzepatide due</b><br />
+                  Tap to log. Expected dose: 5mg.
                 </div>
               </div>
               <div class="push-skip">
                 <span class="skip-dot"></span>
                 <span class="skip-body">
-                  <b>Retatrutide reminder skipped.</b>
+                  <b>Semaglutide reminder skipped.</b>
                   <span class="dim">Already logged at 6:42 AM.</span>
                 </span>
               </div>
@@ -935,9 +1024,9 @@ const platformRows = [
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Installs as a PWA, works fully offline, syncs encrypted
-              when you're online. Your whole history exports as JSON or
-              CSV whenever you want it — no paywall, no support ticket.
+              Installs as a PWA, works fully offline, syncs when you're
+              back online. Your whole history exports as JSON or CSV
+              whenever you want it — no paywall, no support ticket.
             </div>
             <div class="mini">
               <div class="status-grid">
@@ -961,7 +1050,7 @@ const platformRows = [
     <section class="final-cta">
       <div class="wrap">
         <h2>That's the tour.<br /><span class="accent">Start tracking.</span></h2>
-        <p>Free to start. Premium unlocks the AI and correlation charts for $2.99/mo.</p>
+        <p>Free to start. Premium unlocks the AI and correlation charts for $4.99/mo.</p>
         <div class="cta-buttons">
           <button class="btn-primary big" @click="goRegister">Create account →</button>
           <button class="btn-secondary big" @click="goHome">Back to home</button>
@@ -1352,7 +1441,17 @@ const platformRows = [
 }
 .compound-name { flex: 1; color: var(--text); }
 .compound-row.active .compound-name { font-weight: 600; }
-.compound-t { font-family: var(--font-mono); font-size: 11px; color: var(--color-fat); }
+.compound-meta {
+  display: inline-flex; align-items: baseline; gap: 10px;
+  font-family: var(--font-mono); font-size: 10.5px;
+}
+.compound-shape {
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 1px 5px; border: 1px solid var(--border);
+}
+.compound-t { color: var(--color-fat); }
+.compound-every { color: var(--text-tertiary); }
 .custom-form {
   margin-top: 12px; padding: 10px; border: 1px dashed var(--border-strong);
   background: var(--surface-alt);
@@ -1375,6 +1474,35 @@ const platformRows = [
 .stack-legend { display: flex; gap: 16px; font-size: 10px; margin-bottom: 6px; font-family: var(--font-mono); }
 .s-fat { color: var(--color-fat); }
 .s-green { color: var(--primary); }
+
+/* ---- Kinetics shape grid --------------------------------------- */
+.kinetics-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+}
+.kinetics-cell {
+  padding: 12px; border: 1px solid var(--border); background: var(--surface-alt);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.kinetics-cell.is-default { border-color: var(--primary); }
+.kinetics-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.kinetics-label {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+}
+.kinetics-default {
+  font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em;
+  color: var(--primary); padding: 2px 6px; border: 1px solid var(--primary);
+}
+.kinetics-svg {
+  background: var(--surface); border: 1px solid var(--border);
+}
+.kinetics-blurb {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.5;
+}
+@media (max-width: 800px) {
+  .kinetics-grid { grid-template-columns: 1fr; }
+}
 
 /* ---- Push scheduler mini -------------------------------------- */
 .sched-mini { display: grid; grid-template-columns: 1fr 1.1fr; gap: 20px; }

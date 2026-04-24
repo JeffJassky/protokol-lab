@@ -3,14 +3,14 @@ import FoodLog from '../models/FoodLog.js';
 import FoodItem from '../models/FoodItem.js';
 import RecentFood from '../models/RecentFood.js';
 import UserSettings from '../models/UserSettings.js';
+import { childLogger } from '../lib/logger.js';
 
+const log = childLogger('foodlog');
 const router = Router();
 
-// Resolve or create a FoodItem from the request body
 async function resolveFoodItemId(body) {
   if (body.foodItemId) return body.foodItemId;
 
-  // OFF item — upsert by barcode
   if (body.offBarcode) {
     const item = await FoodItem.findOneAndUpdate(
       { offBarcode: body.offBarcode },
@@ -32,7 +32,6 @@ async function resolveFoodItemId(body) {
   return null;
 }
 
-// Update recent foods cache
 async function updateRecent(userId, foodItemId, servingCount, mealType) {
   await RecentFood.findOneAndUpdate(
     { userId, foodItemId },
@@ -40,7 +39,6 @@ async function updateRecent(userId, foodItemId, servingCount, mealType) {
     { upsert: true },
   );
 
-  // Prune to 50
   const count = await RecentFood.countDocuments({ userId });
   if (count > 50) {
     const oldest = await RecentFood.find({ userId })
@@ -48,10 +46,10 @@ async function updateRecent(userId, foodItemId, servingCount, mealType) {
       .limit(count - 50)
       .select('_id');
     await RecentFood.deleteMany({ _id: { $in: oldest.map((r) => r._id) } });
+    log.debug({ userId: String(userId), pruned: count - 50 }, 'foodlog: pruned recents');
   }
 }
 
-// Get food log for a date
 router.get('/', async (req, res) => {
   const { date } = req.query;
   const dayStart = new Date(date);
@@ -66,25 +64,19 @@ router.get('/', async (req, res) => {
     .populate('foodItemId')
     .populate('mealId', 'name emoji');
 
-  const grouped = {
-    breakfast: [],
-    lunch: [],
-    dinner: [],
-    snack: [],
-  };
+  const grouped = { breakfast: [], lunch: [], dinner: [], snack: [] };
+  for (const entry of entries) grouped[entry.mealType].push(entry);
 
-  for (const entry of entries) {
-    grouped[entry.mealType].push(entry);
-  }
-
+  (req.log || log).debug({ date, total: entries.length }, 'foodlog: day fetched');
   res.json({ entries: grouped });
 });
 
-// Get per-day calorie totals across a date range (for weight-page chart overlay).
-// Per-day nutrition totals across a date range (calories + macros).
 router.get('/daily-nutrition', async (req, res) => {
   const { from, to } = req.query;
-  if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+  if (!from || !to) {
+    (req.log || log).warn({ from, to }, 'daily-nutrition: missing from/to');
+    return res.status(400).json({ error: 'from and to required' });
+  }
 
   const rangeStart = new Date(from);
   const rangeEnd = new Date(to);
@@ -119,15 +111,16 @@ router.get('/daily-nutrition', async (req, res) => {
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  (req.log || log).debug({ from, to, days: days.length }, 'foodlog: daily-nutrition');
   res.json({ days });
 });
 
-// Legacy alias — old callers still reference daily-calories.
 router.get('/daily-calories', async (req, res) => {
-  // Redirect internally to daily-nutrition and return just the calories field
-  // so existing consumers don't break.
   const { from, to } = req.query;
-  if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+  if (!from || !to) {
+    (req.log || log).warn({ from, to }, 'daily-calories: missing from/to');
+    return res.status(400).json({ error: 'from and to required' });
+  }
 
   const rangeStart = new Date(from);
   const rangeEnd = new Date(to);
@@ -151,10 +144,10 @@ router.get('/daily-calories', async (req, res) => {
     .map(([date, calories]) => ({ date, calories: Math.round(calories) }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  (req.log || log).debug({ from, to, days: days.length }, 'foodlog: daily-calories');
   res.json({ days });
 });
 
-// Get daily summary
 router.get('/summary', async (req, res) => {
   const { date } = req.query;
   const dayStart = new Date(date);
@@ -182,6 +175,10 @@ router.get('/summary', async (req, res) => {
     totalCarbs += food.carbsPer * entry.servingCount;
   }
 
+  (req.log || log).debug(
+    { date, entryCount: entries.length, totalCalories: Math.round(totalCalories) },
+    'foodlog: day summary',
+  );
   res.json({
     summary: {
       totalCalories: Math.round(totalCalories),
@@ -193,10 +190,11 @@ router.get('/summary', async (req, res) => {
   });
 });
 
-// Add entry
 router.post('/', async (req, res) => {
+  const rlog = req.log || log;
   const foodItemId = await resolveFoodItemId(req.body);
   if (!foodItemId) {
+    rlog.warn({ body: { offBarcode: req.body?.offBarcode } }, 'foodlog: cannot resolve foodItem');
     return res.status(400).json({ error: 'Could not resolve food item' });
   }
 
@@ -211,23 +209,33 @@ router.post('/', async (req, res) => {
   await updateRecent(req.userId, foodItemId, entry.servingCount, entry.mealType);
 
   const populated = await entry.populate('foodItemId');
+  rlog.info(
+    {
+      entryId: String(entry._id), foodItemId: String(foodItemId),
+      date: req.body.date, mealType: entry.mealType, servingCount: entry.servingCount,
+    },
+    'foodlog: entry created',
+  );
   res.status(201).json({ entry: populated });
 });
 
-// Copy entries to one or more dates. Body: { entryIds: [...], dates: [...] }.
-// Each source entry is duplicated to each date, preserving mealType, mealId,
-// servingCount, and foodItemId. Used by the food log "..." flyout.
 router.post('/copy', async (req, res) => {
+  const rlog = req.log || log;
   const { entryIds, dates } = req.body;
   if (!Array.isArray(entryIds) || !entryIds.length) {
+    rlog.warn('foodlog copy: entryIds missing');
     return res.status(400).json({ error: 'entryIds required' });
   }
   if (!Array.isArray(dates) || !dates.length) {
+    rlog.warn('foodlog copy: dates missing');
     return res.status(400).json({ error: 'dates required' });
   }
 
   const sources = await FoodLog.find({ _id: { $in: entryIds }, userId: req.userId });
-  if (!sources.length) return res.status(404).json({ error: 'No source entries found' });
+  if (!sources.length) {
+    rlog.warn({ entryIds }, 'foodlog copy: no source entries');
+    return res.status(404).json({ error: 'No source entries found' });
+  }
 
   const docs = [];
   for (const src of sources) {
@@ -243,23 +251,30 @@ router.post('/copy', async (req, res) => {
     }
   }
   const created = await FoodLog.insertMany(docs);
+  rlog.info(
+    { sourceCount: sources.length, dateCount: dates.length, created: created.length },
+    'foodlog: copied',
+  );
   res.status(201).json({ created: created.length });
 });
 
-// Move entries to one or more dates. Same as copy but deletes the source
-// entries after creating the copies. If multiple target dates are given, the
-// effect is "remove from source date, create a copy at each target date".
 router.post('/move', async (req, res) => {
+  const rlog = req.log || log;
   const { entryIds, dates } = req.body;
   if (!Array.isArray(entryIds) || !entryIds.length) {
+    rlog.warn('foodlog move: entryIds missing');
     return res.status(400).json({ error: 'entryIds required' });
   }
   if (!Array.isArray(dates) || !dates.length) {
+    rlog.warn('foodlog move: dates missing');
     return res.status(400).json({ error: 'dates required' });
   }
 
   const sources = await FoodLog.find({ _id: { $in: entryIds }, userId: req.userId });
-  if (!sources.length) return res.status(404).json({ error: 'No source entries found' });
+  if (!sources.length) {
+    rlog.warn({ entryIds }, 'foodlog move: no source entries');
+    return res.status(404).json({ error: 'No source entries found' });
+  }
 
   const docs = [];
   for (const src of sources) {
@@ -276,10 +291,13 @@ router.post('/move', async (req, res) => {
   }
   const created = await FoodLog.insertMany(docs);
   await FoodLog.deleteMany({ _id: { $in: sources.map((s) => s._id) }, userId: req.userId });
+  rlog.info(
+    { sourceCount: sources.length, dateCount: dates.length, created: created.length, removed: sources.length },
+    'foodlog: moved',
+  );
   res.status(201).json({ created: created.length, removed: sources.length });
 });
 
-// Update entry
 router.put('/:id', async (req, res) => {
   const update = {};
   if (req.body.servingCount != null) update.servingCount = req.body.servingCount;
@@ -292,14 +310,21 @@ router.put('/:id', async (req, res) => {
     { returnDocument: 'after' },
   ).populate('foodItemId');
 
-  if (!entry) return res.status(404).json({ error: 'Not found' });
+  if (!entry) {
+    (req.log || log).warn({ entryId: req.params.id }, 'foodlog update: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info({ entryId: req.params.id, fields: Object.keys(update) }, 'foodlog: entry updated');
   res.json({ entry });
 });
 
-// Delete entry
 router.delete('/:id', async (req, res) => {
   const entry = await FoodLog.findOneAndDelete({ _id: req.params.id, userId: req.userId });
-  if (!entry) return res.status(404).json({ error: 'Not found' });
+  if (!entry) {
+    (req.log || log).warn({ entryId: req.params.id }, 'foodlog delete: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info({ entryId: req.params.id }, 'foodlog: entry deleted');
   res.status(204).send();
 });
 

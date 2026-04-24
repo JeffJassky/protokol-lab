@@ -1,7 +1,13 @@
 import sgMail from "@sendgrid/mail";
+import { childLogger, errContext } from "../lib/logger.js";
+
+const log = childLogger('email');
 
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  log.info({ from: process.env.SENDGRID_FROM_EMAIL }, 'email: SendGrid configured');
+} else {
+  log.warn('email: SENDGRID_API_KEY missing — emails will be logged, not sent');
 }
 
 function from() {
@@ -11,17 +17,28 @@ function from() {
   };
 }
 
-async function send({ to, subject, html, text }) {
+async function send({ to, subject, html, text, template }) {
   if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
-    console.warn("[email] SendGrid not configured, skipping send to", to);
-    console.warn("[email] subject:", subject);
-    console.warn("[email] text:\n", text);
+    log.warn({ to, template, subject, textPreview: text?.slice(0, 200) }, 'email: not configured — would have sent');
     return;
   }
+  const t0 = Date.now();
   try {
-    await sgMail.send({ to, from: from(), subject, html, text });
+    const [resp] = await sgMail.send({ to, from: from(), subject, html, text });
+    log.info(
+      {
+        to, template, subject,
+        sgStatus: resp?.statusCode,
+        sgMessageId: resp?.headers?.['x-message-id'],
+        durationMs: Date.now() - t0,
+      },
+      'email: sent',
+    );
   } catch (err) {
-    console.error("[email] send failed:", err?.response?.body || err.message);
+    log.error(
+      { ...errContext(err), to, template, subject, sgBody: err?.response?.body },
+      'email: send failed',
+    );
     throw err;
   }
 }
@@ -60,7 +77,7 @@ If you didn't request this, you can ignore this email.`;
     </table>
   </body>
 </html>`;
-  await send({ to, subject, html, text });
+  await send({ to, subject, html, text, template: 'password-reset' });
 }
 
 export async function sendWelcomeEmail(to) {
@@ -83,5 +100,5 @@ Your account is ready. Sign in anytime at ${appUrl}`;
     </table>
   </body>
 </html>`;
-  await send({ to, subject, html, text });
+  await send({ to, subject, html, text, template: 'welcome' });
 }

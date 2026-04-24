@@ -8,13 +8,14 @@ import FoodLog from '../models/FoodLog.js';
 import SymptomLog from '../models/SymptomLog.js';
 import DoseLog from '../models/DoseLog.js';
 import { sendToUser } from './push.js';
+import { childLogger, errContext } from '../lib/logger.js';
+
+const log = childLogger('scheduler');
 
 const MINUTE = 60 * 1000;
 
 let agenda = null;
 
-// Formats `date` as "HH:mm" in the given IANA tz.
-// Uses Intl.DateTimeFormat so we don't pull in a date library.
 function formatInZone(date, timeZone) {
   try {
     const fmt = new Intl.DateTimeFormat('en-US', {
@@ -31,27 +32,24 @@ function formatInZone(date, timeZone) {
       if (p.type === 'minute') mm = p.value.padStart(2, '0');
     }
     return { hhmm: `${hh}:${mm}` };
-  } catch {
+  } catch (err) {
+    log.warn({ ...errContext(err), timeZone }, 'formatInZone: invalid timezone, defaulting to 00:00');
     return { hhmm: '00:00' };
   }
 }
 
-// Local YYYY-MM-DD for `date` in the given IANA tz.
 function localDayKey(date, timeZone) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(date);
 }
 
-// Whole-day count between two YYYY-MM-DD strings (b - a).
 function daysBetweenDayKeys(a, b) {
   const [ay, am, ad] = a.split('-').map(Number);
   const [by, bm, bd] = b.split('-').map(Number);
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
 }
 
-// Start-of-day boundaries in the given timezone expressed in UTC — used to
-// ask "did this user log anything today (in their local day)?"
 function dayBoundsInZone(date, timeZone) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -61,12 +59,7 @@ function dayBoundsInZone(date, timeZone) {
   const y = Number(get('year'));
   const m = Number(get('month'));
   const d = Number(get('day'));
-  // Compute UTC instants for local midnight and next midnight. We construct
-  // a local-midnight ISO string, then figure the UTC offset by asking Intl
-  // for the same moment in the target zone.
   const startLocal = new Date(Date.UTC(y, m - 1, d));
-  // Adjust for tz offset by shifting startLocal until the formatted date ==
-  // target date and time == 00:00.
   const targetKey = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} 00:00`;
   for (let i = -14; i <= 14; i++) {
     const cand = new Date(startLocal.getTime() + i * 60 * MINUTE);
@@ -100,20 +93,15 @@ async function userLoggedToday(userId, start, end) {
 
 async function runTick() {
   const now = new Date();
-  // Round to the minute so two ticks in the same minute use identical times.
   now.setSeconds(0, 0);
+  const tickT0 = Date.now();
 
-  // Only iterate users who have at least one reminder source enabled. A full
-  // table scan per minute is fine for this scale; revisit if the user count
-  // crosses ~50k.
   const users = await UserSettings.find({
     $or: [
       { 'trackReminder.enabled': true },
     ],
   }).select('userId timezone trackReminder').lean();
 
-  // Also pull users who have compound reminders — their settings may not
-  // have trackReminder enabled.
   const compoundReminders = await Compound.find({
     reminderEnabled: true,
     enabled: true,
@@ -135,14 +123,15 @@ async function runTick() {
     compoundsByUser.get(key).push(c);
   }
 
+  let doseFired = 0;
+  let trackFired = 0;
+  let trackSkippedLogged = 0;
+
   for (const [uid, settings] of settingsByUser) {
     const tz = settings.timezone || 'UTC';
     const { hhmm } = formatInZone(now, tz);
     const todayKey = localDayKey(now, tz);
 
-    // Compound dose reminders. Dose days are inferred from intervalDays + the
-    // user's most recent DoseLog for the compound. Fire only when due (today
-    // or overdue) and not yet logged today.
     const compounds = compoundsByUser.get(uid) || [];
     for (const c of compounds) {
       if (!c.reminderTime || c.reminderTime !== hhmm) continue;
@@ -155,14 +144,26 @@ async function runTick() {
         .lean();
       if (last) {
         const lastKey = localDayKey(last.date, tz);
-        if (lastKey === todayKey) continue; // already logged today
+        if (lastKey === todayKey) {
+          log.debug({ userId: uid, compound: c.name }, 'scheduler: dose already logged today');
+          continue;
+        }
         const required = Math.max(1, Math.ceil(interval));
-        if (daysBetweenDayKeys(lastKey, todayKey) < required) continue;
+        if (daysBetweenDayKeys(lastKey, todayKey) < required) {
+          log.debug(
+            { userId: uid, compound: c.name, daysSince: daysBetweenDayKeys(lastKey, todayKey), required },
+            'scheduler: not yet due',
+          );
+          continue;
+        }
       }
-      // No prior dose → due immediately.
 
       const minuteKey = `${now.toISOString().slice(0, 16)}`;
-      await sendToUser(uid, 'doseReminder', {
+      log.info(
+        { userId: uid, compound: c.name, compoundId: String(c._id), tz, hhmm },
+        'scheduler: firing dose reminder',
+      );
+      const result = await sendToUser(uid, 'doseReminder', {
         title: `Time for ${c.name}`,
         body: 'Tap to log your dose.',
         url: '/',
@@ -170,36 +171,55 @@ async function runTick() {
         tag: `dose:${c._id}:${minuteKey}`,
         data: { compoundId: String(c._id) },
       });
+      log.info({ userId: uid, compound: c.name, ...result }, 'scheduler: dose reminder fanout');
+      doseFired++;
     }
 
-    // Daily tracking reminder — skip if user already logged anything today
-    // in their local day.
     if (settings.trackReminder?.enabled && settings.trackReminder.time === hhmm) {
       const { start, end } = dayBoundsInZone(now, tz);
       const logged = await userLoggedToday(uid, start, end);
       if (!logged) {
         const minuteKey = `${now.toISOString().slice(0, 16)}`;
-        await sendToUser(uid, 'trackReminder', {
+        log.info({ userId: uid, tz, hhmm }, 'scheduler: firing track reminder');
+        const result = await sendToUser(uid, 'trackReminder', {
           title: "Don't forget to log today",
           body: 'Weight, meals, symptoms — a quick tap keeps the trend honest.',
           url: '/',
           category: 'trackReminder',
           tag: `track:${minuteKey}`,
         });
+        log.info({ userId: uid, ...result }, 'scheduler: track reminder fanout');
+        trackFired++;
+      } else {
+        log.debug({ userId: uid, tz, hhmm }, 'scheduler: track reminder skipped (already logged)');
+        trackSkippedLogged++;
       }
     }
   }
+
+  log.debug(
+    {
+      users: settingsByUser.size,
+      compoundReminders: compoundReminders.length,
+      doseFired,
+      trackFired,
+      trackSkippedLogged,
+      durationMs: Date.now() - tickT0,
+    },
+    'scheduler: tick complete',
+  );
 }
 
 export async function startScheduler() {
-  if (agenda) return agenda;
+  if (agenda) {
+    log.debug('scheduler: already started');
+    return agenda;
+  }
   if (mongoose.connection.readyState !== 1) {
-    console.warn('[scheduler] mongoose not connected — deferring');
+    log.warn({ readyState: mongoose.connection.readyState }, 'scheduler: mongoose not connected, deferring');
     return null;
   }
 
-  // Agenda v6 moved storage to pluggable backends — feed it the already-open
-  // Mongo Db instance so we don't hold two connections.
   agenda = new Agenda({
     backend: new MongoBackend({ mongo: mongoose.connection.db }),
     processEvery: 30 * 1000,
@@ -210,20 +230,24 @@ export async function startScheduler() {
     try {
       await runTick();
     } catch (err) {
-      console.error('[scheduler] tick failed', err);
+      log.error(errContext(err), 'scheduler: tick failed');
     }
   });
 
+  agenda.on('fail', (err, job) => {
+    log.error({ ...errContext(err), jobName: job?.attrs?.name }, 'scheduler: agenda job fail');
+  });
+
   await agenda.start();
-  // Keep a single tick job running forever. every('1 minute') is replaced on
-  // each call, so restarts don't stack jobs.
   await agenda.every('1 minute', 'reminder-tick');
-  console.log('[scheduler] started');
+  log.info({ processEveryMs: 30000, interval: '1 minute' }, 'scheduler: started');
   return agenda;
 }
 
 export async function stopScheduler() {
   if (!agenda) return;
+  log.info('scheduler: stopping');
   await agenda.stop();
   agenda = null;
+  log.info('scheduler: stopped');
 }

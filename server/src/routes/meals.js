@@ -1,31 +1,35 @@
 import { Router } from 'express';
 import Meal from '../models/Meal.js';
 import FoodLog from '../models/FoodLog.js';
+import { childLogger } from '../lib/logger.js';
 
+const log = childLogger('meals');
 const router = Router();
 
-// List all meals for the current user, with items populated so the UI can
-// compute totals without a second round-trip per meal.
 router.get('/', async (req, res) => {
   const meals = await Meal.find({ userId: req.userId })
     .sort({ updatedAt: -1 })
     .populate('items.foodItemId');
+  (req.log || log).debug({ count: meals.length }, 'meals: list');
   res.json({ meals });
 });
 
-// Get a single meal with populated items.
 router.get('/:id', async (req, res) => {
   const meal = await Meal.findOne({ _id: req.params.id, userId: req.userId })
     .populate('items.foodItemId');
-  if (!meal) return res.status(404).json({ error: 'Not found' });
+  if (!meal) {
+    (req.log || log).warn({ mealId: req.params.id }, 'meals: get not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
   res.json({ meal });
 });
 
-// Create a meal. `items` is optional — most creates start empty and get
-// populated via the add-item endpoint from the food log flyout.
 router.post('/', async (req, res) => {
   const { name, emoji, items } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
+  if (!name || !name.trim()) {
+    (req.log || log).warn('meals create: missing name');
+    return res.status(400).json({ error: 'name required' });
+  }
 
   const meal = await Meal.create({
     userId: req.userId,
@@ -39,10 +43,13 @@ router.post('/', async (req, res) => {
   });
 
   const populated = await meal.populate('items.foodItemId');
+  (req.log || log).info(
+    { mealId: String(meal._id), name: meal.name, itemCount: meal.items.length },
+    'meals: created',
+  );
   res.status(201).json({ meal: populated });
 });
 
-// Update meal name.
 router.put('/:id', async (req, res) => {
   const update = {};
   if (req.body.name != null) update.name = String(req.body.name).trim();
@@ -54,22 +61,30 @@ router.put('/:id', async (req, res) => {
     { returnDocument: 'after' },
   ).populate('items.foodItemId');
 
-  if (!meal) return res.status(404).json({ error: 'Not found' });
+  if (!meal) {
+    (req.log || log).warn({ mealId: req.params.id }, 'meals update: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info({ mealId: req.params.id, fields: Object.keys(update) }, 'meals: updated');
   res.json({ meal });
 });
 
-// Delete a meal (FoodLog entries that reference it keep their mealId; the
-// diary UI just stops grouping them under a name).
 router.delete('/:id', async (req, res) => {
   const result = await Meal.findOneAndDelete({ _id: req.params.id, userId: req.userId });
-  if (!result) return res.status(404).json({ error: 'Not found' });
+  if (!result) {
+    (req.log || log).warn({ mealId: req.params.id }, 'meals delete: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info({ mealId: req.params.id }, 'meals: deleted');
   res.status(204).send();
 });
 
-// Add an item to a meal. Body: { foodItemId, servingCount }.
 router.post('/:id/items', async (req, res) => {
   const { foodItemId, servingCount = 1 } = req.body;
-  if (!foodItemId) return res.status(400).json({ error: 'foodItemId required' });
+  if (!foodItemId) {
+    (req.log || log).warn({ mealId: req.params.id }, 'meals add-item: missing foodItemId');
+    return res.status(400).json({ error: 'foodItemId required' });
+  }
 
   const meal = await Meal.findOneAndUpdate(
     { _id: req.params.id, userId: req.userId },
@@ -77,14 +92,23 @@ router.post('/:id/items', async (req, res) => {
     { returnDocument: 'after' },
   ).populate('items.foodItemId');
 
-  if (!meal) return res.status(404).json({ error: 'Not found' });
+  if (!meal) {
+    (req.log || log).warn({ mealId: req.params.id }, 'meals add-item: meal not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info(
+    { mealId: req.params.id, foodItemId, servingCount },
+    'meals: item added',
+  );
   res.status(201).json({ meal });
 });
 
-// Update an item's serving count.
 router.put('/:id/items/:itemId', async (req, res) => {
   const { servingCount } = req.body;
-  if (servingCount == null) return res.status(400).json({ error: 'servingCount required' });
+  if (servingCount == null) {
+    (req.log || log).warn({ mealId: req.params.id, itemId: req.params.itemId }, 'meals item update: missing servingCount');
+    return res.status(400).json({ error: 'servingCount required' });
+  }
 
   const meal = await Meal.findOneAndUpdate(
     { _id: req.params.id, userId: req.userId, 'items._id': req.params.itemId },
@@ -92,11 +116,17 @@ router.put('/:id/items/:itemId', async (req, res) => {
     { returnDocument: 'after' },
   ).populate('items.foodItemId');
 
-  if (!meal) return res.status(404).json({ error: 'Not found' });
+  if (!meal) {
+    (req.log || log).warn({ mealId: req.params.id, itemId: req.params.itemId }, 'meals item update: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info(
+    { mealId: req.params.id, itemId: req.params.itemId, servingCount },
+    'meals: item updated',
+  );
   res.json({ meal });
 });
 
-// Remove an item from a meal.
 router.delete('/:id/items/:itemId', async (req, res) => {
   const meal = await Meal.findOneAndUpdate(
     { _id: req.params.id, userId: req.userId },
@@ -104,19 +134,31 @@ router.delete('/:id/items/:itemId', async (req, res) => {
     { returnDocument: 'after' },
   ).populate('items.foodItemId');
 
-  if (!meal) return res.status(404).json({ error: 'Not found' });
+  if (!meal) {
+    (req.log || log).warn({ mealId: req.params.id, itemId: req.params.itemId }, 'meals item delete: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info({ mealId: req.params.id, itemId: req.params.itemId }, 'meals: item removed');
   res.json({ meal });
 });
 
-// Log a meal to the diary. Creates one FoodLog entry per item, stamped with
-// mealId so the diary UI can group them under the meal's name.
 router.post('/:id/log', async (req, res) => {
+  const rlog = req.log || log;
   const { date, mealType } = req.body;
-  if (!date || !mealType) return res.status(400).json({ error: 'date and mealType required' });
+  if (!date || !mealType) {
+    rlog.warn({ mealId: req.params.id, date, mealType }, 'meals log: missing date/mealType');
+    return res.status(400).json({ error: 'date and mealType required' });
+  }
 
   const meal = await Meal.findOne({ _id: req.params.id, userId: req.userId });
-  if (!meal) return res.status(404).json({ error: 'Not found' });
-  if (!meal.items.length) return res.status(400).json({ error: 'meal has no items' });
+  if (!meal) {
+    rlog.warn({ mealId: req.params.id }, 'meals log: meal not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (!meal.items.length) {
+    rlog.warn({ mealId: req.params.id }, 'meals log: empty meal');
+    return res.status(400).json({ error: 'meal has no items' });
+  }
 
   const docs = meal.items.map((item) => ({
     userId: req.userId,
@@ -129,6 +171,11 @@ router.post('/:id/log', async (req, res) => {
   const entries = await FoodLog.insertMany(docs);
   meal.lastLoggedAt = new Date();
   await meal.save();
+
+  rlog.info(
+    { mealId: req.params.id, date, mealType, itemCount: entries.length },
+    'meals: logged to diary',
+  );
   res.status(201).json({ entries });
 });
 

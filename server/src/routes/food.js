@@ -3,23 +3,14 @@ import FoodItem from '../models/FoodItem.js';
 import FavoriteFood from '../models/FavoriteFood.js';
 import RecentFood from '../models/RecentFood.js';
 import Meal from '../models/Meal.js';
+import { childLogger, errContext } from '../lib/logger.js';
 
+const log = childLogger('food');
 const router = Router();
 
-// OFF categories that indicate a liquid product. Nutriments are still stored
-// "per 100 g" by OFF convention but the label and mental-model should be ml.
 const BEVERAGE_CATEGORY_PATTERNS = [
-  'beverages',
-  'drinks',
-  'beers',
-  'wines',
-  'spirits',
-  'sodas',
-  'juices',
-  'waters',
-  'milks',
-  'teas',
-  'coffees',
+  'beverages', 'drinks', 'beers', 'wines', 'spirits', 'sodas',
+  'juices', 'waters', 'milks', 'teas', 'coffees',
 ];
 
 function isBeverage(p) {
@@ -31,7 +22,6 @@ function isBeverage(p) {
       if (BEVERAGE_CATEGORY_PATTERNS.some((pat) => lower.includes(pat))) return true;
     }
   }
-  // Fallback: look at the product quantity string ("355 ml", "1 l", "12 fl oz").
   const qty = typeof p.quantity === 'string' ? p.quantity.toLowerCase() : '';
   if (/\b(ml|cl|dl|l|fl\s*oz)\b/.test(qty)) return true;
   return false;
@@ -41,8 +31,6 @@ function normalizeOffProduct(p) {
   const n = p.nutriments || {};
   const beverage = isBeverage(p);
   const unit = beverage ? 'ml' : 'g';
-
-  // Prefer explicit serving_quantity, else fall back to 100 for "per 100 g/ml".
   const servingQty = p.serving_quantity || 100;
   const scale = servingQty / 100;
 
@@ -56,7 +44,7 @@ function normalizeOffProduct(p) {
   else if (kcal100 != null) caloriesPer = kcal100 * scale;
   else if (kjServing != null) caloriesPer = kjServing / 4.184;
   else if (kj100 != null) caloriesPer = (kj100 / 4.184) * scale;
-  else return null; // skip items with no calorie data
+  else return null;
 
   const val = (serving, per100) => {
     if (serving != null) return serving;
@@ -64,25 +52,13 @@ function normalizeOffProduct(p) {
     return 0;
   };
 
-  // Search-a-licious returns `brands` as an array; the legacy v2 API returned a
-  // comma-separated string. Normalize to a string so downstream consumers (UI +
-  // Mongoose String schema on FoodItem.brand) get a consistent type.
-  const brand = Array.isArray(p.brands)
-    ? p.brands.join(', ')
-    : p.brands || '';
+  const brand = Array.isArray(p.brands) ? p.brands.join(', ') : p.brands || '';
 
-  // product_name can also arrive as a per-language object on Search-a-licious
-  // (e.g. { en: "Happy Farms", fr: "..." }) — pick English first, then any value.
   let name = p.product_name;
   if (name && typeof name === 'object') {
     name = name.en || Object.values(name).find((v) => typeof v === 'string') || 'Unknown';
   }
 
-  // Human-friendly serving label:
-  //   - If OFF provided a serving_size string (e.g. "12 fl oz (355 ml)"), use it.
-  //   - Else if serving_quantity is known, show "<n> <unit>".
-  //   - Else show "per 100 <unit>" so the user knows this is per-100 data, not
-  //     a real serving size. Previously this silently showed "100g" for liquids.
   let servingSize;
   if (typeof p.serving_size === 'string' && p.serving_size.trim()) {
     servingSize = p.serving_size.trim();
@@ -106,9 +82,6 @@ function normalizeOffProduct(p) {
   };
 }
 
-// Compute meal totals (cal/p/f/c) from its populated items so the client can
-// render a summary row without duplicating the math. Returns zeroes for items
-// whose food reference has been deleted.
 function summarizeMeal(meal) {
   let cal = 0;
   let p = 0;
@@ -130,13 +103,16 @@ function summarizeMeal(meal) {
   };
 }
 
-// Search: meals (user's own) + local FoodItems + OpenFoodFacts
 router.get('/search', async (req, res) => {
+  const rlog = req.log || log;
   const { q, page = 1 } = req.query;
-  if (!q || !q.trim()) return res.json({ results: [] });
+  if (!q || !q.trim()) {
+    rlog.debug('food search: empty query');
+    return res.json({ results: [] });
+  }
 
-  // User meals — simple case-insensitive substring on name. Small result set
-  // per user, so no need for a text index.
+  const searchStart = Date.now();
+
   const userMeals = await Meal.find({
     userId: req.userId,
     name: { $regex: q.trim(), $options: 'i' },
@@ -159,7 +135,6 @@ router.get('/search', async (req, res) => {
     };
   });
 
-  // Local search
   const localResults = await FoodItem.find(
     { $text: { $search: q } },
     { score: { $meta: 'textScore' } },
@@ -182,25 +157,15 @@ router.get('/search', async (req, res) => {
     carbsPer: item.carbsPer,
   }));
 
-  // OpenFoodFacts search
   let off = [];
   const offDebug = { query: q, page: Number(page) };
   try {
-    // Use Search-a-licious (search.openfoodfacts.org) instead of the legacy
-    // world.openfoodfacts.org/api/v2/search — the main host has been returning
-    // 503s for search traffic. Search-a-licious is OFF's dedicated search service.
-    //
-    // Tokenize so we can both (a) pass a cleaned query to the API and
-    // (b) re-rank results client-side based on token coverage. Search-a-licious
-    // uses OR-ish multi-field matching, so we can't rely on the API alone for
-    // precision when tokens span fields (e.g. brand + product name).
     const tokens = q
       .toLowerCase()
       .split(/\s+/)
       .map((t) => t.replace(/[+\-!(){}[\]^"~*?:\\/]/g, '').trim())
       .filter(Boolean);
     const cleanQuery = tokens.join(' ');
-    // Over-fetch so that after re-ranking we still have enough relevant hits.
     const pageSize = 50;
 
     const url = new URL('https://search.openfoodfacts.org/search');
@@ -211,13 +176,7 @@ router.get('/search', async (req, res) => {
       'fields',
       'code,product_name,brands,serving_size,serving_quantity,quantity,categories_tags,nutriments',
     );
-    // Restrict to products that have English data — without this OFF returns
-    // its full global index (French, German, etc. dominate "aldi"-style searches).
     url.searchParams.set('langs', 'en');
-    // NOTE: we intentionally do NOT set sort_by. Sorting by popularity overrides
-    // Search-a-licious's native relevance scoring and surfaces popular products
-    // that only weakly match non-name fields, which is disastrous for multi-token
-    // queries like "happy farms" (went from 48/50 full matches to 0/50).
     offDebug.url = url.toString();
     offDebug.tokens = tokens;
 
@@ -241,7 +200,6 @@ router.get('/search', async (req, res) => {
       throw new Error(`non-JSON response (${offDebug.contentType || 'unknown'}) — body: ${bodySnippet}`);
     }
     const data = await resp.json();
-    // Search-a-licious returns `hits`; legacy v2 returned `products`. Accept either.
     const products = Array.isArray(data.hits)
       ? data.hits
       : Array.isArray(data.products)
@@ -249,26 +207,8 @@ router.get('/search', async (req, res) => {
       : [];
     offDebug.productCount = products.length;
 
-    // Log the serving-related fields of the top hit so we can see what the API
-    // is actually returning (many OFF products lack serving_size/serving_quantity).
-    if (products[0]) {
-      const top = products[0];
-      offDebug.sampleServing = {
-        product_name: top.product_name,
-        serving_size: top.serving_size,
-        serving_quantity: top.serving_quantity,
-        quantity: top.quantity,
-        categories_tags: Array.isArray(top.categories_tags)
-          ? top.categories_tags.slice(0, 5)
-          : top.categories_tags,
-      };
-    }
-
-    // Filter out OFF results that already exist locally (by barcode)
     const localBarcodes = new Set(local.filter((l) => l.offBarcode).map((l) => l.offBarcode));
 
-    // Score by token coverage across product_name + brands, prefer higher coverage.
-    // This compensates for Search-a-licious returning loose OR matches.
     const scoreProduct = (p) => {
       if (!tokens.length) return 0;
       const haystack = `${p.product_name || ''} ${p.brands || ''}`.toLowerCase();
@@ -281,9 +221,6 @@ router.get('/search', async (req, res) => {
       .map((p) => ({ p, score: scoreProduct(p) }))
       .filter(({ score }) => tokens.length === 0 || score > 0);
 
-    // Require all tokens if we have enough full-coverage hits; otherwise fall back
-    // to partial matches so queries like "aldi pork tenderloin" still return something
-    // even when the brand isn't indexed in the product text.
     const fullCoverage = scored.filter(({ score }) => score === tokens.length);
     const ranked = (fullCoverage.length >= 5 ? fullCoverage : scored)
       .sort((a, b) => b.score - a.score)
@@ -298,26 +235,34 @@ router.get('/search', async (req, res) => {
       .filter((item) => item && !localBarcodes.has(item.offBarcode));
     offDebug.normalizedCount = off.length;
 
-    console.log('[OFF search] ok', offDebug);
+    rlog.debug(offDebug, 'food search: OFF ok');
   } catch (err) {
-    console.error('[OFF search] failed', { ...offDebug, error: err.message });
+    rlog.warn({ ...errContext(err), ...offDebug }, 'food search: OFF failed');
   }
 
-  // Meals first — they're the user's own saved groupings and should take
-  // priority over catalog matches.
+  rlog.info(
+    {
+      q, page: Number(page),
+      mealCount: meals.length, localCount: local.length, offCount: off.length,
+      durationMs: Date.now() - searchStart,
+    },
+    'food search: done',
+  );
+
   res.json({ results: [...meals, ...local, ...off] });
 });
 
-// Barcode lookup: check local FoodItem first, fall back to OFF's per-product
-// endpoint. Used by the client-side barcode scanner. The search route's
-// name/brand token ranking filters out barcode-only matches, so this is a
-// separate path.
 router.get('/barcode/:code', async (req, res) => {
+  const rlog = req.log || log;
   const code = String(req.params.code || '').trim();
-  if (!code) return res.status(400).json({ error: 'code required' });
+  if (!code) {
+    rlog.warn('barcode: empty code');
+    return res.status(400).json({ error: 'code required' });
+  }
 
   const localItem = await FoodItem.findOne({ offBarcode: code });
   if (localItem) {
+    rlog.debug({ code, itemId: String(localItem._id) }, 'barcode: local hit');
     return res.json({
       result: {
         source: 'local',
@@ -338,28 +283,33 @@ router.get('/barcode/:code', async (req, res) => {
 
   try {
     const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=code,product_name,brands,serving_size,serving_quantity,quantity,categories_tags,nutriments`;
+    const t0 = Date.now();
     const resp = await fetch(url, {
       headers: {
         'User-Agent': 'VitalityTracker/0.1 (github.com/JeffJassky/vitality-tracker)',
         Accept: 'application/json',
       },
     });
+    const durationMs = Date.now() - t0;
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     if (data.status !== 1 || !data.product) {
+      rlog.info({ code, durationMs }, 'barcode: OFF product not found');
       return res.status(404).json({ error: 'Product not found' });
     }
     const normalized = normalizeOffProduct(data.product);
-    if (!normalized) return res.status(404).json({ error: 'Product missing nutrition data' });
+    if (!normalized) {
+      rlog.warn({ code, durationMs }, 'barcode: OFF product missing nutrition');
+      return res.status(404).json({ error: 'Product missing nutrition data' });
+    }
+    rlog.info({ code, durationMs, name: normalized.name }, 'barcode: OFF hit');
     return res.json({ result: normalized });
   } catch (err) {
-    console.error('[OFF barcode] failed', { code, error: err.message });
+    rlog.error({ ...errContext(err), code }, 'barcode: OFF lookup failed');
     return res.status(502).json({ error: 'Lookup failed' });
   }
 });
 
-// Update a food item's nutritional data. Changes propagate to every log entry
-// that references this item since they all point to the same FoodItem document.
 router.put('/:id', async (req, res) => {
   const { name, emoji, brand, servingSize, servingGrams, caloriesPer, proteinPer, fatPer, carbsPer } = req.body;
   const update = {};
@@ -374,13 +324,14 @@ router.put('/:id', async (req, res) => {
   if (carbsPer != null) update.carbsPer = Number(carbsPer);
 
   const item = await FoodItem.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) {
+    (req.log || log).warn({ itemId: req.params.id }, 'food item update: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  (req.log || log).info({ itemId: req.params.id, fields: Object.keys(update) }, 'food item updated');
   res.json({ item });
 });
 
-// Get recents — merged list of recently-used foods and recently-logged meals,
-// sorted by timestamp (newest first) so meals logged today surface above older
-// individual foods.
 router.get('/recents', async (req, res) => {
   const [recentFoods, recentMeals] = await Promise.all([
     RecentFood.find({ userId: req.userId })
@@ -427,18 +378,21 @@ router.get('/recents', async (req, res) => {
   const recents = [...foodEntries, ...mealEntries].sort(
     (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime(),
   );
+  (req.log || log).debug(
+    { foodCount: foodEntries.length, mealCount: mealEntries.length },
+    'food: recents fetched',
+  );
   res.json({ recents });
 });
 
-// Get favorites
 router.get('/favorites', async (req, res) => {
   const favorites = await FavoriteFood.find({ userId: req.userId })
     .sort({ createdAt: -1 })
     .populate('foodItemId');
+  (req.log || log).debug({ count: favorites.length }, 'food: favorites fetched');
   res.json({ favorites });
 });
 
-// Add favorite
 router.post('/favorites', async (req, res) => {
   const { foodItemId, defaultServingCount, defaultMealType } = req.body;
   const favorite = await FavoriteFood.findOneAndUpdate(
@@ -446,12 +400,13 @@ router.post('/favorites', async (req, res) => {
     { defaultServingCount, defaultMealType },
     { upsert: true, returnDocument: 'after' },
   );
+  (req.log || log).info({ foodItemId, favoriteId: String(favorite._id) }, 'food: favorite added');
   res.status(201).json({ favorite });
 });
 
-// Remove favorite
 router.delete('/favorites/:id', async (req, res) => {
   await FavoriteFood.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+  (req.log || log).info({ favoriteId: req.params.id }, 'food: favorite removed');
   res.status(204).send();
 });
 

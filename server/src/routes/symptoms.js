@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import Symptom from '../models/Symptom.js';
 import SymptomLog from '../models/SymptomLog.js';
+import { childLogger, errContext } from '../lib/logger.js';
 
+const log = childLogger('symptoms');
 const router = Router();
 
-// Defaults seeded the first time a user requests their symptom list. Order
-// is preserved so the UI shows them in this sequence.
 const DEFAULT_SYMPTOMS = [
   'Nausea',
   'Reflux / heartburn / acid burps',
@@ -20,32 +20,35 @@ async function ensureDefaults(userId) {
   const count = await Symptom.countDocuments({ userId });
   if (count > 0) return;
   const docs = DEFAULT_SYMPTOMS.map((name, i) => ({
-    userId,
-    name,
-    isDefault: true,
-    order: i,
+    userId, name, isDefault: true, order: i,
   }));
   try {
     await Symptom.insertMany(docs, { ordered: false });
+    log.info({ userId: String(userId), count: docs.length }, 'symptoms: seeded defaults');
   } catch (err) {
-    // Ignore duplicate-key races if two requests seed simultaneously.
-    if (err.code !== 11000) throw err;
+    if (err.code !== 11000) {
+      log.error({ ...errContext(err), userId: String(userId) }, 'symptoms: seed failed');
+      throw err;
+    }
+    log.debug({ userId: String(userId) }, 'symptoms: seed race (duplicate key, ignored)');
   }
 }
-
-// ---- Symptom types ------------------------------------------------------
 
 router.get('/', async (req, res) => {
   await ensureDefaults(req.userId);
   const symptoms = await Symptom.find({ userId: req.userId }).sort({ order: 1, createdAt: 1 });
+  (req.log || log).debug({ count: symptoms.length }, 'symptoms: list');
   res.json({ symptoms });
 });
 
 router.post('/', async (req, res) => {
+  const rlog = req.log || log;
   const { name } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
+  if (!name || !name.trim()) {
+    rlog.warn('symptoms create: missing name');
+    return res.status(400).json({ error: 'name required' });
+  }
 
-  // Pick an order value at the end of the existing list.
   const last = await Symptom.findOne({ userId: req.userId }).sort({ order: -1 });
   const order = last ? last.order + 1 : 0;
 
@@ -56,24 +59,31 @@ router.post('/', async (req, res) => {
       isDefault: false,
       order,
     });
+    rlog.info({ symptomId: String(symptom._id), name: symptom.name }, 'symptoms: created');
     res.status(201).json({ symptom });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ error: 'Symptom already exists' });
+    if (err.code === 11000) {
+      rlog.warn({ name }, 'symptoms create: duplicate name');
+      return res.status(409).json({ error: 'Symptom already exists' });
+    }
     throw err;
   }
 });
 
 router.delete('/:id', async (req, res) => {
   const symptom = await Symptom.findOneAndDelete({ _id: req.params.id, userId: req.userId });
-  if (!symptom) return res.status(404).json({ error: 'Not found' });
-  // Cascade: drop all logs for this symptom.
-  await SymptomLog.deleteMany({ userId: req.userId, symptomId: symptom._id });
+  if (!symptom) {
+    (req.log || log).warn({ symptomId: req.params.id }, 'symptoms delete: not found');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const { deletedCount } = await SymptomLog.deleteMany({ userId: req.userId, symptomId: symptom._id });
+  (req.log || log).info(
+    { symptomId: req.params.id, cascadedLogs: deletedCount },
+    'symptoms: deleted + cascaded logs',
+  );
   res.status(204).send();
 });
 
-// ---- Symptom logs -------------------------------------------------------
-
-// Get the set of dates that have at least one symptom log entry.
 router.get('/logged-dates', async (req, res) => {
   const { from, to } = req.query;
   const match = { userId: req.userId };
@@ -91,14 +101,16 @@ router.get('/logged-dates', async (req, res) => {
     { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } } } },
     { $sort: { _id: 1 } },
   ]);
+  (req.log || log).debug({ from, to, count: results.length }, 'symptoms: logged-dates');
   res.json({ dates: results.map((r) => r._id) });
 });
 
-// All symptom logs across a date range. Returns an array of
-// { symptomId, date (YYYY-MM-DD), severity } sorted by date.
 router.get('/logs/range', async (req, res) => {
   const { from, to } = req.query;
-  if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+  if (!from || !to) {
+    (req.log || log).warn({ from, to }, 'symptom logs range: missing from/to');
+    return res.status(400).json({ error: 'from and to required' });
+  }
 
   const rangeStart = new Date(from);
   const rangeEnd = new Date(to);
@@ -114,14 +126,16 @@ router.get('/logs/range', async (req, res) => {
     date: l.date.toISOString().slice(0, 10),
     severity: l.severity,
   }));
-
+  (req.log || log).debug({ from, to, count: results.length }, 'symptoms: logs range');
   res.json({ logs: results });
 });
 
-// All logs for a single date.
 router.get('/logs', async (req, res) => {
   const { date } = req.query;
-  if (!date) return res.status(400).json({ error: 'date required' });
+  if (!date) {
+    (req.log || log).warn('symptom logs: missing date');
+    return res.status(400).json({ error: 'date required' });
+  }
 
   const dayStart = new Date(date);
   const dayEnd = new Date(date);
@@ -131,37 +145,43 @@ router.get('/logs', async (req, res) => {
     userId: req.userId,
     date: { $gte: dayStart, $lt: dayEnd },
   });
+  (req.log || log).debug({ date, count: logs.length }, 'symptoms: day logs');
   res.json({ logs });
 });
 
-// Upsert a severity for (symptom, date). Body: { symptomId, date, severity }.
-// If severity is null, the log is removed instead.
 router.put('/logs', async (req, res) => {
+  const rlog = req.log || log;
   const { symptomId, date, severity } = req.body;
-  if (!symptomId || !date) return res.status(400).json({ error: 'symptomId and date required' });
+  if (!symptomId || !date) {
+    rlog.warn({ symptomId, date }, 'symptom log upsert: missing fields');
+    return res.status(400).json({ error: 'symptomId and date required' });
+  }
 
   const day = new Date(date);
 
   if (severity == null) {
-    await SymptomLog.findOneAndDelete({
+    const removed = await SymptomLog.findOneAndDelete({
       userId: req.userId,
       symptomId,
       date: day,
     });
+    rlog.info({ symptomId, date, existed: Boolean(removed) }, 'symptoms: log cleared');
     return res.json({ removed: true });
   }
 
   const sev = Number(severity);
   if (!Number.isInteger(sev) || sev < 0 || sev > 10) {
+    rlog.warn({ symptomId, severity }, 'symptom log upsert: severity out of range');
     return res.status(400).json({ error: 'severity must be 0-10' });
   }
 
-  const log = await SymptomLog.findOneAndUpdate(
+  const entry = await SymptomLog.findOneAndUpdate(
     { userId: req.userId, symptomId, date: day },
     { severity: sev },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   );
-  res.json({ log });
+  rlog.info({ symptomId, date, severity: sev }, 'symptoms: log upserted');
+  res.json({ log: entry });
 });
 
 export default router;

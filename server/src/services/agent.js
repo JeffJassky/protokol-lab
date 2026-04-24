@@ -10,6 +10,9 @@ import Symptom from "../models/Symptom.js";
 import SymptomLog from "../models/SymptomLog.js";
 import UserSettings from "../models/UserSettings.js";
 import Meal from "../models/Meal.js";
+import { childLogger, errContext } from "../lib/logger.js";
+
+const log = childLogger('agent');
 
 // Gemini 3 Flash is the first model family that supports combining the
 // built-in googleSearch tool with user-defined function declarations in the
@@ -243,6 +246,25 @@ function dateRange(startDate, endDate) {
 }
 
 async function executeTool(name, args, userId) {
+  const t0 = Date.now();
+  const tLog = log.child({ userId: String(userId), tool: name });
+  tLog.debug({ args }, 'tool: exec begin');
+  try {
+    const result = await executeToolImpl(name, args, userId);
+    const summary = Array.isArray(result)
+      ? { rows: result.length }
+      : typeof result === 'object' && result !== null
+      ? { keys: Object.keys(result).slice(0, 8) }
+      : {};
+    tLog.info({ ...summary, durationMs: Date.now() - t0 }, 'tool: exec ok');
+    return result;
+  } catch (err) {
+    tLog.error({ ...errContext(err), args, durationMs: Date.now() - t0 }, 'tool: exec failed');
+    throw err;
+  }
+}
+
+async function executeToolImpl(name, args, userId) {
   switch (name) {
     case "get_food_log": {
       const filter = { userId, date: dateRange(args.startDate, args.endDate) };
@@ -630,8 +652,12 @@ function renderSources(groundingMetadata) {
 }
 
 export async function* chatStream(userId, history) {
+  const sLog = log.child({ userId: String(userId) });
+  const streamStart = Date.now();
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    sLog.error('agent: GEMINI_API_KEY missing');
     yield { type: "error", message: "Gemini API key not configured" };
     return;
   }
@@ -640,7 +666,12 @@ export async function* chatStream(userId, history) {
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   yield { type: "status", text: "Loading your data..." };
+  const snapshotT0 = Date.now();
   const snapshot = await buildDataSnapshot(userId);
+  sLog.debug(
+    { bytes: snapshot.length, durationMs: Date.now() - snapshotT0 },
+    'agent: snapshot built',
+  );
 
   const ai = new GoogleGenAI({ apiKey });
 
@@ -681,7 +712,7 @@ RULES:
 4. Keep responses concise but informative. Use markdown tables for multi-day data.
 5. For nutrition analysis, always compare against the user's targets when available.
 6. Be encouraging but honest. If they're over/under targets, note it constructively.
-7. The user manages their own list of compounds (peptides, medications) in settings. Use the ENABLED COMPOUNDS line in the snapshot to know which ones are active. Be knowledgeable about common compounds the user might enable — GLP-1 agonists (retatrutide, tirzepatide, semaglutide), peptides (BPC-157, ipamorelin), etc. — including their effects, half-lives, and common side effects.
+7. The user manages their own list of compounds (peptides, medications) in settings. Use the ENABLED COMPOUNDS line in the snapshot to know which ones are active. Be knowledgeable about common classes the user might enable — GLP-1 receptor agonists, GLP-1/GIP co-agonists, amylin analogues, and other peptides — including typical half-lives, effects, and common side effects.
 8. When citing external information from web search, include links inline or the system will append a Sources block automatically.
 
 TODAY'S DATE: ${today}`;
@@ -714,13 +745,61 @@ TODAY'S DATE: ${today}`;
   let response = null;
   let iterations = 0;
   let sawWebSearch = false;
+  let totalToolCalls = 0;
+  let searchCalls = 0;
+
+  // Usage totals summed across every iteration of the agentic loop. Gemini
+  // bills per-call, and each call re-sends the full prompt, so summing the
+  // per-response usageMetadata gives the true billable token volume.
+  const usageTotals = {
+    inputTokens: 0,
+    outputTokens: 0,
+    thoughtTokens: 0,
+    toolTokens: 0,
+    cachedInputTokens: 0,
+    totalTokens: 0,
+  };
+
+  sLog.info(
+    { model: MODEL, historyMessages: history.length, maxIterations: MAX_ITERATIONS },
+    'agent: chat begin',
+  );
 
   while (iterations < MAX_ITERATIONS) {
-    response = await ai.models.generateContent({
-      model: MODEL,
-      contents,
-      config,
-    });
+    const iterT0 = Date.now();
+    try {
+      response = await ai.models.generateContent({
+        model: MODEL,
+        contents,
+        config,
+      });
+    } catch (err) {
+      sLog.error(
+        { ...errContext(err), iteration: iterations, model: MODEL },
+        'agent: generateContent failed',
+      );
+      throw err;
+    }
+    const usage = response?.usageMetadata;
+    if (usage) {
+      usageTotals.inputTokens += usage.promptTokenCount || 0;
+      usageTotals.outputTokens += usage.candidatesTokenCount || 0;
+      usageTotals.thoughtTokens += usage.thoughtsTokenCount || 0;
+      usageTotals.toolTokens += usage.toolUsePromptTokenCount || 0;
+      usageTotals.cachedInputTokens += usage.cachedContentTokenCount || 0;
+      usageTotals.totalTokens += usage.totalTokenCount || 0;
+    }
+    sLog.debug(
+      {
+        iteration: iterations,
+        durationMs: Date.now() - iterT0,
+        promptTokens: usage?.promptTokenCount,
+        candidateTokens: usage?.candidatesTokenCount,
+        totalTokens: usage?.totalTokenCount,
+        finishReason: response?.candidates?.[0]?.finishReason,
+      },
+      'agent: iteration complete',
+    );
 
     const candidate = response.candidates?.[0];
     const parts = candidate?.content?.parts || [];
@@ -738,19 +817,29 @@ TODAY'S DATE: ${today}`;
     // Detect server-side web search invocations for this turn (Gemini handled
     // them itself — there's no function response to send back).
     const groundingThisTurn = candidate?.groundingMetadata;
-    if (!sawWebSearch && groundingThisTurn?.webSearchQueries?.length) {
-      sawWebSearch = true;
-      for (const q of groundingThisTurn.webSearchQueries) {
-        yield {
-          type: "tool_call",
-          name: "web_search",
-          summary: `Searching the web: "${q}"`,
-        };
+    const queriesThisTurn = groundingThisTurn?.webSearchQueries || [];
+    if (queriesThisTurn.length) {
+      searchCalls += queriesThisTurn.length;
+      if (!sawWebSearch) {
+        sawWebSearch = true;
+        for (const q of queriesThisTurn) {
+          yield {
+            type: "tool_call",
+            name: "web_search",
+            summary: `Searching the web: "${q}"`,
+          };
+        }
       }
     }
 
     const functionCalls = parts.filter((p) => p.functionCall);
     if (functionCalls.length === 0) break;
+
+    totalToolCalls += functionCalls.length;
+    sLog.info(
+      { iteration: iterations, toolCalls: functionCalls.map((c) => c.functionCall.name) },
+      'agent: tool calls requested',
+    );
 
     // Emit client-side tool_call events
     for (const call of functionCalls) {
@@ -801,6 +890,20 @@ TODAY'S DATE: ${today}`;
   }
 
   if (iterations >= MAX_ITERATIONS) {
+    sLog.warn(
+      { iterations, totalToolCalls, durationMs: Date.now() - streamStart },
+      'agent: hit MAX_ITERATIONS',
+    );
+    yield {
+      type: "usage",
+      model: MODEL,
+      status: "max_iterations",
+      iterations,
+      toolCalls: totalToolCalls,
+      searchCalls,
+      durationMs: Date.now() - streamStart,
+      ...usageTotals,
+    };
     yield {
       type: "final",
       text: "I hit my complexity limit on this question. Try breaking it into smaller parts?",
@@ -818,6 +921,28 @@ TODAY'S DATE: ${today}`;
 
   const sourcesBlock = renderSources(finalCandidate?.groundingMetadata);
   const finalHtml = await marked.parse((finalText || "") + sourcesBlock);
+  sLog.info(
+    {
+      iterations,
+      totalToolCalls,
+      sawWebSearch,
+      searchCalls,
+      finalTextLength: finalText.length,
+      ...usageTotals,
+      durationMs: Date.now() - streamStart,
+    },
+    'agent: chat done',
+  );
+  yield {
+    type: "usage",
+    model: MODEL,
+    status: "ok",
+    iterations,
+    toolCalls: totalToolCalls,
+    searchCalls,
+    durationMs: Date.now() - streamStart,
+    ...usageTotals,
+  };
   yield { type: "final", html: finalHtml };
 }
 

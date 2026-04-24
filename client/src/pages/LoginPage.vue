@@ -1,25 +1,39 @@
 <script setup>
-import { ref } from 'vue';
-import { useRouter, RouterLink } from 'vue-router';
+import { ref, computed } from 'vue';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import { startCheckout } from '../api/stripe.js';
+import { PLANS } from '../../../shared/plans.js';
 
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 
 const email = ref('');
 const password = ref('');
 const error = ref('');
 const loading = ref(false);
 
+const intendedPlanId = computed(() => {
+  const id = route.query.plan;
+  return id && PLANS[id] && PLANS[id].pricing.requiresCheckout ? id : null;
+});
+const intendedInterval = computed(() =>
+  route.query.interval === 'yearly' ? 'yearly' : 'monthly',
+);
+
 async function handleLogin() {
   error.value = '';
   loading.value = true;
   try {
     await auth.login(email.value, password.value);
+    if (intendedPlanId.value) {
+      await startCheckout(intendedPlanId.value, intendedInterval.value);
+      return;
+    }
     router.push('/');
   } catch (err) {
     error.value = err.message;
-  } finally {
     loading.value = false;
   }
 }
@@ -49,7 +63,9 @@ async function handleLogin() {
       </p>
       <p class="switch">
         Don't have an account?
-        <RouterLink to="/register">Create one</RouterLink>
+        <RouterLink :to="intendedPlanId
+          ? { path: '/register', query: { plan: intendedPlanId, interval: intendedInterval } }
+          : '/register'">Create one</RouterLink>
       </p>
     </div>
   </div>

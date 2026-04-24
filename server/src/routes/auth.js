@@ -6,11 +6,11 @@ import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { sendPasswordResetEmail, sendWelcomeEmail } from '../services/email.js';
+import { childLogger, errContext } from '../lib/logger.js';
 
+const log = childLogger('auth');
 const router = Router();
 
-// sameSite=none is required when the frontend and API live on different
-// eTLD+1 domains, and the browser then also requires secure=true.
 const SAMESITE = process.env.COOKIE_SAMESITE || 'lax';
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -22,8 +22,6 @@ const COOKIE_OPTS = {
 const RESET_TOKEN_TTL_MS = 120 * 60 * 1000;
 const RESET_RESEND_MIN_MS = 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Precomputed bcrypt hash of a random string — used to equalize login timing
-// when the email is not found, so attackers can't distinguish missing vs wrong-password.
 const DUMMY_HASH = '$2b$10$CwTycUXWue0Thq9StjUM0uJ8.q2FujYYQH3VjXm9gxzQc.IgXe3uS';
 
 function signToken(userId) {
@@ -43,6 +41,10 @@ const registerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts, try again later' },
+  handler: (req, res, next, options) => {
+    (req.log || log).warn({ ip: req.ip, path: req.path }, 'rate limit: register');
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 const forgotLimiter = rateLimit({
@@ -51,6 +53,10 @@ const forgotLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts, try again later' },
+  handler: (req, res, next, options) => {
+    (req.log || log).warn({ ip: req.ip }, 'rate limit: forgot-password');
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 const resetLimiter = rateLimit({
@@ -59,6 +65,10 @@ const resetLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts, try again later' },
+  handler: (req, res, next, options) => {
+    (req.log || log).warn({ ip: req.ip }, 'rate limit: reset-password');
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 const loginLimiter = rateLimit({
@@ -67,84 +77,114 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts, try again later' },
+  handler: (req, res, next, options) => {
+    (req.log || log).warn({ ip: req.ip }, 'rate limit: login');
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 router.post('/register', registerLimiter, async (req, res) => {
+  const rlog = req.log || log;
   const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
   const password = req.body?.password;
 
   if (!email || !EMAIL_RE.test(email)) {
+    rlog.warn({ email }, 'register: invalid email');
     return res.status(400).json({ error: 'Valid email required' });
   }
   const pwError = validatePassword(password);
-  if (pwError) return res.status(400).json({ error: pwError });
+  if (pwError) {
+    rlog.warn({ email, reason: pwError }, 'register: invalid password');
+    return res.status(400).json({ error: pwError });
+  }
 
   const existing = await User.findOne({ email });
   if (existing) {
+    rlog.warn({ email }, 'register: email already exists');
     return res.status(409).json({ error: 'An account with that email already exists' });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await User.create({ email, passwordHash });
+  rlog.info({ userId: String(user._id), email }, 'register: new user created');
 
   const token = signToken(user._id);
   res.cookie('token', token, COOKIE_OPTS);
 
   sendWelcomeEmail(user.email).catch((err) => {
-    console.error('[auth] welcome email failed:', err.message);
+    rlog.error({ ...errContext(err), userId: String(user._id) }, 'register: welcome email failed');
   });
 
   res.status(201).json({ user: { id: user._id, email: user.email } });
 });
 
 router.post('/login', loginLimiter, async (req, res) => {
+  const rlog = req.log || log;
   const { email, password } = req.body;
   if (!email || !password) {
+    rlog.warn('login: missing credentials');
     return res.status(400).json({ error: 'Email and password required' });
   }
 
-  const user = await User.findOne({ email: email.toLowerCase().trim() });
+  const normalized = email.toLowerCase().trim();
+  const user = await User.findOne({ email: normalized });
   const hash = user ? user.passwordHash : DUMMY_HASH;
   const valid = await bcrypt.compare(password, hash);
   if (!user || !valid) {
+    rlog.warn({ email: normalized, userFound: Boolean(user) }, 'login: invalid credentials');
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
   const token = signToken(user._id);
   res.cookie('token', token, COOKIE_OPTS);
+  rlog.info({ userId: String(user._id), email: normalized }, 'login: success');
 
   res.json({ user: { id: user._id, email: user.email } });
 });
 
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: { id: req.user._id, email: req.user.email } });
+  const u = req.user;
+  res.json({
+    user: {
+      id: u._id,
+      email: u.email,
+      isAdmin: Boolean(u.isAdmin),
+      plan: u.plan,
+      planActivatedAt: u.planActivatedAt,
+      planExpiresAt: u.planExpiresAt,
+      hasStripeCustomer: Boolean(u.stripeCustomerId),
+      hasActiveSubscription: Boolean(u.stripeSubscriptionId),
+    },
+  });
 });
 
 router.post('/logout', (req, res) => {
+  (req.log || log).info('logout');
   res.clearCookie('token');
   res.json({ ok: true });
 });
 
 router.post('/forgot-password', forgotLimiter, async (req, res) => {
+  const rlog = req.log || log;
   const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
-  // Always respond OK — don't reveal whether an account exists.
   const genericOk = { ok: true };
 
   if (!email || !EMAIL_RE.test(email)) {
+    rlog.debug('forgot-password: invalid email format (silent ok)');
     return res.json(genericOk);
   }
 
   const user = await User.findOne({ email });
   if (!user) {
+    rlog.debug({ email }, 'forgot-password: no account (silent ok)');
     return res.json(genericOk);
   }
 
-  // Skip issuing a fresh token if one was minted very recently — prevents
-  // attackers from flooding a victim's inbox via distributed IPs.
   if (
     user.passwordResetExpiresAt &&
     user.passwordResetExpiresAt.getTime() - RESET_TOKEN_TTL_MS > Date.now() - RESET_RESEND_MIN_MS
   ) {
+    rlog.info({ userId: String(user._id) }, 'forgot-password: throttled, token still fresh');
     return res.json(genericOk);
   }
 
@@ -160,21 +200,26 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 
   try {
     await sendPasswordResetEmail(user.email, resetUrl);
+    rlog.info({ userId: String(user._id) }, 'forgot-password: reset email sent');
   } catch (err) {
-    console.error('[auth] reset email failed:', err.message);
-    // Still return generic OK to preserve anti-enumeration.
+    rlog.error({ ...errContext(err), userId: String(user._id) }, 'forgot-password: reset email failed');
   }
 
   res.json(genericOk);
 });
 
 router.post('/reset-password', resetLimiter, async (req, res) => {
+  const rlog = req.log || log;
   const { token, password } = req.body || {};
   if (!token || typeof token !== 'string') {
+    rlog.warn('reset-password: missing/invalid token');
     return res.status(400).json({ error: 'Invalid or expired reset link' });
   }
   const pwError = validatePassword(password);
-  if (pwError) return res.status(400).json({ error: pwError });
+  if (pwError) {
+    rlog.warn({ reason: pwError }, 'reset-password: invalid password');
+    return res.status(400).json({ error: pwError });
+  }
 
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -184,6 +229,7 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
   });
 
   if (!user) {
+    rlog.warn('reset-password: token not found or expired');
     return res.status(400).json({ error: 'Invalid or expired reset link' });
   }
 
@@ -191,6 +237,7 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
   user.passwordResetTokenHash = null;
   user.passwordResetExpiresAt = null;
   await user.save();
+  rlog.info({ userId: String(user._id) }, 'reset-password: success');
 
   res.json({ ok: true });
 });

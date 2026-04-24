@@ -51,6 +51,7 @@ async function handleLogout() {
         <router-link to="/">Log</router-link>
         <router-link to="/dashboard">Dashboard</router-link>
         <router-link to="/settings">Settings</router-link>
+        <router-link v-if="auth.user?.isAdmin" to="/admin" class="admin-link">Admin</router-link>
         <button
           class="theme-toggle"
           type="button"
@@ -157,6 +158,11 @@ async function handleLogout() {
   color: var(--primary);
   background: var(--primary-soft);
   font-weight: var(--font-weight-medium);
+}
+.nav-links a.admin-link {
+  color: var(--primary);
+  border: 1px solid var(--border);
+  margin-left: var(--space-1);
 }
 .theme-toggle {
   display: inline-flex;

@@ -1,16 +1,33 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { useRouter, RouterLink } from 'vue-router';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import { startCheckout } from '../api/stripe.js';
+import { PLANS } from '../../../shared/plans.js';
 
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 
 const email = ref('');
 const password = ref('');
 const confirm = ref('');
 const error = ref('');
 const loading = ref(false);
+
+// Intent carried in from the marketing page — when present, the post-register
+// flow redirects the new user straight into Stripe Checkout instead of the app.
+const intendedPlanId = computed(() => {
+  const id = route.query.plan;
+  return id && PLANS[id] && PLANS[id].pricing.requiresCheckout ? id : null;
+});
+const intendedInterval = computed(() => {
+  const i = route.query.interval;
+  return i === 'yearly' ? 'yearly' : 'monthly';
+});
+const intendedPlan = computed(() =>
+  intendedPlanId.value ? PLANS[intendedPlanId.value] : null,
+);
 
 const passwordValid = computed(() => password.value.length >= 8);
 const passwordsMatch = computed(() => password.value === confirm.value);
@@ -28,10 +45,15 @@ async function handleRegister() {
   loading.value = true;
   try {
     await auth.register(email.value, password.value);
+    if (intendedPlanId.value) {
+      // Browser will navigate to Stripe. Keep loading=true so the button stays
+      // disabled through the redirect — avoids double-clicks.
+      await startCheckout(intendedPlanId.value, intendedInterval.value);
+      return;
+    }
     router.push('/');
   } catch (err) {
     error.value = err.message;
-  } finally {
     loading.value = false;
   }
 }
@@ -41,7 +63,12 @@ async function handleRegister() {
   <div class="auth-page">
     <div class="auth-card">
       <h1>Create your account</h1>
-      <p class="subtitle">Start tracking your nutrition and weight</p>
+      <p v-if="intendedPlan" class="subtitle trial-subtitle">
+        Start your <strong>14-day free trial</strong> of
+        <strong>{{ intendedPlan.marketing.title }}</strong>.
+        No charge until the trial ends.
+      </p>
+      <p v-else class="subtitle">Start tracking your nutrition and weight</p>
       <form @submit.prevent="handleRegister">
         <div class="field">
           <label for="email">Email</label>
@@ -58,12 +85,20 @@ async function handleRegister() {
         </div>
         <p v-if="error" class="error">{{ error }}</p>
         <button type="submit" class="btn-primary" :disabled="loading">
-          {{ loading ? 'Creating account...' : 'Create account' }}
+          <span v-if="loading">
+            {{ intendedPlan ? 'Opening checkout…' : 'Creating account…' }}
+          </span>
+          <span v-else-if="intendedPlan">
+            Continue to checkout →
+          </span>
+          <span v-else>Create account</span>
         </button>
       </form>
       <p class="switch">
         Already have an account?
-        <RouterLink to="/login">Sign in</RouterLink>
+        <RouterLink :to="intendedPlanId
+          ? { path: '/login', query: { plan: intendedPlanId, interval: intendedInterval } }
+          : '/login'">Sign in</RouterLink>
       </p>
     </div>
   </div>
@@ -95,6 +130,13 @@ async function handleRegister() {
   color: var(--text-secondary);
   font-size: var(--font-size-s);
   margin-bottom: var(--space-6);
+}
+.trial-subtitle {
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: var(--radius-small);
+  line-height: 1.5;
 }
 .field {
   margin-bottom: var(--space-4);
