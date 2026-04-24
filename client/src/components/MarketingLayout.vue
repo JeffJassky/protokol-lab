@@ -1,10 +1,17 @@
 <script setup>
-import { useRouter } from 'vue-router';
+import { ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { MARKETING_NAV } from '../marketing-nav.js';
 
 const router = useRouter();
+const route = useRoute();
 const goLogin = () => router.push('/login');
 const goHome = () => router.push('/');
+
+const menuOpen = ref(false);
+const toggleMenu = () => { menuOpen.value = !menuOpen.value; };
+const closeMenu = () => { menuOpen.value = false; };
+watch(() => route.fullPath, closeMenu);
 </script>
 
 <template>
@@ -28,7 +35,35 @@ const goHome = () => router.push('/');
         <nav class="nav-links" aria-label="Primary">
           <a v-for="l in MARKETING_NAV" :key="l.href" :href="l.href" class="nav-link">{{ l.label }}</a>
         </nav>
-        <button class="nav-cta" @click="goLogin">Sign in</button>
+        <button class="nav-cta nav-cta-desktop" @click="goLogin">Sign in</button>
+        <button
+          class="nav-burger"
+          :aria-expanded="menuOpen"
+          aria-controls="mkt-mobile-menu"
+          aria-label="Toggle menu"
+          @click="toggleMenu"
+        >
+          <span class="burger-bar" :class="{ open: menuOpen }"></span>
+          <span class="burger-bar" :class="{ open: menuOpen }"></span>
+          <span class="burger-bar" :class="{ open: menuOpen }"></span>
+        </button>
+      </div>
+      <div
+        id="mkt-mobile-menu"
+        class="mobile-menu"
+        :class="{ open: menuOpen }"
+        :aria-hidden="!menuOpen"
+      >
+        <div class="wrap mobile-menu-inner">
+          <a
+            v-for="l in MARKETING_NAV"
+            :key="l.href"
+            :href="l.href"
+            class="mobile-link"
+            @click="closeMenu"
+          >{{ l.label }}</a>
+          <button class="nav-cta mobile-cta" @click="goLogin">Sign in</button>
+        </div>
       </div>
     </div>
 
@@ -159,6 +194,64 @@ const goHome = () => router.push('/');
 }
 .nav-cta:hover { background: var(--primary); color: var(--bg); }
 
+.nav-burger {
+  display: none;
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  width: 40px; height: 40px;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.burger-bar {
+  display: block;
+  width: 18px; height: 1.5px;
+  background: var(--text);
+  transition: transform .2s, opacity .2s;
+  transform-origin: center;
+}
+.burger-bar.open:nth-child(1) { transform: translateY(6.5px) rotate(45deg); }
+.burger-bar.open:nth-child(2) { opacity: 0; }
+.burger-bar.open:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
+
+.mobile-menu {
+  display: none;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 97%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .25s ease;
+}
+.mobile-menu.open { max-height: 70vh; }
+.mobile-menu-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 32px 16px;
+}
+.mobile-link {
+  display: block;
+  padding: 14px 0;
+  font-size: 13px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+.mobile-link:hover { color: var(--primary); }
+.mobile-cta {
+  margin-top: 16px;
+  align-self: flex-start;
+}
+
 .mkt-footer {
   padding: 64px 0 48px;
   border-top: 1px solid var(--border);
@@ -203,5 +296,10 @@ const goHome = () => router.push('/');
 @media (max-width: 768px) {
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .nav-links { display: none; }
+  .nav-cta-desktop { display: none; }
+  .nav-burger { display: inline-flex; }
+  .mobile-menu { display: block; }
+  .wrap { padding: 0 20px; }
+  .mobile-menu-inner { padding: 8px 20px 16px; }
 }
 </style>

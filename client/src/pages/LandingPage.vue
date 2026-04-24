@@ -376,7 +376,7 @@ const aiTrail = [
           </div>
           <h1>
             The tracker<br />
-            <span class="accent">built for GLP-1s.</span
+            <span class="accent">built for <span class="nowrap">GLP-1s.</span></span
             ><span class="cursor"></span>
           </h1>
           <p class="hero-lead">
@@ -1395,7 +1395,7 @@ const aiTrail = [
 
 /* ---- Hero --------------------------------------------------------- */
 .hero {
-  padding: 72px 0 96px;
+  padding-top: 72px; padding-bottom: 96px;
   display: grid; grid-template-columns: 1fr 1.18fr; gap: 64px;
   align-items: center;
   border-bottom: 1px solid var(--border);
@@ -1557,8 +1557,8 @@ const aiTrail = [
 .svg-axis-tag   { font-size: 9px;  fill: var(--text-tertiary); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 
 /* ---- Sections ----------------------------------------------------- */
-section { padding: 96px 0; border-bottom: 1px solid var(--border); }
-section.hero { padding: 72px 0 96px; }
+section { padding-top: 96px; padding-bottom: 96px; border-bottom: 1px solid var(--border); }
+section.hero { padding-top: 72px; padding-bottom: 96px; }
 .section-head { margin-bottom: 56px; max-width: 780px; }
 .section-head.center { text-align: center; margin: 0 auto 56px; }
 .section-head h2 {
@@ -1982,7 +1982,7 @@ footer {
 
 /* ---- Responsive --------------------------------------------------- */
 @media (max-width: 980px) {
-  .hero { grid-template-columns: 1fr; padding: 56px 0; }
+  .hero { grid-template-columns: 1fr; padding-top: 56px; padding-bottom: 56px; }
   .hero h1 { font-size: 44px; }
   .feat-row, .feat-row.reverse { grid-template-columns: 1fr; gap: 36px; }
   .feat-row.reverse .feat-text { order: 1; }
@@ -1991,4 +1991,14 @@ footer {
   .fg-cell { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
 }
+@media (max-width: 560px) {
+  .wrap { padding: 0 20px; }
+  .hero { padding-top: 40px; padding-bottom: 64px; gap: 40px; }
+  .hero h1 { font-size: 36px; letter-spacing: -0.01em; }
+  .hero-lead { font-size: 14px; }
+  .eyebrow { font-size: 10px; letter-spacing: 0.14em; }
+  .hero-ctas { flex-wrap: wrap; gap: 10px; }
+  .hero-ctas .btn-primary, .hero-ctas .btn-secondary { flex: 1 1 auto; }
+}
+.nowrap { white-space: nowrap; }
 </style>
