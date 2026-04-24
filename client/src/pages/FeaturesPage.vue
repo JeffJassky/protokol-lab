@@ -1075,7 +1075,7 @@ const platformRows = [
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 .scanlines {
   position: fixed; inset: 0; pointer-events: none; z-index: 100;

@@ -3,10 +3,37 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { startCheckout } from '../api/stripe.js';
+import { PLANS, PLAN_IDS } from '../../../shared/plans.js';
 
 const router = useRouter();
 const auth = useAuthStore();
 const checkoutErr = ref('');
+const billingInterval = ref('yearly');
+
+const premiumPlan = PLANS[PLAN_IDS.PREMIUM];
+const unlimitedPlan = PLANS[PLAN_IDS.UNLIMITED];
+
+function monthlyDisplay(plan) {
+  const v = billingInterval.value === 'yearly'
+    ? plan.pricing.yearlyEffectiveMonthlyUsd
+    : plan.pricing.monthlyUsd;
+  return v.toFixed(2);
+}
+function yearSavingsUsd(plan) {
+  return Math.round(plan.pricing.monthlyUsd * 12 - plan.pricing.yearlyUsd);
+}
+function priceNote(plan) {
+  const save = yearSavingsUsd(plan);
+  const yr = plan.pricing.yearlyUsd;
+  return billingInterval.value === 'yearly'
+    ? `Billed as $${yr}/year — save $${save}`
+    : `$${yr}/year — save $${save} on annual`;
+}
+const annualSavePct = computed(() => {
+  const p = premiumPlan.pricing;
+  if (!p.monthlyUsd || !p.yearlyUsd) return 0;
+  return Math.round((1 - p.yearlyUsd / (p.monthlyUsd * 12)) * 100);
+});
 
 // Route a visitor through whichever signup path matches their intent.
 //   goRegister()                         → free account flow
@@ -1086,6 +1113,24 @@ const aiTrail = [
             Try any paid plan free for 14 days. Cancel anytime before the trial ends — no charge.
           </p>
         </div>
+        <div class="price-toggle" role="tablist" aria-label="Billing interval">
+          <button
+            type="button"
+            class="price-toggle-btn"
+            :class="{ active: billingInterval === 'monthly' }"
+            role="tab"
+            :aria-selected="billingInterval === 'monthly'"
+            @click="billingInterval = 'monthly'"
+          >Monthly</button>
+          <button
+            type="button"
+            class="price-toggle-btn"
+            :class="{ active: billingInterval === 'yearly' }"
+            role="tab"
+            :aria-selected="billingInterval === 'yearly'"
+            @click="billingInterval = 'yearly'"
+          >Yearly <span class="price-save-tag">save {{ annualSavePct }}%</span></button>
+        </div>
         <div class="price-cards three">
           <div class="price-card">
             <div class="price-kind">Free</div>
@@ -1110,7 +1155,7 @@ const aiTrail = [
           <div class="price-card featured">
             <div class="price-kind accent">Premium</div>
             <div class="price-amount">
-              $9.99<span class="per"> / month</span>
+              ${{ monthlyDisplay(premiumPlan) }}<span class="per"> / month</span>
             </div>
             <div class="price-desc">
               Everything in Free, plus the tools that turn your data into
@@ -1124,15 +1169,15 @@ const aiTrail = [
               <li>Cloud sync across devices</li>
               <li>Export all your data, anytime</li>
             </ul>
-            <button class="btn-primary wide" @click="goRegister('premium', 'monthly')">
-              Start 14-day free trial →
+            <button class="btn-primary wide" @click="goRegister(premiumPlan.id, billingInterval)">
+              Start {{ premiumPlan.pricing.trialDays }}-day free trial →
             </button>
-            <div class="price-trial-note">$79/year — save $41</div>
+            <div class="price-trial-note">{{ priceNote(premiumPlan) }}</div>
           </div>
           <div class="price-card">
             <div class="price-kind">Unlimited</div>
             <div class="price-amount">
-              $19.99<span class="per"> / month</span>
+              ${{ monthlyDisplay(unlimitedPlan) }}<span class="per"> / month</span>
             </div>
             <div class="price-desc">
               Everything in Premium, with the AI coach uncapped. For heavy
@@ -1144,10 +1189,10 @@ const aiTrail = [
               <li>Food image recognition, uncapped</li>
               <li>Priority support</li>
             </ul>
-            <button class="btn-secondary wide" @click="goRegister('unlimited', 'monthly')">
-              Start 14-day free trial →
+            <button class="btn-secondary wide" @click="goRegister(unlimitedPlan.id, billingInterval)">
+              Start {{ unlimitedPlan.pricing.trialDays }}-day free trial →
             </button>
-            <div class="price-trial-note">$149/year — save $91</div>
+            <div class="price-trial-note">{{ priceNote(unlimitedPlan) }}</div>
           </div>
         </div>
       </div>
@@ -1275,7 +1320,7 @@ const aiTrail = [
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Scanline + vignette — scoped to landing only */
@@ -1736,6 +1781,50 @@ section.hero { padding: 72px 0 96px; }
   max-width: 520px;
   margin: 12px auto 0;
   line-height: 1.5;
+}
+.price-toggle {
+  display: flex;
+  width: fit-content;
+  margin: 28px auto 32px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  gap: 4px;
+}
+.price-toggle-btn {
+  padding: 10px 18px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color .15s, background .15s;
+}
+.price-toggle-btn:hover { color: var(--text); }
+.price-toggle-btn.active {
+  background: var(--primary);
+  color: var(--bg);
+}
+.price-save-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.price-toggle-btn.active .price-save-tag {
+  background: color-mix(in srgb, var(--bg) 25%, transparent);
+  color: var(--bg);
+  border-color: color-mix(in srgb, var(--bg) 40%, transparent);
 }
 .price-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 860px; margin: 0 auto; }
 .price-cards.three { grid-template-columns: 1fr 1fr 1fr; max-width: 1080px; }

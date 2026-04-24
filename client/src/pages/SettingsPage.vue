@@ -59,6 +59,18 @@ function priceLabelFor(plan) {
   return `$${plan.pricing.monthlyUsd.toFixed(2)}/mo`;
 }
 
+// Max annual savings across paid plans — shown on the Yearly toggle tag.
+const annualSavePct = computed(() => {
+  let best = 0;
+  for (const p of paidPlans) {
+    const { monthlyUsd, yearlyUsd } = p.pricing;
+    if (!monthlyUsd || !yearlyUsd) continue;
+    const pct = Math.round((1 - yearlyUsd / (monthlyUsd * 12)) * 100);
+    if (pct > best) best = pct;
+  }
+  return best;
+});
+
 async function loadSubscription() {
   subLoading.value = true;
   try {
@@ -629,7 +641,7 @@ watch(
               class="sub-interval-btn"
               :class="{ active: billingInterval === 'yearly' }"
               @click="billingInterval = 'yearly'"
-            >Yearly <span class="sub-save-tag">save ~35%</span></button>
+            >Yearly <span class="sub-save-tag">save {{ annualSavePct }}%</span></button>
           </div>
 
           <div class="sub-plans">
