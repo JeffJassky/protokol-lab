@@ -415,6 +415,20 @@ export const MARKETING_META = {
     },
     sitemap: { priority: 0.7, changefreq: 'monthly' },
   },
+  '/blog/managing-glp1-side-effects.html': {
+    static: true,
+    title: 'Managing GLP-1 Side Effects: A Practical Overview | Protokol Lab',
+    description: 'Educational overview of nausea, reflux, sulfur burps, constipation, diarrhea, and fatigue on Ozempic, Wegovy, Mounjaro, Zepbound — what causes each, what users commonly try, and when to call a prescriber.',
+    og: {
+      variant: 'blog-side-effects',
+      eyebrow: 'Blog · Side effects',
+      titleLines: ['Managing GLP-1', 'side effects.'],
+      accent: 'side effects.',
+      subtitle: 'Nausea, reflux, sulfur burps, constipation, diarrhea, fatigue. What causes each and what users commonly try. Educational overview, not medical advice.',
+      chartVariant: 'pk',
+    },
+    sitemap: { priority: 0.8, changefreq: 'monthly' },
+  },
 };
 
 // ----- Per-competitor /compare/<slug> entries ----------------------------

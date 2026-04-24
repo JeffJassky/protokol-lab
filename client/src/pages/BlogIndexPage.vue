@@ -31,6 +31,12 @@ const posts = [
     excerpt: 'Same peptide, three deliveries. The practical differences between Ozempic, Wegovy, and compounded semaglutide — and why the tracker treats them identically.',
     date: '2026-03-20',
   },
+  {
+    slug: 'managing-glp1-side-effects',
+    title: 'Managing GLP-1 Side Effects: A Practical Overview',
+    excerpt: 'An educational overview of nausea, reflux, sulfur burps, constipation, diarrhea, and fatigue on Ozempic, Wegovy, Mounjaro, and Zepbound — what causes them, what users commonly try, and when to call a prescriber.',
+    date: '2026-04-24',
+  },
 ];
 
 // Blog schema is built from the visible `posts` array above so the two
