@@ -1,0 +1,194 @@
+/* Shared marketing-page styling. Imported by standalone SEO pages
+ * (PricingPage, AiPage, CompoundsPage, FaqPage, AboutPage, etc.)
+ * Keeps nav + footer + typography consistent with LandingPage/FeaturesPage
+ * while avoiding duplicating the 500-line scoped <style> blocks those
+ * pages already have.
+ */
+
+.mkt-page {
+  padding: 56px 0 96px;
+}
+.mkt-page .wrap { max-width: 1040px; margin: 0 auto; padding: 0 32px; }
+
+.mkt-eyebrow {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.mkt-eyebrow::before {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: var(--text-tertiary);
+}
+
+.mkt-h1 {
+  font-family: var(--font-display);
+  font-size: 48px;
+  line-height: 1.02;
+  margin: 0 0 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.mkt-h1 .accent { color: var(--primary); }
+
+.mkt-lead {
+  font-size: 15px;
+  color: var(--text-secondary);
+  max-width: 720px;
+  line-height: 1.7;
+  margin: 0 0 40px;
+}
+
+.mkt-h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.15;
+  margin: 48px 0 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.mkt-h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  margin: 24px 0 8px;
+  font-weight: 700;
+}
+.mkt-p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0 0 14px;
+  max-width: 720px;
+}
+.mkt-p a, .mkt-table a, .faq-body a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.mkt-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0 32px;
+  font-size: 13px;
+}
+.mkt-table th, .mkt-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.mkt-table th {
+  color: var(--text-tertiary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+}
+
+.mkt-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin: 24px 0 32px;
+}
+.mkt-card {
+  border: 1px solid var(--border);
+  padding: 24px;
+  background: var(--surface);
+}
+.mkt-card h3 {
+  font-size: 16px;
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+.mkt-card p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.mkt-ul {
+  padding-left: 20px;
+  margin: 0 0 24px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  max-width: 720px;
+}
+.mkt-ul li { margin-bottom: 4px; }
+
+.mkt-cta-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+.mkt-btn-primary {
+  padding: 14px 22px;
+  background: var(--primary);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-block;
+}
+.mkt-btn-secondary {
+  padding: 14px 22px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-block;
+}
+
+/* FAQ */
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+}
+.faq-q {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--text);
+}
+.faq-body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 720px;
+}
+
+/* Callout */
+.mkt-callout {
+  border-left: 2px solid var(--primary);
+  padding: 14px 18px;
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 24px 0;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .mkt-h1 { font-size: 36px; }
+  .mkt-h2 { font-size: 22px; }
+}

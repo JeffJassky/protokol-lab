@@ -148,12 +148,45 @@ router.get('/me', requireAuth, (req, res) => {
     user: {
       id: u._id,
       email: u.email,
+      displayName: u.displayName || null,
       isAdmin: Boolean(u.isAdmin),
       plan: u.plan,
       planActivatedAt: u.planActivatedAt,
       planExpiresAt: u.planExpiresAt,
       hasStripeCustomer: Boolean(u.stripeCustomerId),
       hasActiveSubscription: Boolean(u.stripeSubscriptionId),
+    },
+  });
+});
+
+router.patch('/me', requireAuth, async (req, res) => {
+  const rlog = req.log || log;
+  const update = {};
+  if (req.body?.displayName !== undefined) {
+    const raw = typeof req.body.displayName === 'string' ? req.body.displayName.trim() : '';
+    if (raw.length > 60) {
+      return res.status(400).json({ error: 'Display name too long (max 60)' });
+    }
+    update.displayName = raw || null;
+  }
+  if (!Object.keys(update).length) {
+    return res.status(400).json({ error: 'nothing_to_update' });
+  }
+  const user = await User.findByIdAndUpdate(req.userId, { $set: update }, { new: true })
+    .select('-passwordHash');
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  rlog.info({ userId: String(user._id), fields: Object.keys(update) }, 'auth: profile updated');
+  res.json({
+    user: {
+      id: user._id,
+      email: user.email,
+      displayName: user.displayName || null,
+      isAdmin: Boolean(user.isAdmin),
+      plan: user.plan,
+      planActivatedAt: user.planActivatedAt,
+      planExpiresAt: user.planExpiresAt,
+      hasStripeCustomer: Boolean(user.stripeCustomerId),
+      hasActiveSubscription: Boolean(user.stripeSubscriptionId),
     },
   });
 });

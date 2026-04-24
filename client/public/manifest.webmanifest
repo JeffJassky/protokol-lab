@@ -1,13 +1,13 @@
 {
-  "name": "Protokol Lab",
+  "name": "Protokol Lab — GLP-1 Tracker",
   "short_name": "Protokol",
-  "description": "Track weight, nutrition, compounds, symptoms, and dose schedules.",
+  "description": "The tracker built for GLP-1s. Dose half-life curves, weekly calorie budgets, symptoms, weight, and photos. Works with Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound, and compounded peptides.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#ffffff",
-  "theme_color": "#4f46e5",
+  "background_color": "#0b0f0c",
+  "theme_color": "#0b0f0c",
   "categories": ["health", "lifestyle", "medical"],
   "icons": [
     {

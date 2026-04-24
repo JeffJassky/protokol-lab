@@ -124,6 +124,11 @@ function fmtDuration(ms) {
         </p>
       </div>
       <div class="header-controls">
+        <router-link
+          v-if="user"
+          :to="`/admin/support?userId=${user.id}`"
+          class="link-button"
+        >Support tickets →</router-link>
         <label>
           <span>Window</span>
           <select v-model.number="days" @change="load">
@@ -421,8 +426,11 @@ function fmtDuration(ms) {
 .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0; }
 .muted { color: var(--text-tertiary, var(--text-secondary)); }
 .admin-badge { margin-left: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
+.header-controls { display: flex; gap: 10px; align-items: flex-end; }
 .header-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .header-controls select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; font-family: inherit; font-size: 13px; }
+.link-button { align-self: flex-end; border: 1px solid var(--border); padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 12px; }
+.link-button:hover { border-color: var(--primary); color: var(--primary); }
 
 .banner { padding: 10px 14px; margin-bottom: 16px; font-size: 13px; border: 1px solid; }
 .banner.ok { background: var(--surface); border-color: var(--primary); color: var(--primary); }

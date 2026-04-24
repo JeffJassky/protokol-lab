@@ -2,22 +2,95 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#4f46e5" />
+
+    <!-- Default title + description. Per-route pages override via @unhead/vue. -->
+    <title>Protokol Lab — GLP-1 Tracker for Tirzepatide, Semaglutide &amp; Compounded Peptides</title>
+    <meta name="description" content="The tracker built for GLP-1s. Log doses with half-life curves, weekly calorie budgets that forgive low-appetite days, symptoms, weight, and photos. Works with Ozempic, Wegovy, Mounjaro, Zepbound, and compounded peptides. Free to start." />
+    <link rel="canonical" href="https://protokollab.com/" />
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Protokol Lab" />
+    <meta property="og:title" content="Protokol Lab — GLP-1 Tracker for Tirzepatide &amp; Semaglutide" />
+    <meta property="og:description" content="Dose tracking with half-life curves, weekly calorie budgets built for GLP-1 appetite patterns, agentic AI that logs food for you. Works with Ozempic, Wegovy, Mounjaro, Zepbound." />
+    <meta property="og:url" content="https://protokollab.com/" />
+    <meta property="og:image" content="https://protokollab.com/og/landing.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Protokol Lab — GLP-1 Tracker" />
+    <meta name="twitter:description" content="Built for GLP-1s. Dose half-life curves, weekly rolling calorie budget, agentic AI. For Tirzepatide, Semaglutide, and compounded peptides." />
+    <meta name="twitter:image" content="https://protokollab.com/og/landing.png" />
+
+    <!-- App / PWA -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0b0f0c" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Protokol" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- Fonts — IBM Plex Mono for body, JetBrains Mono for display/data. See styles/themes.css. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
     />
-    <title>Protokol Lab</title>
+
+    <!-- Structured data: Organization + WebSite. Applies site-wide.
+         Per-page schema (Product, FAQPage, Article, MedicalWebApplication) is injected by @unhead/vue. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://protokollab.com/#organization",
+          "name": "Protokol Lab",
+          "url": "https://protokollab.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://protokollab.com/icons/icon-512.png",
+            "width": 512,
+            "height": 512
+          },
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://protokollab.com/#website",
+          "url": "https://protokollab.com/",
+          "name": "Protokol Lab",
+          "description": "GLP-1 tracker for Tirzepatide, Semaglutide, and compounded peptides.",
+          "publisher": { "@id": "https://protokollab.com/#organization" },
+          "inLanguage": "en-US"
+        },
+        {
+          "@type": "MedicalWebPage",
+          "@id": "https://protokollab.com/#medical",
+          "url": "https://protokollab.com/",
+          "about": [
+            { "@type": "Drug", "name": "Tirzepatide", "alternateName": ["Mounjaro", "Zepbound"] },
+            { "@type": "Drug", "name": "Semaglutide", "alternateName": ["Ozempic", "Wegovy", "Rybelsus"] }
+          ],
+          "audience": { "@type": "PeopleAudience", "suggestedMinAge": 18 }
+        }
+      ]
+    }
+    </script>
+
     <script>
       // Resolve theme before Vue mounts so first paint matches saved/system preference.
       // Must stay in sync with useTheme.js (storageKey 'vt-theme', attribute 'data-theme').

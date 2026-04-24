@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
@@ -22,6 +23,8 @@ import photosRoutes from './routes/photos.js';
 import pushRoutes, { publicPushRouter } from './routes/push.js';
 import stripeRoutes, { publicStripeRouter } from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
+import supportRoutes from './routes/support.js';
+import adminSupportRoutes from './routes/adminSupport.js';
 import { requireAuth } from './middleware/requireAuth.js';
 import { requireAdmin } from './middleware/requireAdmin.js';
 import { runStartupBackup } from './services/backup.js';
@@ -88,14 +91,40 @@ app.use('/api/chat', requireAuth, chatRoutes);
 app.use('/api/notes', requireAuth, notesRoutes);
 app.use('/api/photos', requireAuth, photosRoutes);
 app.use('/api/stripe', requireAuth, stripeRoutes);
+app.use('/api/support', requireAuth, supportRoutes);
+app.use('/api/admin/support', requireAuth, requireAdmin, adminSupportRoutes);
 app.use('/api/admin', requireAuth, requireAdmin, adminRoutes);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, '../../client/dist');
 app.use(express.static(clientDist));
+
+// Serve prerendered marketing routes (written by client/scripts/prerender.mjs
+// at build time) so crawlers see full HTML without running JS. Each route
+// lives at dist/<route>/index.html; we check for that file before falling
+// through to the SPA shell.
+//
+// index.shell.html is the unhydrated shell preserved by the prerender script
+// for SPA-only routes (auth, app). When prerender has not run (dev builds),
+// index.html is still the shell.
+const SHELL_FILE = fs.existsSync(path.join(clientDist, 'index.shell.html'))
+  ? path.join(clientDist, 'index.shell.html')
+  : path.join(clientDist, 'index.html');
+
 app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(clientDist, 'index.html'));
+
+  // Try prerendered directory form first: /pricing → dist/pricing/index.html
+  if (req.path !== '/' && req.path.indexOf('.') === -1) {
+    const prerendered = path.join(clientDist, req.path, 'index.html');
+    if (fs.existsSync(prerendered)) {
+      return res.sendFile(prerendered);
+    }
+  }
+
+  // Fall back to the SPA shell for everything else (auth, app, unknown).
+  res.sendFile(SHELL_FILE);
 });
 
 // Central error handler — logs full stack w/ correlation fields, returns

@@ -4,6 +4,10 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { startCheckout } from '../api/stripe.js';
 import { PLANS, PLAN_IDS } from '../../../shared/plans.js';
+import { useRouteSeo } from '../composables/useSeo.js';
+import MarketingLayout from '../components/MarketingLayout.vue';
+
+useRouteSeo();
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -75,69 +79,193 @@ function subqDose(t, mg, halfLifeDays) {
 }
 
 // ---- Hero composite chart ------------------------------------------------
+// 8-week tirzepatide dose-escalation panel.
+//
+// Two different sample resolutions:
+//   weight : 1 measurement/day (57 points) — realistic weigh-in cadence,
+//            rendered as individual dots. A least-squares regression line
+//            through these daily dots shows the underlying trend.
+//   PK     : 6 samples/day (337 points) — the sub-Q Bateman curve is
+//            continuous, so high resolution keeps it smooth.
+//
+// Dates anchor to "today" at the right edge so the 8-week window rolls
+// forward with the page — tooltip timestamps stay current.
 const hero = computed(() => {
   const W = 620, H = 420;
-  const pad = { t: 32, r: 52, b: 40, l: 52 };
+  // Extra bottom padding leaves room for the dose pill row under the axis.
+  const pad = { t: 24, r: 52, b: 60, l: 52 };
   const W0 = W - pad.l - pad.r, H0 = H - pad.t - pad.b;
-  const days = 84;
-  const weight = Array.from({ length: days }, (_, i) => {
-    const t = i / (days - 1);
-    return 226 - t * 19 + Math.sin(i * 0.6) * 0.7 + Math.cos(i * 1.2) * 0.4;
-  });
-  const mgSteps = [2,2,2.5,2.5,3,3,3.5,3.5,4,4,4,4,4,4,4,4];
-  const doses = [7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82].map((day, i) => ({ day, mg: mgSteps[i] }));
+
+  const weeks = 6;
+  const days = weeks * 7;
+  const dayCount = days + 1; // inclusive: 0..42
+  const samplesPerDay = 6;
+  const pkN = days * samplesPerDay + 1;
+
+  const mgSteps = [2.5, 2.5, 5, 5, 7.5, 7.5];
+  const doses = mgSteps.map((mg, wk) => ({ day: wk * 7, mg }));
   const halfLife = 5;
-  const pk = Array.from({ length: days }, (_, i) => {
-    let a = 0; for (const d of doses) a += subqDose(i - d.day, d.mg, halfLife);
-    return a;
-  });
-  const ix = (i) => pad.l + (i / (days - 1)) * W0;
-  const wMin = Math.min(...weight) - 1, wMax = Math.max(...weight) + 1;
+
+  // PK — continuous, high-res.
+  const pk = new Array(pkN);
+  for (let i = 0; i < pkN; i++) {
+    const t = i / samplesPerDay;
+    let a = 0;
+    for (const d of doses) a += subqDose(t - d.day, d.mg, halfLife);
+    pk[i] = a;
+  }
+
+  // Weight — one measurement per day, layered noise that reads as real
+  // weigh-ins instead of a sine wave.
+  //
+  //   trend    : linear −14 lb over the window
+  //   lowFreq  : seeded random walk, lightly smoothed → multi-day swings
+  //              (the ±2 lb drift every real tracker sees on GLP-1s)
+  //   highFreq : seeded per-day jitter → day-to-day hydration/scale noise
+  //
+  // Seeded PRNG (mulberry32) so the "random" values stay stable between
+  // SSR prerender and client mount — a fresh Math.random() call set would
+  // hydrate with different dot positions and cause layout flicker.
+  function mulberry32(seed) {
+    return function () {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const rand = mulberry32(0x9e3779b9);
+  const rawDrift = new Array(dayCount);
+  rawDrift[0] = 0;
+  for (let d = 1; d < dayCount; d++) {
+    // Small step per day; occasional larger step to punctuate.
+    rawDrift[d] = rawDrift[d - 1] + (rand() - 0.5) * 0.7;
+  }
+  // Light low-pass filter (5-day boxcar) so the drift is slow/smooth.
+  const lowFreq = new Array(dayCount);
+  for (let d = 0; d < dayCount; d++) {
+    let s = 0, c = 0;
+    for (let k = -2; k <= 2; k++) {
+      const j = d + k;
+      if (j >= 0 && j < dayCount) { s += rawDrift[j]; c++; }
+    }
+    lowFreq[d] = s / c;
+  }
+  const weightDaily = new Array(dayCount);
+  for (let d = 0; d < dayCount; d++) {
+    const tr = d / days;
+    const trend = 226 - tr * 10;
+    const highFreq = (rand() - 0.5) * 0.9; // ±0.45 lb daily scale noise
+    weightDaily[d] = trend + lowFreq[d] + highFreq;
+  }
+
+  // Least-squares linear regression on daily weights.
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let d = 0; d < dayCount; d++) {
+    sumX += d; sumY += weightDaily[d];
+    sumXY += d * weightDaily[d]; sumX2 += d * d;
+  }
+  const slope = (dayCount * sumXY - sumX * sumY) / (dayCount * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / dayCount;
+  const regStart = intercept;
+  const regEnd = intercept + slope * (dayCount - 1);
+
+  // Coordinate transforms.
+  // X maps by day for weight marks, by pk sample index for the curve.
+  const xByDay = (d) => pad.l + (d / days) * W0;
+  const xByPkIdx = (i) => pad.l + (i / (pkN - 1)) * W0;
+  const allWeights = [...weightDaily, regStart, regEnd];
+  const wMin = Math.min(...allWeights) - 1;
+  const wMax = Math.max(...allWeights) + 1;
   const wy = (v) => pad.t + (1 - (v - wMin) / (wMax - wMin)) * H0;
   const pkMax = Math.max(...pk) * 1.1;
   const py = (v) => pad.t + (1 - v / pkMax) * H0;
-  const weightPath = weight.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${wy(v).toFixed(1)}`).join(' ');
-  const pkPath = pk.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
-  const pkArea = `${pkPath} L${ix(days - 1).toFixed(1)},${pad.t + H0} L${ix(0).toFixed(1)},${pad.t + H0} Z`;
+
+  const weightDots = weightDaily.map((v, d) => ({ x: xByDay(d), y: wy(v) }));
+  const weightPath = weightDots
+    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(' ');
+  const regPath = `M${xByDay(0).toFixed(1)},${wy(regStart).toFixed(1)} L${xByDay(days).toFixed(1)},${wy(regEnd).toFixed(1)}`;
+  const pkPath = pk.map((v, i) => `${i === 0 ? 'M' : 'L'}${xByPkIdx(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+  const pkArea = `${pkPath} L${xByPkIdx(pkN - 1).toFixed(1)},${pad.t + H0} L${xByPkIdx(0).toFixed(1)},${pad.t + H0} Z`;
+
   const grid = Array.from({ length: 5 }, (_, i) => pad.t + (i / 4) * H0);
+
+  const now = Date.now();
+  const startMs = now - days * 86400000;
+
+  // Per-week date ticks under the axis — one label at the start of every
+  // week, plus today at the right edge. Anchors per-edge so the end-caps
+  // don't clip off the chart border.
+  const weekLabels = [];
+  for (let w = 0; w <= weeks; w++) {
+    const dateMs = startMs + w * 7 * 86400000;
+    const d = new Date(dateMs);
+    const isToday = w === weeks;
+    const label = isToday
+      ? 'TODAY'
+      : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    weekLabels.push({
+      x: xByDay(w * 7),
+      label,
+      anchor: w === 0 ? 'start' : isToday ? 'end' : 'middle',
+      isToday,
+    });
+  }
+
   return {
-    W, H, pad, wMin, wMax, pkMax, weightPath, pkPath, pkArea, grid,
+    W, H, pad, wMin, wMax, pkMax,
+    weightDots, weightPath, regPath, pkPath, pkArea, grid,
     padB: pad.t + H0,
     right: W - pad.r,
-    doses: doses.map(d => ({ ...d, x: ix(d.day) })),
+    W0, H0, days, dayCount,
+    pillY: pad.t + H0 + 14,
+    doses: doses.map((d) => ({ ...d, x: xByDay(d.day) })),
+    weekLabels,
+    // Retained for hover handler — mouse x snaps to nearest day.
+    weightDaily, pk, samplesPerDay, startMs,
+    xByDay, wy, py,
   };
 });
 
-// ---- PK mini ------------------------------------------------------------
-const pkMini = computed(() => {
-  const W = 560, H = 240;
-  const pad = { t: 16, r: 16, b: 28, l: 40 };
-  const W0 = W - pad.l - pad.r, H0 = H - pad.t - pad.b;
-  const days = 70;
-  const dosesBase = [5,12,19,26,33,40,47,54,61,68];
-  const mgs =       [2,2, 3, 3, 4, 4, 4, 5, 5, 5];
-  const doses = dosesBase.map((d, i) => ({ day: d, mg: mgs[i] }));
-  const halfLife = 5;
-  const pk = Array.from({ length: days }, (_, i) => {
-    let a = 0; for (const d of doses) a += subqDose(i - d.day, d.mg, halfLife);
-    return a;
-  });
-  const ix = (i) => pad.l + (i / (days - 1)) * W0;
-  const pkMax = Math.max(...pk) * 1.1;
-  const py = (v) => pad.t + (1 - v / pkMax) * H0;
-  const path = pk.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
-  const area = `${path} L${ix(days-1)},${pad.t+H0} L${ix(0)},${pad.t+H0} Z`;
-  const activeNow = pk[pk.length - 1].toFixed(2);
-  const gridYs = [0.25, 0.5, 0.75].map(f => pad.t + f * H0);
+// ---- Hero hover state ---------------------------------------------------
+// Vertical cursor + tooltip that shows date, weight, active level at
+// whatever sample index the mouse is over.
+const heroSvgEl = ref(null);
+const heroHover = ref(null); // { idx, svgX, svgY } in viewBox coords, or null
+
+function onHeroMove(e) {
+  const svg = heroSvgEl.value;
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  const h = hero.value;
+  const xViewBox = ((e.clientX - rect.left) / rect.width) * h.W;
+  if (xViewBox < h.pad.l || xViewBox > h.right) { heroHover.value = null; return; }
+  // Snap to nearest day. Weight data is daily, so aligning the tooltip to a
+  // day boundary makes the readout match what the user actually measured.
+  const t = (xViewBox - h.pad.l) / h.W0;
+  const day = Math.max(0, Math.min(h.days, Math.round(t * h.days)));
+  heroHover.value = { day };
+}
+function onHeroLeave() { heroHover.value = null; }
+
+const heroTip = computed(() => {
+  const h = hero.value;
+  const hov = heroHover.value;
+  if (!hov) return null;
+  const d = hov.day;
+  const dateMs = h.startMs + d * 86400000;
+  const dt = new Date(dateMs);
+  const dateLabel = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
+  const pkIdx = d * h.samplesPerDay;
   return {
-    W, H, pad, pkMax, path, area, gridYs, activeNow,
-    doses: doses.map((d) => {
-      let peak = 0;
-      for (let t = 0; t < 2; t += 0.05) peak = Math.max(peak, subqDose(t, d.mg, halfLife));
-      return { ...d, x: ix(d.day), y: py(peak) };
-    }),
-    padB: pad.t + H0,
-    right: W - pad.r,
+    day: d,
+    x: h.xByDay(d),
+    weightY: h.wy(h.weightDaily[d]),
+    pkY: h.py(h.pk[pkIdx]),
+    date: dateLabel,
+    weight: h.weightDaily[d].toFixed(1),
+    pk: h.pk[pkIdx].toFixed(2),
   };
 });
 
@@ -152,7 +280,7 @@ const rolling = computed(() => {
     { d: 'Fri', cal: 1180, tgt: 2100 },
     { d: 'Sat', cal: 2460, tgt: 2100 },
     { d: 'Sun', cal: 2390, tgt: 2100 },
-    { d: 'Mon', cal: 2120, tgt: 2100 },
+    { d: 'Mon', cal: 2100, tgt: 2100 },
     { d: 'Tue', cal: 1840, tgt: 2100, today: true },
   ];
   const weekTgt = 2100 * 7;
@@ -160,9 +288,10 @@ const rolling = computed(() => {
   const left = weekTgt - weekCons;
   const scaleMax = Math.max(...days.map((d) => d.cal), 2100) * 1.1;
   const macros = [
-    { key: 'p', label: 'Protein', color: 'var(--color-protein)', pct: 68, note: '58g left today' },
-    { key: 'f', label: 'Fat',     color: 'var(--color-fat)',     pct: 81, note: '12g left today' },
-    { key: 'c', label: 'Carbs',   color: 'var(--color-carbs)',   pct: 74, note: '38g left today' },
+    { key: 'cal', label: 'Calories', color: 'var(--color-cal)',     pct: 90, note: '260 kcal left today' },
+    { key: 'p',   label: 'Protein',  color: 'var(--color-protein)', pct: 68, note: '58g left today' },
+    { key: 'f',   label: 'Fat',      color: 'var(--color-fat)',     pct: 81, note: '12g left today' },
+    { key: 'c',   label: 'Carbs',    color: 'var(--color-carbs)',   pct: 74, note: '38g left today' },
   ];
   return {
     days: days.map((d) => ({
@@ -178,13 +307,6 @@ const rolling = computed(() => {
     macros,
   };
 });
-
-// ---- Compound library (used by Feature 01) ------------------------------
-const compoundLib = [
-  { name: 'Tirzepatide',    t: '5.0 d', active: true },
-  { name: 'Semaglutide',    t: '7.0 d' },
-  { name: 'Custom...',      t: '—',     custom: true },
-];
 
 // ---- Feature grid static data -------------------------------------------
 const foodItems = [
@@ -243,108 +365,73 @@ const aiTrail = [
 </script>
 
 <template>
-  <div class="landing-root">
-    <div class="scanlines" aria-hidden="true"></div>
-
-    <!-- NAV -->
-    <div class="nav">
-      <div class="wrap nav-inner">
-        <span class="logo">
-          <svg viewBox="0 0 64 64" width="22" height="22" class="logo-mark">
-            <circle
-              cx="32"
-              cy="32"
-              r="26"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-            />
-            <line
-              x1="32"
-              y1="2"
-              x2="32"
-              y2="18"
-              stroke="currentColor"
-              stroke-width="2.5"
-            />
-            <line
-              x1="32"
-              y1="46"
-              x2="32"
-              y2="62"
-              stroke="currentColor"
-              stroke-width="2.5"
-            />
-            <line
-              x1="2"
-              y1="32"
-              x2="18"
-              y2="32"
-              stroke="currentColor"
-              stroke-width="2.5"
-            />
-            <line
-              x1="46"
-              y1="32"
-              x2="62"
-              y2="32"
-              stroke="currentColor"
-              stroke-width="2.5"
-            />
-            <circle cx="32" cy="32" r="7" fill="var(--primary)" />
-          </svg>
-          Protokol Lab
-        </span>
-        <div class="nav-links">
-          <a href="/features" class="nav-link">Features</a>
-          <a href="#ai" class="nav-link">AI</a>
-          <a href="#pricing" class="nav-link">Pricing</a>
-        </div>
-        <button class="nav-cta" @click="goLogin">Sign in</button>
-      </div>
-    </div>
-
-    <!-- HERO -->
-    <section class="hero wrap">
-      <div>
-        <div class="eyebrow eyebrow-green">
-          <span class="dot-live"></span> For Tirzepatide · Semaglutide
-        </div>
-        <h1>
-          Best tracker<br />
-          <span class="accent">for GLP-1s.</span><span class="cursor"></span>
-        </h1>
-        <p class="hero-lead">
-          Log your macros, doses, weight, symptoms and photos in one app. See
-          how your medication is actually moving the needle, week over week.
-        </p>
-        <div class="hero-ctas">
-          <button class="btn-primary" @click="goRegister">
-            Start tracking →
-          </button>
-          <button class="btn-secondary" @click="goLogin">Sign in</button>
-        </div>
-        <div class="hero-meta">
-          <div class="hero-meta-row">
-            <span class="dot-live"></span> Works offline
+  <MarketingLayout>
+    <div class="landing-root">
+      <!-- HERO -->
+      <section class="hero wrap">
+        <div>
+          <div class="eyebrow eyebrow-green">
+            <span class="dot-live"></span> Tirzepatide · Semaglutide · Mounjaro
+            · Zepbound · Ozempic · Wegovy
           </div>
-          <div class="hero-meta-row">Free to start · $4.99/mo premium</div>
-          <div class="hero-meta-row">No ads · your data stays yours</div>
-        </div>
-      </div>
-      <div>
-        <div class="hero-terminal">
-          <div class="term-titlebar">
-            <div class="term-dots">
-              <span class="term-dot"></span>
-              <span class="term-dot"></span>
-              <span class="term-dot"></span>
+          <h1>
+            The tracker<br />
+            <span class="accent">built for GLP-1s.</span
+            ><span class="cursor"></span>
+          </h1>
+          <p class="hero-lead">
+            Log macros, doses, weight, symptoms, and photos in one app. Built
+            for Tirzepatide, Semaglutide, compounded peptides, and research
+            compounds — with half-life curves, weekly rolling budgets, and an AI
+            that reads your whole history.
+          </p>
+          <div class="hero-ctas">
+            <button class="btn-primary" @click="goRegister">
+              Start tracking →
+            </button>
+            <button class="btn-secondary" @click="goLogin">Sign in</button>
+          </div>
+          <div class="hero-meta">
+            <div class="hero-meta-row">
+              <span class="dot-live"></span> Installs like an app
             </div>
-            <span class="term-title">dashboard · 84d · weight × compound</span>
-            <span class="term-badge"><span class="dot-live"></span>LIVE</span>
+            <div class="hero-meta-row">
+              Free to start · Premium from ${{ premiumPlan.pricing.yearlyEffectiveMonthlyUsd
+
+
+
+              }}/mo
+            </div>
+            <div class="hero-meta-row">No ads · your data stays yours</div>
           </div>
-          <div class="term-body" style="padding: 16px; height: 420px;">
-            <svg :viewBox="`0 0 ${hero.W} ${hero.H}`" class="block-svg">
+        </div>
+        <div class="hero-chart">
+          <div class="hero-chart-head">
+            <div class="hero-chart-legend">
+              <span class="legend-chip"
+                ><span class="swatch-dot"></span>Daily weigh-in</span
+              >
+              <span class="legend-chip"
+                ><span class="swatch-line-dashed"></span>Trend</span
+              >
+              <span class="legend-chip"
+                ><span class="swatch-amber"></span>Tirzepatide active</span
+              >
+            </div>
+          </div>
+          <div class="hero-chart-body">
+            <svg
+              ref="heroSvgEl"
+              :viewBox="`0 0 ${hero.W} ${hero.H}`"
+              class="block-svg hero-svg"
+              role="img"
+              aria-label="Weight trend over 8 weeks overlaid with tirzepatide active blood level curve and weekly dose escalation markers. Hover to inspect values."
+              @mousemove="onHeroMove"
+              @mouseleave="onHeroLeave"
+            >
+              <title>
+                Weight and tirzepatide pharmacokinetic curve · 8-week dashboard
+              </title>
               <line
                 v-for="(y, i) in hero.grid"
                 :key="i"
@@ -356,44 +443,80 @@ const aiTrail = [
                 stroke-width="1"
                 stroke-dasharray="1 3"
               />
-              <path :d="hero.pkArea" fill="rgba(230,184,85,0.12)" />
+              <path :d="hero.pkArea" fill="rgba(230,184,85,0.18)" />
+              <!-- Tirzepatide active level: solid amber -->
               <path
                 :d="hero.pkPath"
                 fill="none"
                 stroke="var(--color-fat)"
-                stroke-width="1.5"
-                stroke-dasharray="3 3"
-                opacity="0.85"
+                stroke-width="1.75"
+                opacity="0.95"
               />
+              <!-- Linear regression through the daily weigh-ins: dashed,
+                   drawn beneath the dots so the dots sit on top. -->
+              <path
+                :d="hero.regPath"
+                fill="none"
+                stroke="var(--primary)"
+                stroke-width="1.5"
+                stroke-dasharray="5 4"
+                opacity="0.6"
+              />
+              <!-- Daily weigh-ins: connecting line + dot per day. Line
+                   draws first so the dots sit on top of the joins. -->
               <path
                 :d="hero.weightPath"
                 fill="none"
                 stroke="var(--primary)"
-                stroke-width="2"
+                stroke-width="1.75"
+                stroke-linejoin="round"
+                opacity="0.9"
               />
+              <circle
+                v-for="(p, i) in hero.weightDots"
+                :key="i"
+                :cx="p.x"
+                :cy="p.y"
+                r="2.75"
+                fill="var(--primary)"
+              />
+              <!-- Dose markers: subtle dashed guide + amber tick on axis +
+                   pill with mg label sitting below the axis (out of the way
+                   of the curves). Mirrors the OG preview. -->
               <g v-for="(d, i) in hero.doses" :key="i">
                 <line
                   :x1="d.x"
                   :x2="d.x"
-                  :y1="hero.pad.t + 6"
+                  :y1="hero.pad.t"
                   :y2="hero.padB"
                   stroke="var(--color-fat)"
-                  stroke-width="0.75"
-                  stroke-dasharray="1 3"
-                  opacity="0.35"
+                  stroke-width="0.6"
+                  stroke-dasharray="2 3"
+                  opacity="0.3"
+                />
+                <line
+                  :x1="d.x"
+                  :x2="d.x"
+                  :y1="hero.padB"
+                  :y2="hero.padB + 5"
+                  stroke="var(--color-fat)"
+                  stroke-width="1.5"
                 />
                 <rect
                   :x="d.x - 16"
-                  :y="hero.pad.t - 4"
+                  :y="hero.pillY"
                   width="32"
                   height="14"
-                  fill="var(--color-fat)"
+                  rx="2"
+                  fill="var(--surface)"
+                  stroke="var(--color-fat)"
+                  stroke-width="0.75"
                 />
                 <text
                   :x="d.x"
-                  :y="hero.pad.t + 6"
+                  :y="hero.pillY + 10"
                   text-anchor="middle"
-                  class="svg-dose-label"
+                  class="svg-dose-pill"
                 >
                   {{ d.mg }}mg
                 </text>
@@ -446,56 +569,96 @@ const aiTrail = [
               >
                 ACTIVE · mg
               </text>
+              <!-- Weekly date ticks: one label per week, anchored so the
+                   first/last labels align with the chart edges. -->
               <text
-                :x="hero.pad.l"
-                :y="hero.H - 14"
-                text-anchor="start"
+                v-for="(w, i) in hero.weekLabels"
+                :key="'w' + i"
+                :x="w.x"
+                :y="hero.H - 6"
+                :text-anchor="w.anchor"
                 class="svg-axis-dim"
-              >
-                84d ago
-              </text>
-              <text
-                :x="hero.right"
-                :y="hero.H - 14"
-                text-anchor="end"
-                class="svg-axis-dim"
-              >
-                today
-              </text>
+                :class="{ 'svg-axis-today': w.isToday }"
+              >{{ w.label }}</text>
+              <!-- Hover cursor: vertical line + focus dots on each curve at
+                   the mouse x. Only rendered while heroTip exists. -->
+              <g v-if="heroTip" class="hero-cursor" pointer-events="none">
+                <line
+                  :x1="heroTip.x"
+                  :x2="heroTip.x"
+                  :y1="hero.pad.t"
+                  :y2="hero.padB"
+                  stroke="var(--text)"
+                  stroke-width="1"
+                  stroke-dasharray="2 3"
+                  opacity="0.5"
+                />
+                <circle
+                  :cx="heroTip.x"
+                  :cy="heroTip.weightY"
+                  r="4"
+                  fill="var(--primary)"
+                  stroke="var(--bg)"
+                  stroke-width="2"
+                />
+                <circle
+                  :cx="heroTip.x"
+                  :cy="heroTip.pkY"
+                  r="4"
+                  fill="var(--color-fat)"
+                  stroke="var(--bg)"
+                  stroke-width="2"
+                />
+              </g>
             </svg>
+            <!-- Floating tooltip; positioned in viewBox-relative % so it
+                 tracks the SVG's aspect-ratio resize without JS layout. -->
+            <div
+              v-if="heroTip"
+              class="hero-tip"
+              :style="{
+                left: (heroTip.x / hero.W * 100) + '%',
+                top:  (Math.min(heroTip.weightY, heroTip.pkY) / hero.H * 100) + '%',
+              }"
+            >
+              <div class="hero-tip-date">{{ heroTip.date }}</div>
+              <div class="hero-tip-row">
+                <span class="hero-tip-swatch primary"></span>
+                <span class="hero-tip-label">Weight</span>
+                <span class="hero-tip-val">{{ heroTip.weight }} lb</span>
+              </div>
+              <div class="hero-tip-row">
+                <span class="hero-tip-swatch amber"></span>
+                <span class="hero-tip-label">Active</span>
+                <span class="hero-tip-val">{{ heroTip.pk }} mg</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- FEATURE 01 -->
-    <section id="features">
-      <div class="wrap">
-        <div class="section-head">
-          <div class="eyebrow">01 · Dose tracking</div>
-          <h2>
-            See how much is<br /><span class="accent"
-              >still in your system.</span
-            >
-          </h2>
-          <p class="lead">
-            Every dose has a half-life. Protocol plots it for you so you can see
-            exactly how much of your medication is active right now — and why
-            your appetite comes and goes the way it does. Pick from a library of
-            common compounds, or add your own.
-          </p>
-        </div>
-        <div class="feat-row">
-          <div class="feat-text">
-            <h3 class="feat-head">
-              Every compound.<br /><span class="accent">Your schedule.</span>
-            </h3>
-            <p class="feat-body">
-              One-tap presets for Tirzepatide, Semaglutide, and more. Adding
-              your own is two fields: a name and a half-life. The curve draws
-              itself.
+      <!-- FEATURE 01 · Dose tracking (text-only; the hero already
+           illustrates the PK curve, so this section carries the narrative). -->
+      <section id="features">
+        <div class="wrap">
+          <div class="section-head">
+            <div class="eyebrow">01 · Dose tracking</div>
+            <h2>
+              See how much is<br /><span class="accent"
+                >still in your system.</span
+              >
+            </h2>
+            <p class="lead">
+              Every dose has a half-life. Protokol Lab plots the active amount
+              in real time so you know exactly how much medication is working
+              right now — and why your appetite comes and goes the way it does.
+              One-tap presets for Tirzepatide (Mounjaro, Zepbound),
+              Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide, and
+              Dulaglutide. Compounded peptides and research compounds —
+              retatrutide, cagrilintide, or anything else — take two fields:
+              a name and a half-life. The curve draws itself.
             </p>
-            <ul class="feat-bullets">
+            <ul class="feat-bullets section-bullets">
               <li>
                 <span
                   ><b>Common compounds built in</b> · the popular ones,
@@ -519,379 +682,177 @@ const aiTrail = [
               </li>
             </ul>
           </div>
-          <div class="feat-visual">
-            <div class="hero-terminal">
-              <div class="term-titlebar">
-                <div class="term-dots">
-                  <span class="term-dot"></span><span class="term-dot"></span
-                  ><span class="term-dot"></span>
-                </div>
-                <span class="term-title">compound · tirzepatide · t½ 5d</span>
-              </div>
-              <div class="term-body" style="height: 400px;">
-                <!-- CompoundMini -->
-                <div class="mini-pad">
-                  <div class="mini-eyebrow">Your library</div>
-                  <div
-                    v-for="(c, i) in compoundLib"
-                    :key="i"
-                    class="compound-row"
-                    :class="{ active: c.active, custom: c.custom }"
-                  >
-                    <span class="compound-name">{{ c.name }}</span>
-                    <span class="compound-t">t½ {{ c.t }}</span>
-                  </div>
-                </div>
-                <!-- PKMini -->
-                <div class="mini-pad alt">
-                  <div class="pk-header">
-                    <div>
-                      <div class="mini-eyebrow">Compound</div>
-                      <div class="pk-name">
-                        Tirzepatide <span class="pk-t">· t½ = 5.0 days</span>
-                      </div>
-                    </div>
-                    <div class="right">
-                      <div class="mini-eyebrow">Active now</div>
-                      <div class="pk-active">
-                        {{ pkMini.activeNow }}<span class="pk-unit"> mg</span>
-                      </div>
-                    </div>
-                  </div>
-                  <svg
-                    :viewBox="`0 0 ${pkMini.W} ${pkMini.H}`"
-                    class="block-svg"
-                  >
-                    <line
-                      v-for="(y, i) in pkMini.gridYs"
-                      :key="i"
-                      :x1="pkMini.pad.l"
-                      :x2="pkMini.right"
-                      :y1="y"
-                      :y2="y"
-                      stroke="var(--border)"
-                      stroke-dasharray="1 3"
-                    />
-                    <path :d="pkMini.area" fill="rgba(230,184,85,0.15)" />
-                    <path
-                      :d="pkMini.path"
-                      fill="none"
-                      stroke="var(--color-fat)"
-                      stroke-width="1.75"
-                    />
-                    <g v-for="(d, i) in pkMini.doses" :key="i">
-                      <circle
-                        :cx="d.x"
-                        :cy="d.y"
-                        r="3"
-                        fill="var(--color-fat)"
-                        stroke="var(--bg)"
-                        stroke-width="1.5"
-                      />
-                      <line
-                        :x1="d.x"
-                        :x2="d.x"
-                        :y1="pkMini.padB"
-                        :y2="pkMini.padB + 4"
-                        stroke="var(--color-fat)"
-                        stroke-width="1"
-                      />
-                    </g>
-                    <text
-                      :x="pkMini.pad.l - 6"
-                      :y="pkMini.pad.t + 4"
-                      text-anchor="end"
-                      class="svg-axis-dim"
-                    >
-                      {{ pkMini.pkMax.toFixed(1) }}
-                    </text>
-                    <text
-                      :x="pkMini.pad.l - 6"
-                      :y="pkMini.padB + 4"
-                      text-anchor="end"
-                      class="svg-axis-dim"
-                    >
-                      0
-                    </text>
-                    <text
-                      :x="pkMini.pad.l"
-                      :y="pkMini.H - 8"
-                      class="svg-axis-dim"
-                    >
-                      -70d
-                    </text>
-                    <text
-                      :x="pkMini.right"
-                      :y="pkMini.H - 8"
-                      text-anchor="end"
-                      class="svg-axis-dim"
-                    >
-                      now
-                    </text>
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- FEATURE 02 -->
-    <section>
-      <div class="wrap">
-        <div class="section-head">
-          <div class="eyebrow">02 · Weekly calories</div>
-          <h2>
-            Bad day? It's fine.<br /><span class="accent"
-              >Look at your week.</span
-            >
-          </h2>
-          <p class="lead">
-            GLP-1s flatten your hunger for a couple days, then it comes back. A
-            24-hour calorie counter treats that like failure. Protocol doesn't.
-            Your target is a 7-day total — eat light when you can't eat, catch
-            up when you can.
-          </p>
-        </div>
-        <div class="feat-row reverse">
-          <div class="feat-text">
-            <h3 class="feat-head">
-              A low-appetite day<br />isn't a
-              <span class="accent">broken streak.</span>
-            </h3>
-            <p class="feat-body">
-              Calories roll over. Daily targets adjust to what you've actually
-              eaten this week. The strip tells you where you stand at a glance —
-              no math, no spreadsheet, no shame.
+      <!-- FEATURE 02 -->
+      <section>
+        <div class="wrap">
+          <div class="section-head">
+            <div class="eyebrow">02 · Weekly calories</div>
+            <h2>
+              Off day? It's fine.<br /><span class="accent"
+                >Look at your week.</span
+              >
+            </h2>
+            <p class="lead">
+              GLP-1s flatten your hunger for a couple days, then it comes back.
+              A 24-hour calorie counter treats that like failure. Protokol Lab
+              doesn't. Your target is a 7-day total — eat light when you can't
+              eat, catch up when you can.
             </p>
-            <ul class="feat-bullets">
-              <li>
-                <span
-                  ><b>Unused calories carry forward</b> · they don't disappear
-                  at midnight</span
-                >
-              </li>
-              <li>
-                <span
-                  ><b>Built for uneven weeks</b> · suppression days are
-                  expected, not penalized</span
-                >
-              </li>
-              <li>
-                <span
-                  ><b>Targets that actually adjust</b> · your week recalibrates
-                  as it unfolds</span
-                >
-              </li>
-              <li>
-                <span
-                  ><b>No red streaks</b> · a light day is information, not a
-                  failure</span
-                >
-              </li>
-            </ul>
           </div>
-          <div class="feat-visual">
-            <div class="hero-terminal">
-              <div class="term-titlebar">
-                <div class="term-dots">
-                  <span class="term-dot"></span><span class="term-dot"></span
-                  ><span class="term-dot"></span>
-                </div>
-                <span class="term-title">budget · rolling 7d</span>
-              </div>
-              <div class="term-body" style="height: 400px;">
-                <div class="mini-pad alt">
-                  <div class="rolling-header">
-                    <div>
-                      <div class="mini-eyebrow">7-day budget</div>
-                      <div class="rolling-val">
-                        {{ rolling.weekCons
-
-
-
-
-
-
-
-
-
-
-
-
-
-                        }}<span class="rolling-tgt">
-                          / {{ rolling.weekTgt }}</span
-                        >
-                      </div>
-                    </div>
-                    <div class="right">
-                      <div class="mini-eyebrow">left</div>
-                      <div class="rolling-left">
-                        {{ rolling.leftAbs
-
-
-
-
-
-
-
-
-
-
-
-
-
-                        }}<span class="rolling-unit"> kcal</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="rolling-bars">
-                    <div
-                      v-for="day in rolling.days"
-                      :key="day.d"
-                      class="rolling-col"
-                    >
-                      <div class="rolling-track" :class="{ today: day.today }">
-                        <div
-                          class="rolling-fill"
-                          :class="{ today: day.today }"
-                          :style="{ height: day.normalPct + '%' }"
-                        ></div>
-                        <div
-                          v-if="day.overPct > 0"
-                          class="rolling-over"
-                          :style="{ bottom: day.targetPct + '%', height: day.overPct + '%' }"
-                        ></div>
-                        <div
-                          class="rolling-target"
-                          :style="{ bottom: day.targetPct + '%' }"
-                        ></div>
-                      </div>
-                      <div class="rolling-label" :class="{ today: day.today }">
-                        {{ day.d }}
-                      </div>
-                    </div>
-                  </div>
-                  <div class="rolling-note">
-                    <span class="arrow">▸</span> Couldn't eat much Thu–Fri.
-                    Those calories rolled over.
-                    <span class="dim">Week still on track.</span>
-                  </div>
-                  <div class="rolling-macros">
-                    <div
-                      v-for="m in rolling.macros"
-                      :key="m.key"
-                      class="rolling-macro"
-                    >
-                      <div class="rolling-macro-head">
-                        <span class="rolling-macro-label">{{ m.label }}</span>
-                        <span class="rolling-macro-note">{{ m.note }}</span>
-                      </div>
-                      <div class="rolling-macro-bar">
-                        <div
-                          class="rolling-macro-fill"
-                          :style="{ width: m.pct + '%', background: m.color }"
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div class="feat-row reverse">
+            <div class="feat-text">
+              <h3 class="feat-head">
+                An off day<br />isn't a
+                <span class="accent">broken streak.</span>
+              </h3>
+              <p class="feat-body">
+                Calories roll over. The strip shows how much of this week's
+                budget you've already spent and how much you've got left for
+                today — no math, no spreadsheet, no shame.
+              </p>
+              <ul class="feat-bullets">
+                <li>
+                  <span
+                    ><b>Unused calories carry forward</b> · they don't disappear
+                    at midnight</span
+                  >
+                </li>
+                <li>
+                  <span
+                    ><b>Built for uneven weeks</b> · suppression days are
+                    expected, not penalized</span
+                  >
+                </li>
+                <li>
+                  <span
+                    ><b>Today, in context of the week</b> · every macro tells
+                    you exactly how much is left for today to stay on pace</span
+                  >
+                </li>
+              </ul>
             </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- FEATURE 03 · AGENTIC AI -->
-    <section id="ai">
-      <div class="wrap">
-        <div class="section-head">
-          <div class="eyebrow">03 · Agentic AI</div>
-          <h2>
-            An assistant that<br /><span class="accent">does the work.</span>
-          </h2>
-          <p class="lead">
-            Not a chatbot. The AI has tools — it reads your log, searches the
-            web for anything new, creates custom foods, and writes entries
-            directly into your day. You describe what you ate. It handles the
-            rest.
-          </p>
-        </div>
-        <div class="feat-row">
-          <div class="feat-text">
-            <h3 class="feat-head">
-              Tell it what you ate.<br /><span class="accent">It logs it.</span>
-            </h3>
-            <p class="feat-body">
-              Most trackers give you a chat window and call it AI. This one
-              actually does things. Watch the tool trail on the right — it
-              checks your food database, falls back to web search when a new
-              item isn't there, saves it to your library, and writes the
-              entry into today's log.
-            </p>
-            <ul class="feat-bullets">
-              <li>
-                <span>
-                  <b>Reads your data</b> · every food, dose, weigh-in, symptom,
-                  and note is available context
-                </span>
-              </li>
-              <li>
-                <span>
-                  <b>Searches the web</b> · new restaurant, new supplement, any
-                  nutrition fact it needs to check
-                </span>
-              </li>
-              <li>
-                <span>
-                  <b>Creates &amp; logs</b> · custom foods and log entries
-                  written straight to your account
-                </span>
-              </li>
-              <li>
-                <span>
-                  <b>Multi-thread history</b> · keep "Dose escalation plan"
-                  separate from "Nausea tolerance"
-                </span>
-              </li>
-            </ul>
-          </div>
-          <div class="feat-visual">
-            <div class="hero-terminal">
-              <div class="term-titlebar">
-                <div class="term-dots">
-                  <span class="term-dot"></span><span class="term-dot"></span
-                  ><span class="term-dot"></span>
-                </div>
-                <span class="term-title">ai · tool trail</span>
-                <span class="term-badge"><span class="dot-live"></span>LIVE</span>
-              </div>
-              <div class="term-body" style="padding: 0;">
-                <div class="aichat">
-                  <div class="aichat-msg user">
-                    <div class="aichat-tag">You</div>
-                    <div>I just ate a Sweetgreen Kale Caesar at lunch.</div>
+            <div class="feat-visual">
+              <div class="hero-terminal">
+                <div class="term-titlebar">
+                  <div class="term-dots">
+                    <span class="term-dot"></span><span class="term-dot"></span
+                    ><span class="term-dot"></span>
                   </div>
-                  <div class="aichat-msg ai">
-                    <div class="aichat-tag">Protokol Lab</div>
-                    <ol class="trail">
-                      <li
-                        v-for="(t, i) in aiTrail"
-                        :key="i"
-                        class="trail-item"
-                        :class="t.kind"
+                  <span class="term-title">budget · rolling 7d</span>
+                </div>
+                <div class="term-body" style="height: 400px;">
+                  <div class="mini-pad alt">
+                    <div class="rolling-header">
+                      <div>
+                        <div class="mini-eyebrow">7-day budget</div>
+                        <div class="rolling-val">
+                          {{ rolling.weekCons
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                          }}<span class="rolling-tgt">
+                            / {{ rolling.weekTgt }}</span
+                          >
+                        </div>
+                      </div>
+                      <div class="right">
+                        <div class="mini-eyebrow">left</div>
+                        <div class="rolling-left">
+                          {{ rolling.leftAbs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                          }}<span class="rolling-unit"> kcal</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="rolling-bars">
+                      <div
+                        v-for="day in rolling.days"
+                        :key="day.d"
+                        class="rolling-col"
                       >
-                        <span class="trail-icon">{{ t.icon }}</span>
-                        <span class="trail-text">{{ t.text }}</span>
-                      </li>
-                    </ol>
-                    <div class="ai-final">
-                      Logged. You're at <b>1,240 cal</b>, 340 to go for the
-                      day. Protein's at 92g — you'll want another shake before
-                      bed to hit 180.
+                        <div
+                          class="rolling-label"
+                          :class="{ today: day.today }"
+                        >
+                          {{ day.d }}
+                        </div>
+                        <div
+                          class="rolling-track"
+                          :class="{ today: day.today }"
+                        >
+                          <div
+                            class="rolling-fill"
+                            :class="{ today: day.today }"
+                            :style="{ height: day.normalPct + '%' }"
+                          ></div>
+                          <div
+                            v-if="day.overPct > 0"
+                            class="rolling-over"
+                            :style="{ bottom: day.targetPct + '%', height: day.overPct + '%' }"
+                          ></div>
+                          <div
+                            class="rolling-target"
+                            :style="{ bottom: day.targetPct + '%' }"
+                          ></div>
+                        </div>
+                        <div
+                          class="rolling-value"
+                          :class="{ today: day.today, over: day.over }"
+                        >
+                          {{ day.cal.toLocaleString() }}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="rolling-macros">
+                      <div
+                        v-for="m in rolling.macros"
+                        :key="m.key"
+                        class="rolling-macro"
+                      >
+                        <div class="rolling-macro-head">
+                          <span class="rolling-macro-label">{{ m.label }}</span>
+                          <span class="rolling-macro-note">{{ m.note }}</span>
+                        </div>
+                        <div class="rolling-macro-bar">
+                          <div
+                            class="rolling-macro-fill"
+                            :style="{ width: m.pct + '%', background: m.color }"
+                          ></div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -899,414 +860,461 @@ const aiTrail = [
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- FEATURE GRID -->
-    <section>
-      <div class="wrap">
-        <div class="section-head">
-          <div class="eyebrow">Core · Free forever</div>
-          <h2>
-            Everything else you'd want.<br /><span class="accent"
-              >Faster than you're used to.</span
-            >
-          </h2>
-          <p class="lead">
-            If you're coming from MyFitnessPal, you won't miss a thing. Barcode
-            scanning, custom foods, saved meals, targets — it's all here, and
-            it's all quick.
-          </p>
-        </div>
-        <div class="fg">
-          <!-- 01 Food library -->
-          <div class="fg-cell">
-            <div class="fg-label"><span class="num">01</span>FOOD LIBRARY</div>
-            <div class="fg-title">Scan, search, done.</div>
-            <div class="fg-body">
-              Scan a barcode and it's logged. Build your own foods with exact
-              macros. Your recents and favorites are right where you expect
-              them.
+      <!-- FEATURE 03 · AGENTIC AI -->
+      <section id="ai">
+        <div class="wrap">
+          <div class="section-head">
+            <div class="eyebrow">03 · Agentic AI</div>
+            <h2>
+              An assistant that<br /><span class="accent">does the work.</span>
+            </h2>
+            <p class="lead">
+              Not a chatbot. The AI has tools — it reads your log, searches the
+              web for anything new, creates custom foods, and writes entries
+              directly into your day. You describe what you ate. It handles the
+              rest.
+            </p>
+          </div>
+          <div class="feat-row">
+            <div class="feat-text">
+              <h3 class="feat-head">
+                Tell it what you ate.<br /><span class="accent"
+                  >It logs it.</span
+                >
+              </h3>
+              <p class="feat-body">
+                Most trackers give you a chat window and call it AI. This one
+                actually does things. Watch the tool trail on the right — it
+                checks your food database, falls back to web search when a new
+                item isn't there, saves it to your library, and writes the entry
+                into today's log.
+              </p>
+              <ul class="feat-bullets">
+                <li>
+                  <span>
+                    <b>Reads your data</b> · every food, dose, weigh-in,
+                    symptom, and note is available context
+                  </span>
+                </li>
+                <li>
+                  <span>
+                    <b>Searches the web</b> · new restaurant, new supplement,
+                    any nutrition fact it needs to check
+                  </span>
+                </li>
+                <li>
+                  <span>
+                    <b>Creates &amp; logs</b> · custom foods and log entries
+                    written straight to your account
+                  </span>
+                </li>
+                <li>
+                  <span>
+                    <b>Multi-thread history</b> · keep "Dose escalation plan"
+                    separate from "Nausea tolerance"
+                  </span>
+                </li>
+              </ul>
             </div>
-            <div class="mini-ui">
-              <div class="mini-pad alt">
-                <div class="food-search">
-                  <span class="food-search-icon">⌕</span>
-                  <span class="food-search-text"
-                    >greek yog<span class="caret">|</span></span
+            <div class="feat-visual">
+              <div class="hero-terminal">
+                <div class="term-titlebar">
+                  <div class="term-dots">
+                    <span class="term-dot"></span><span class="term-dot"></span
+                    ><span class="term-dot"></span>
+                  </div>
+                  <span class="term-title">ai · tool trail</span>
+                  <span class="term-badge"
+                    ><span class="dot-live"></span>LIVE</span
                   >
-                  <span class="food-scan">⧠ scan</span>
                 </div>
-                <div v-for="(it, i) in foodItems" :key="i" class="food-row">
-                  <div class="food-info">
-                    <div class="food-name">{{ it.name }}</div>
-                    <div class="food-meta">{{ it.meta }}</div>
-                  </div>
-                  <div v-if="it.tag" class="food-tag">{{ it.tag }}</div>
-                  <div class="food-add">+</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 02 Meals -->
-          <div class="fg-cell">
-            <div class="fg-label"><span class="num">02</span>MEALS</div>
-            <div class="fg-title">Repeat your good days.</div>
-            <div class="fg-body">
-              Save a combo of foods as a meal you can re-log with one tap.
-              "Usual breakfast" stops taking two minutes.
-            </div>
-            <div class="mini-ui">
-              <div class="mini-pad alt">
-                <div v-for="(m, i) in mealPresets" :key="i" class="meal-row">
-                  <span class="meal-emoji">{{ m.emoji }}</span>
-                  <div class="meal-info">
-                    <div class="meal-name">{{ m.name }}</div>
-                    <div class="meal-items">{{ m.items }}</div>
-                  </div>
-                  <div class="meal-kcal">
-                    {{ m.kcal }} <span class="dim">kcal</span>
-                  </div>
-                  <div class="food-add">+</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 03 Targets -->
-          <div class="fg-cell">
-            <div class="fg-label"><span class="num">03</span>TARGETS</div>
-            <div class="fg-title">Pick your own numbers.</div>
-            <div class="fg-body">
-              Set calories, protein, fat, and carbs the way you want. Lock them
-              in, or let them adjust to your actual weekly trend.
-            </div>
-            <div class="mini-ui">
-              <div class="mini-pad alt targets-pad">
-                <div v-for="r in targetRows" :key="r.label" class="target-row">
-                  <div class="target-head">
-                    <span class="target-label">{{ r.label }}</span>
-                    <span class="target-val">{{ r.val }} {{ r.unit }}</span>
-                  </div>
-                  <div class="target-track">
-                    <div
-                      class="target-fill"
-                      :class="`kind-${r.kind}`"
-                      :style="{ width: r.pct + '%' }"
-                    ></div>
-                  </div>
-                </div>
-                <div class="target-auto">⚙ Auto-adjust: on (weekly)</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 04 Symptoms -->
-          <div class="fg-cell">
-            <div class="fg-label"><span class="num">04</span>HOW YOU FEEL</div>
-            <div class="fg-title">Log it in three seconds.</div>
-            <div class="fg-body">
-              Nausea, fatigue, injection site, anything. Rate it 0 to 10 and
-              you're done. Later, see how it all lines up with your doses.
-            </div>
-            <div class="mini-ui">
-              <div class="mini-pad alt symptoms-pad">
-                <div v-for="s in symptoms" :key="s.name" class="symptom-row">
-                  <span class="symptom-name">{{ s.name }}</span>
-                  <div class="symptom-dots">
-                    <div
-                      v-for="n in 11"
-                      :key="n"
-                      class="sym-dot"
-                      :class="{ active: (n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1) }"
-                      :style="((n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1)) ? { background: dotColor(n - 1), borderColor: dotColor(n - 1) } : {}"
-                    >
-                      {{ n - 1 }}
+                <div class="term-body" style="padding: 0;">
+                  <div class="aichat">
+                    <div class="aichat-msg user">
+                      <div class="aichat-tag">You</div>
+                      <div>I just ate a Sweetgreen Kale Caesar at lunch.</div>
+                    </div>
+                    <div class="aichat-msg ai">
+                      <div class="aichat-tag">Protokol Lab</div>
+                      <ol class="trail">
+                        <li
+                          v-for="(t, i) in aiTrail"
+                          :key="i"
+                          class="trail-item"
+                          :class="t.kind"
+                        >
+                          <span class="trail-icon">{{ t.icon }}</span>
+                          <span class="trail-text">{{ t.text }}</span>
+                        </li>
+                      </ol>
+                      <div class="ai-final">
+                        Logged. You're at <b>1,240 cal</b>, 340 to go for the
+                        day. Protein's at 92g — you'll want another shake before
+                        bed to hit 180.
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <!-- 05 Weight/waist -->
-          <div class="fg-cell">
-            <div class="fg-label">
-              <span class="num">05</span>WEIGHT + WAIST
-            </div>
-            <div class="fg-title">The trend, not the noise.</div>
-            <div class="fg-body">
-              Daily weigh-ins smoothed into a trend line, so one bad morning
-              doesn't throw you off. Weekly average and where you're headed,
-              always visible.
-            </div>
-            <div class="mini-ui">
-              <div class="mini-pad alt stats-grid">
-                <div v-for="s in stats" :key="s.l" class="stat-cell">
-                  <div class="stat-label">{{ s.l }}</div>
-                  <div class="stat-val" :class="{ good: s.good }">
-                    {{ s.v }}<span class="stat-unit"> {{ s.u }}</span>
+      <!-- FEATURE GRID -->
+      <section>
+        <div class="wrap">
+          <div class="section-head">
+            <div class="eyebrow">Core · Free forever</div>
+            <h2>
+              Everything else you'd want.<br /><span class="accent"
+                >Faster than you're used to.</span
+              >
+            </h2>
+            <p class="lead">
+              If you're coming from MyFitnessPal, you won't miss a thing.
+              Barcode scanning, custom foods, saved meals, targets — it's all
+              here, and it's all quick.
+            </p>
+          </div>
+          <div class="fg">
+            <!-- 01 Food library -->
+            <div class="fg-cell">
+              <div class="fg-label">
+                <span class="num">01</span>FOOD LIBRARY
+              </div>
+              <div class="fg-title">Scan, search, done.</div>
+              <div class="fg-body">
+                Scan a barcode and it's logged. Build your own foods with exact
+                macros. Your recents and favorites are right where you expect
+                them.
+              </div>
+              <div class="mini-ui">
+                <div class="mini-pad alt">
+                  <div class="food-search">
+                    <span class="food-search-icon">⌕</span>
+                    <span class="food-search-text"
+                      >greek yog<span class="caret">|</span></span
+                    >
+                    <span class="food-scan">⧠ scan</span>
+                  </div>
+                  <div v-for="(it, i) in foodItems" :key="i" class="food-row">
+                    <div class="food-info">
+                      <div class="food-name">{{ it.name }}</div>
+                      <div class="food-meta">{{ it.meta }}</div>
+                    </div>
+                    <div v-if="it.tag" class="food-tag">{{ it.tag }}</div>
+                    <div class="food-add">+</div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- 06 Photos -->
-          <div class="fg-cell">
-            <div class="fg-label">
-              <span class="num">06</span>PROGRESS PHOTOS
-            </div>
-            <div class="fg-title">The scale lies. Photos don't.</div>
-            <div class="fg-body">
-              Monthly shots attached to your account. Swipe between any two
-              months to see what actually changed.
-            </div>
-            <div class="mini-ui">
-              <div class="mini-pad alt">
-                <div class="photos-strip">
-                  <div v-for="m in months" :key="m" class="photo-tile">
-                    <span class="photo-label">{{ m }}</span>
+            <!-- 02 Meals -->
+            <div class="fg-cell">
+              <div class="fg-label"><span class="num">02</span>MEALS</div>
+              <div class="fg-title">Repeat your good days.</div>
+              <div class="fg-body">
+                Save a combo of foods as a meal you can re-log with one tap.
+                "Usual breakfast" stops taking two minutes.
+              </div>
+              <div class="mini-ui">
+                <div class="mini-pad alt">
+                  <div v-for="(m, i) in mealPresets" :key="i" class="meal-row">
+                    <span class="meal-emoji">{{ m.emoji }}</span>
+                    <div class="meal-info">
+                      <div class="meal-name">{{ m.name }}</div>
+                      <div class="meal-items">{{ m.items }}</div>
+                    </div>
+                    <div class="meal-kcal">
+                      {{ m.kcal }} <span class="dim">kcal</span>
+                    </div>
+                    <div class="food-add">+</div>
                   </div>
                 </div>
-                <div class="photos-meta">
-                  5 months · -18.6 lbs ·
-                  <span class="accent">▸ compare side-by-side</span>
+              </div>
+            </div>
+
+            <!-- 03 Targets -->
+            <div class="fg-cell">
+              <div class="fg-label"><span class="num">03</span>TARGETS</div>
+              <div class="fg-title">Pick your own numbers.</div>
+              <div class="fg-body">
+                Set calories, protein, fat, and carbs the way you want. Change
+                them whenever your goals shift — they drive the week view,
+                nutrition score, and AI assistant.
+              </div>
+              <div class="mini-ui">
+                <div class="mini-pad alt targets-pad">
+                  <div
+                    v-for="r in targetRows"
+                    :key="r.label"
+                    class="target-row"
+                  >
+                    <div class="target-head">
+                      <span class="target-label">{{ r.label }}</span>
+                      <span class="target-val">{{ r.val }} {{ r.unit }}</span>
+                    </div>
+                    <div class="target-track">
+                      <div
+                        class="target-fill"
+                        :class="`kind-${r.kind}`"
+                        :style="{ width: r.pct + '%' }"
+                      ></div>
+                    </div>
+                  </div>
+                  <div class="target-auto">
+                    ⚙ Powers today's plan · week view · score
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 04 Symptoms -->
+            <div class="fg-cell">
+              <div class="fg-label">
+                <span class="num">04</span>HOW YOU FEEL
+              </div>
+              <div class="fg-title">Log it in three seconds.</div>
+              <div class="fg-body">
+                Nausea, fatigue, injection site, anything. Rate it 0 to 10 and
+                you're done. Later, see how it all lines up with your doses.
+              </div>
+              <div class="mini-ui">
+                <div class="mini-pad alt symptoms-pad">
+                  <div v-for="s in symptoms" :key="s.name" class="symptom-row">
+                    <span class="symptom-name">{{ s.name }}</span>
+                    <div class="symptom-dots">
+                      <div
+                        v-for="n in 11"
+                        :key="n"
+                        class="sym-dot"
+                        :class="{ active: (n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1) }"
+                        :style="((n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1)) ? { background: dotColor(n - 1), borderColor: dotColor(n - 1) } : {}"
+                      >
+                        {{ n - 1 }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 05 Weight/waist -->
+            <div class="fg-cell">
+              <div class="fg-label">
+                <span class="num">05</span>WEIGHT + WAIST
+              </div>
+              <div class="fg-title">The trend, not the noise.</div>
+              <div class="fg-body">
+                Daily weigh-ins smoothed into a trend line, so one bad morning
+                doesn't throw you off. Weekly average and where you're headed,
+                always visible.
+              </div>
+              <div class="mini-ui">
+                <div class="mini-pad alt stats-grid">
+                  <div v-for="s in stats" :key="s.l" class="stat-cell">
+                    <div class="stat-label">{{ s.l }}</div>
+                    <div class="stat-val" :class="{ good: s.good }">
+                      {{ s.v }}<span class="stat-unit"> {{ s.u }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 06 Photos -->
+            <div class="fg-cell">
+              <div class="fg-label">
+                <span class="num">06</span>PROGRESS PHOTOS
+              </div>
+              <div class="fg-title">The scale lies. Photos don't.</div>
+              <div class="fg-body">
+                Monthly shots attached to your account. Swipe between any two
+                months to see what actually changed.
+              </div>
+              <div class="mini-ui">
+                <div class="mini-pad alt">
+                  <div class="photos-strip">
+                    <div v-for="m in months" :key="m" class="photo-tile">
+                      <span class="photo-label">{{ m }}</span>
+                    </div>
+                  </div>
+                  <div class="photos-meta">
+                    5 months · -18.6 lbs ·
+                    <span class="accent">▸ compare side-by-side</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- MORE FEATURES CALLOUT -->
-    <section class="more-features">
-      <div class="wrap">
-        <div class="section-head center">
-          <div class="eyebrow center">Core · Free forever</div>
+      <!-- MORE FEATURES CALLOUT -->
+      <section class="more-features">
+        <div class="wrap">
+          <div class="section-head center">
+            <div class="eyebrow center">Core · Free forever</div>
+            <h2>
+              That's the sales pitch.<br /><span class="accent"
+                >See the full tour.</span
+              >
+            </h2>
+            <p class="lead">
+              Food library, saved meals, macro targets, BMR projections, goal
+              countdown, progress photos, push reminders, custom symptoms, day
+              notes, data export. Every feature illustrated with a real screen
+              from the app.
+            </p>
+            <div class="more-cta">
+              <a href="/features" class="btn-secondary"
+                >Browse all features →</a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section class="pricing" id="pricing">
+        <div class="wrap">
+          <div class="section-head center">
+            <div class="eyebrow center">Pricing</div>
+            <h2>Simple. Honest. Cheap.</h2>
+            <p class="pricing-sub">
+              Try any paid plan free for 14 days. Cancel anytime before the
+              trial ends — no charge.
+            </p>
+          </div>
+          <div
+            class="price-toggle"
+            role="tablist"
+            aria-label="Billing interval"
+          >
+            <button
+              type="button"
+              class="price-toggle-btn"
+              :class="{ active: billingInterval === 'monthly' }"
+              role="tab"
+              :aria-selected="billingInterval === 'monthly'"
+              @click="billingInterval = 'monthly'"
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              class="price-toggle-btn"
+              :class="{ active: billingInterval === 'yearly' }"
+              role="tab"
+              :aria-selected="billingInterval === 'yearly'"
+              @click="billingInterval = 'yearly'"
+            >
+              Yearly
+              <span class="price-save-tag">save {{ annualSavePct }}%</span>
+            </button>
+          </div>
+          <div class="price-cards three">
+            <div class="price-card">
+              <div class="price-kind">Free</div>
+              <div class="price-amount">
+                $0<span class="per"> / forever</span>
+              </div>
+              <div class="price-desc">
+                Enough to actually run your week. No credit card, no trial
+                timer.
+              </div>
+              <ul class="price-feats">
+                <li>Food log, meals, barcode scan</li>
+                <li>Weight and waist tracking</li>
+                <li>Symptoms and notes</li>
+                <li>Dose tracking with half-life curves</li>
+                <li>Rolling 7-day calorie budget</li>
+                <li>Progress photos with side-by-side compare</li>
+              </ul>
+              <button class="btn-secondary wide" @click="goRegister">
+                Get started
+              </button>
+            </div>
+            <div class="price-card featured">
+              <div class="price-kind accent">Premium</div>
+              <div class="price-amount">
+                ${{ monthlyDisplay(premiumPlan)
+
+
+
+                }}<span class="per"> / month</span>
+              </div>
+              <div class="price-desc">
+                Everything in Free, plus the tools that turn your data into
+                answers.
+              </div>
+              <ul class="price-feats">
+                <li>AI chat that reads your data</li>
+                <li>Correlation charts, any two metrics</li>
+                <li>Deeper dose charts and stats</li>
+                <li>Unlimited custom compounds</li>
+                <li>Cloud sync across devices</li>
+                <li>Export all your data, anytime</li>
+              </ul>
+              <button
+                class="btn-primary wide"
+                @click="goRegister(premiumPlan.id, billingInterval)"
+              >
+                Start {{ premiumPlan.pricing.trialDays }}-day free trial →
+              </button>
+              <div class="price-trial-note">{{ priceNote(premiumPlan) }}</div>
+            </div>
+            <div class="price-card">
+              <div class="price-kind">Unlimited</div>
+              <div class="price-amount">
+                ${{ monthlyDisplay(unlimitedPlan)
+
+
+
+                }}<span class="per"> / month</span>
+              </div>
+              <div class="price-desc">
+                Everything in Premium, with the AI coach uncapped. For heavy
+                users who live in the chat.
+              </div>
+              <ul class="price-feats">
+                <li>Unlimited AI messages per day</li>
+                <li>Longer conversation context</li>
+                <li>Food image recognition, uncapped</li>
+                <li>Priority support</li>
+              </ul>
+              <button
+                class="btn-secondary wide"
+                @click="goRegister(unlimitedPlan.id, billingInterval)"
+              >
+                Start {{ unlimitedPlan.pricing.trialDays }}-day free trial →
+              </button>
+              <div class="price-trial-note">{{ priceNote(unlimitedPlan) }}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FINAL CTA -->
+      <section id="cta" class="final-cta">
+        <div class="wrap">
           <h2>
-            That's the sales pitch.<br /><span class="accent">See the full tour.</span>
+            Stop guessing.<br /><span class="accent">Start tracking.</span>
           </h2>
-          <p class="lead">
-            Food library, saved meals, macro targets, BMR projections, goal
-            countdown, progress photos, push scheduler, custom symptoms,
-            offline sync, data export. Every feature illustrated with a real
-            screen from the app.
+          <p>
+            Food, doses, weight, how you feel — one app, one place. See what's
+            actually working for you.
           </p>
-          <div class="more-cta">
-            <a href="/features" class="btn-secondary">Browse all features →</a>
-          </div>
+          <button class="btn-primary big" @click="goRegister">
+            Get started free →
+          </button>
         </div>
-      </div>
-    </section>
-
-
-    <!-- PRICING -->
-    <section class="pricing" id="pricing">
-      <div class="wrap">
-        <div class="section-head center">
-          <div class="eyebrow center">Pricing</div>
-          <h2>Simple. Honest. Cheap.</h2>
-          <p class="pricing-sub">
-            Try any paid plan free for 14 days. Cancel anytime before the trial ends — no charge.
-          </p>
-        </div>
-        <div class="price-toggle" role="tablist" aria-label="Billing interval">
-          <button
-            type="button"
-            class="price-toggle-btn"
-            :class="{ active: billingInterval === 'monthly' }"
-            role="tab"
-            :aria-selected="billingInterval === 'monthly'"
-            @click="billingInterval = 'monthly'"
-          >Monthly</button>
-          <button
-            type="button"
-            class="price-toggle-btn"
-            :class="{ active: billingInterval === 'yearly' }"
-            role="tab"
-            :aria-selected="billingInterval === 'yearly'"
-            @click="billingInterval = 'yearly'"
-          >Yearly <span class="price-save-tag">save {{ annualSavePct }}%</span></button>
-        </div>
-        <div class="price-cards three">
-          <div class="price-card">
-            <div class="price-kind">Free</div>
-            <div class="price-amount">
-              $0<span class="per"> / forever</span>
-            </div>
-            <div class="price-desc">
-              Enough to actually run your week. No credit card, no trial timer.
-            </div>
-            <ul class="price-feats">
-              <li>Food log, meals, barcode scan</li>
-              <li>Weight and waist tracking</li>
-              <li>Symptoms and notes</li>
-              <li>Dose tracking with half-life curves</li>
-              <li>Rolling 7-day calorie budget</li>
-              <li>Progress photos with side-by-side compare</li>
-            </ul>
-            <button class="btn-secondary wide" @click="goRegister">
-              Get started
-            </button>
-          </div>
-          <div class="price-card featured">
-            <div class="price-kind accent">Premium</div>
-            <div class="price-amount">
-              ${{ monthlyDisplay(premiumPlan) }}<span class="per"> / month</span>
-            </div>
-            <div class="price-desc">
-              Everything in Free, plus the tools that turn your data into
-              answers.
-            </div>
-            <ul class="price-feats">
-              <li>AI chat that reads your data</li>
-              <li>Correlation charts, any two metrics</li>
-              <li>Deeper dose charts and stats</li>
-              <li>Unlimited custom compounds</li>
-              <li>Cloud sync across devices</li>
-              <li>Export all your data, anytime</li>
-            </ul>
-            <button class="btn-primary wide" @click="goRegister(premiumPlan.id, billingInterval)">
-              Start {{ premiumPlan.pricing.trialDays }}-day free trial →
-            </button>
-            <div class="price-trial-note">{{ priceNote(premiumPlan) }}</div>
-          </div>
-          <div class="price-card">
-            <div class="price-kind">Unlimited</div>
-            <div class="price-amount">
-              ${{ monthlyDisplay(unlimitedPlan) }}<span class="per"> / month</span>
-            </div>
-            <div class="price-desc">
-              Everything in Premium, with the AI coach uncapped. For heavy
-              users who live in the chat.
-            </div>
-            <ul class="price-feats">
-              <li>Unlimited AI messages per day</li>
-              <li>Longer conversation context</li>
-              <li>Food image recognition, uncapped</li>
-              <li>Priority support</li>
-            </ul>
-            <button class="btn-secondary wide" @click="goRegister(unlimitedPlan.id, billingInterval)">
-              Start {{ unlimitedPlan.pricing.trialDays }}-day free trial →
-            </button>
-            <div class="price-trial-note">{{ priceNote(unlimitedPlan) }}</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- FINAL CTA -->
-    <section id="cta" class="final-cta">
-      <div class="wrap">
-        <h2>Stop guessing.<br /><span class="accent">Start tracking.</span></h2>
-        <p>
-          Food, doses, weight, how you feel — one app, one place. See what's
-          actually working for you.
-        </p>
-        <button class="btn-primary big" @click="goRegister">
-          Get started free →
-        </button>
-      </div>
-    </section>
-
-    <!-- FOOTER -->
-    <footer>
-      <div class="wrap">
-        <div class="footer-grid">
-          <div>
-            <div class="logo footer-logo">
-              <svg viewBox="0 0 64 64" width="20" height="20">
-                <circle
-                  cx="32"
-                  cy="32"
-                  r="26"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                />
-                <line
-                  x1="32"
-                  y1="2"
-                  x2="32"
-                  y2="18"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                />
-                <line
-                  x1="32"
-                  y1="46"
-                  x2="32"
-                  y2="62"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                />
-                <line
-                  x1="2"
-                  y1="32"
-                  x2="18"
-                  y2="32"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                />
-                <line
-                  x1="46"
-                  y1="32"
-                  x2="62"
-                  y2="32"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                />
-                <circle cx="32" cy="32" r="7" fill="var(--primary)" />
-              </svg>
-              Protokol Lab
-            </div>
-            <div class="footer-blurb">
-              Calorie tracking built for GLP-1s. Food, weight, doses, and
-              symptoms in one place — so you can see what's actually working.
-            </div>
-          </div>
-          <div class="footer-col">
-            <h4>Product</h4>
-            <ul>
-              <li><a href="#features">Features</a></li>
-              <li><a href="#premium">Premium</a></li>
-              <li><a href="#pricing">Pricing</a></li>
-              <li><a href="#">Changelog</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Resources</h4>
-            <ul>
-              <li><a href="#">Help center</a></li>
-              <li><a href="#">Compound library</a></li>
-              <li><a href="#">Blog</a></li>
-              <li><a href="#">Community</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Legal</h4>
-            <ul>
-              <li><a href="#">Terms</a></li>
-              <li><a href="#">Privacy</a></li>
-              <li><a href="#">Data export</a></li>
-            </ul>
-          </div>
-        </div>
-        <div class="footer-disclaimer">
-          Protokol Lab is an organizational and mathematical modeling tool. It
-          does not provide medical advice, diagnose conditions, or recommend the
-          consumption of any substance. Users are solely responsible for how
-          they choose to interpret their own data. Protokol Lab does not sell,
-          distribute, or endorse any compound listed in its library. Consult a
-          licensed medical professional before making decisions about your
-          health.
-        </div>
-      </div>
-    </footer>
-  </div>
+      </section>
+    </div>
+  </MarketingLayout>
 </template>
 
 <style scoped>
@@ -1388,10 +1396,77 @@ const aiTrail = [
 /* ---- Hero --------------------------------------------------------- */
 .hero {
   padding: 72px 0 96px;
-  display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px;
+  display: grid; grid-template-columns: 1fr 1.18fr; gap: 64px;
   align-items: center;
   border-bottom: 1px solid var(--border);
 }
+/* Hero chart — no chrome, floats. Legend + LIVE sit above the SVG.
+ * Matches scripts/og-template.html so the OG preview mirrors the live page. */
+.hero-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+.hero-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.hero-chart-legend { display: flex; gap: 18px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.legend-chip { display: inline-flex; gap: 8px; align-items: center; }
+.swatch-line { width: 20px; height: 2px; background: var(--primary); }
+.swatch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+.swatch-line-dashed {
+  width: 20px; height: 2px;
+  background: repeating-linear-gradient(90deg, var(--primary) 0 5px, transparent 5px 9px);
+  opacity: 0.7;
+}
+.swatch-amber { width: 20px; height: 2px; background: var(--color-fat); }
+.hero-chart-live {
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.hero-chart-body { width: 100%; position: relative; }
+.hero-svg { cursor: crosshair; }
+
+/* Floating tooltip — positioned as % of the SVG container so it rides the
+ * chart's aspect-ratio resize. pointer-events disabled so it doesn't
+ * interrupt mousemove tracking on the SVG. */
+.hero-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 12px));
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+.hero-tip-date {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.hero-tip-row { display: flex; align-items: center; gap: 8px; }
+.hero-tip-swatch { width: 10px; height: 10px; border-radius: 50%; }
+.hero-tip-swatch.primary { background: var(--primary); }
+.hero-tip-swatch.amber   { background: var(--color-fat); }
+.hero-tip-label { color: var(--text-secondary); min-width: 50px; }
+.hero-tip-val { color: var(--text); font-weight: 600; }
 .hero h1 {
   font-family: var(--font-display);
   font-size: 64px; line-height: 1;
@@ -1474,9 +1549,11 @@ const aiTrail = [
 /* SVG helpers */
 .block-svg { width: 100%; height: auto; display: block; }
 .svg-dose-label { font-size: 9px; font-weight: 700; fill: var(--bg); font-family: var(--font-mono); }
+.svg-dose-pill  { font-size: 9px; font-weight: 700; fill: var(--color-fat); font-family: var(--font-mono); }
 .svg-axis-green { font-size: 10px; fill: var(--primary); font-family: var(--font-mono); }
 .svg-axis-amber { font-size: 10px; fill: var(--color-fat); font-family: var(--font-mono); }
 .svg-axis-dim   { font-size: 9px;  fill: var(--text-tertiary); font-family: var(--font-mono); }
+.svg-axis-today { fill: var(--primary); font-weight: 600; }
 .svg-axis-tag   { font-size: 9px;  fill: var(--text-tertiary); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 
 /* ---- Sections ----------------------------------------------------- */
@@ -1523,6 +1600,12 @@ section.hero { padding: 72px 0 96px; }
   content: '›'; color: var(--primary); font-weight: 700; flex-shrink: 0;
 }
 .feat-bullets li b { color: var(--text); font-weight: 600; }
+/* When the bullet list lives directly under a .lead (no side visual), give
+ * it more room + 2-col layout on wider screens. */
+.section-bullets { margin-top: 24px; gap: 14px; max-width: 780px; }
+@media (min-width: 720px) {
+  .section-bullets { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; }
+}
 
 /* ---- Mini pad (shared block for all mini-UIs) --------------------- */
 .mini-pad { padding: 14px; }
@@ -1577,7 +1660,7 @@ section.hero { padding: 72px 0 96px; }
 .rolling-fill.today { background: var(--primary); opacity: 1; }
 .rolling-over {
   position: absolute; left: 0; right: 0;
-  background: var(--color-carbs);
+  background: var(--danger);
 }
 .rolling-target {
   position: absolute; left: 0; right: 0; height: 1px;
@@ -1585,8 +1668,15 @@ section.hero { padding: 72px 0 96px; }
 }
 .rolling-label {
   font-size: 9px; font-family: var(--font-mono); color: var(--text-tertiary); text-align: center;
+  text-transform: uppercase; letter-spacing: 0.1em;
 }
 .rolling-label.today { color: var(--primary); font-weight: 700; }
+.rolling-value {
+  font-size: 10px; font-family: var(--font-mono); color: var(--text);
+  text-align: center; font-variant-numeric: tabular-nums; font-weight: 700;
+}
+.rolling-value.today { color: var(--primary); }
+.rolling-value.over { color: var(--danger); }
 .rolling-note {
   margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
   font-size: 11px; color: var(--text-secondary); line-height: 1.5;

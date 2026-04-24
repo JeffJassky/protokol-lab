@@ -85,6 +85,7 @@ function fmtDateTime(v) {
         <p class="subtitle">{{ total }} total</p>
       </div>
       <div class="header-controls">
+        <router-link to="/admin/support" class="link-button">Support →</router-link>
         <router-link to="/admin" class="link-button">← Overview</router-link>
       </div>
     </header>

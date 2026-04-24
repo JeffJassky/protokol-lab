@@ -80,6 +80,119 @@ If you didn't request this, you can ignore this email.`;
   await send({ to, subject, html, text, template: 'password-reset' });
 }
 
+// ---------------------------------------------------------------------------
+// Support email helpers
+// ---------------------------------------------------------------------------
+
+function supportTicketUrl(ticketId, { admin = false } = {}) {
+  const base = process.env.APP_URL || '';
+  return `${base}${admin ? '/admin/support/tickets/' : '/support/tickets/'}${ticketId}`;
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function emailShell(innerHtml) {
+  return `<!doctype html>
+<html>
+  <body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f5f5f7;padding:24px;margin:0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e5e5ea;">
+      <tr><td style="padding:32px 28px;">
+        ${innerHtml}
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export async function sendTicketCreatedUserEmail(to, ticket) {
+  const subject = `[Support #${String(ticket._id).slice(-6)}] We got your ticket`;
+  const url = supportTicketUrl(ticket._id);
+  const text = `We received your support ticket: "${ticket.subject}"
+
+We'll reply as soon as we can. You can track status here:
+${url}`;
+  const html = emailShell(`
+    <h1 style="font-size:20px;margin:0 0 12px;color:#111;">We got your ticket</h1>
+    <p style="font-size:15px;color:#333;line-height:1.5;margin:0 0 16px;">
+      Thanks for reaching out. We received your support ticket and will reply soon.
+    </p>
+    <p style="font-size:14px;color:#555;margin:0 0 16px;">
+      <strong>${escapeHtml(ticket.subject)}</strong>
+    </p>
+    <p style="margin:0 0 20px;"><a href="${url}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:500;font-size:15px;">View ticket</a></p>
+  `);
+  await send({ to, subject, html, text, template: 'ticket-created' });
+}
+
+export async function sendTicketAdminNotifyEmail(ticket) {
+  const adminEmail = process.env.SUPPORT_ADMIN_EMAIL;
+  if (!adminEmail) {
+    log.warn({ ticketId: String(ticket._id) }, 'ticket-admin-notify: SUPPORT_ADMIN_EMAIL not set');
+    return;
+  }
+  const subject = `[Support] New ticket from ${ticket.userEmail}: ${ticket.subject}`;
+  const url = supportTicketUrl(ticket._id, { admin: true });
+  const text = `New ticket from ${ticket.userEmail}
+
+Subject: ${ticket.subject}
+
+${ticket.description}
+
+Open: ${url}`;
+  const html = emailShell(`
+    <h1 style="font-size:18px;margin:0 0 12px;color:#111;">New support ticket</h1>
+    <p style="font-size:13px;color:#666;margin:0 0 4px;">From</p>
+    <p style="font-size:14px;color:#111;margin:0 0 12px;"><strong>${escapeHtml(ticket.userEmail)}</strong></p>
+    <p style="font-size:13px;color:#666;margin:0 0 4px;">Subject</p>
+    <p style="font-size:14px;color:#111;margin:0 0 12px;">${escapeHtml(ticket.subject)}</p>
+    <p style="font-size:13px;color:#666;margin:0 0 4px;">Description</p>
+    <p style="font-size:14px;color:#333;line-height:1.5;white-space:pre-wrap;margin:0 0 20px;">${escapeHtml(ticket.description)}</p>
+    <p style="margin:0 0 20px;"><a href="${url}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:500;font-size:14px;">Open in admin</a></p>
+  `);
+  await send({ to: adminEmail, subject, html, text, template: 'ticket-admin-notify' });
+}
+
+export async function sendTicketStatusChangedEmail(to, ticket, prevStatus) {
+  const subject = `[Support #${String(ticket._id).slice(-6)}] Status: ${ticket.status}`;
+  const url = supportTicketUrl(ticket._id);
+  const text = `Your support ticket "${ticket.subject}" changed status from ${prevStatus} to ${ticket.status}.
+
+${url}`;
+  const html = emailShell(`
+    <h1 style="font-size:20px;margin:0 0 12px;color:#111;">Ticket status updated</h1>
+    <p style="font-size:15px;color:#333;line-height:1.5;margin:0 0 16px;">
+      Your ticket <strong>${escapeHtml(ticket.subject)}</strong> moved from
+      <strong>${escapeHtml(prevStatus)}</strong> to <strong>${escapeHtml(ticket.status)}</strong>.
+    </p>
+    <p style="margin:0 0 20px;"><a href="${url}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:500;font-size:15px;">View ticket</a></p>
+  `);
+  await send({ to, subject, html, text, template: 'ticket-status-changed' });
+}
+
+export async function sendTicketReplyEmail(to, ticket, message) {
+  const subject = `[Support #${String(ticket._id).slice(-6)}] New reply: ${ticket.subject}`;
+  const url = supportTicketUrl(ticket._id);
+  const text = `A support agent replied to your ticket "${ticket.subject}":
+
+${message.body}
+
+Reply here: ${url}`;
+  const html = emailShell(`
+    <h1 style="font-size:20px;margin:0 0 12px;color:#111;">New reply on your ticket</h1>
+    <p style="font-size:14px;color:#555;margin:0 0 8px;">Re: <strong>${escapeHtml(ticket.subject)}</strong></p>
+    <div style="font-size:15px;color:#333;line-height:1.5;white-space:pre-wrap;background:#f5f5f7;border:1px solid #e5e5ea;border-radius:8px;padding:14px 16px;margin:0 0 20px;">${escapeHtml(message.body)}</div>
+    <p style="margin:0 0 20px;"><a href="${url}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:500;font-size:15px;">Reply</a></p>
+  `);
+  await send({ to, subject, html, text, template: 'ticket-reply' });
+}
+
 export async function sendWelcomeEmail(to) {
   const subject = "Welcome to Protokol Lab";
   const appUrl = process.env.APP_URL || "";

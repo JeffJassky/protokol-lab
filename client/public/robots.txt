@@ -1,0 +1,75 @@
+# Protokol Lab — robots.txt
+# Marketing surfaces = public. App surfaces = private.
+
+User-agent: *
+Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /ai
+Allow: /compounds
+Allow: /faq
+Allow: /about
+Allow: /medical-advisory
+Allow: /advanced
+Allow: /blog
+Disallow: /admin
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /log
+Disallow: /settings
+Disallow: /food/search
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /api/
+
+# AI crawlers — explicit allow for marketing/content
+User-agent: GPTBot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /log
+Disallow: /settings
+Disallow: /api/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /log
+Disallow: /settings
+Disallow: /api/
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /log
+Disallow: /settings
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /log
+Disallow: /settings
+Disallow: /api/
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+Sitemap: https://protokollab.com/sitemap.xml

@@ -1,0 +1,114 @@
+# Protokol Lab
+
+> The tracker built for GLP-1s. Log doses with pharmacokinetic half-life curves, weekly rolling calorie budgets that forgive low-appetite days, symptoms, weight, and progress photos — all in one app. Works with every major GLP-1: Tirzepatide (Mounjaro, Zepbound), Semaglutide (Ozempic, Wegovy, Rybelsus), compounded peptides, and research compounds like retatrutide and cagrilintide.
+
+Protokol Lab is an organizational and mathematical modeling tool. It does not provide medical advice, diagnose conditions, or recommend the consumption of any substance. Users are solely responsible for how they interpret their own data.
+
+## What Protokol Lab Does
+
+- **Dose tracking with half-life curves.** Every compound has a t½. Protokol Lab plots the active blood level in real time so you can see exactly how much medication is in your system — and why appetite comes and goes the way it does. Stacked doses modeled correctly (Bateman equation; subcutaneous, bolus, and depot profiles supported).
+- **Weekly rolling calorie budget.** GLP-1s flatten appetite for a few days, then it returns. A 24-hour calorie counter treats that as failure. Protokol Lab's target is a 7-day total — eat light when you can't eat, catch up when you can. Unused calories roll forward. Daily targets recalibrate as the week unfolds.
+- **Agentic AI assistant.** Not a chatbot. The AI has tools: it reads your full log (food, dose, weight, symptoms, notes), searches the web for new restaurants or supplements, creates custom foods, and writes entries directly into your day. You describe what you ate; it handles the rest.
+- **Symptoms tracking.** Rate any symptom 0–10 in three seconds. Nausea, fatigue, injection site reactions, constipation, custom. Later, correlate against your dose curve to see what's causing what.
+- **Weight and waist trend.** Daily weigh-ins smoothed into a trend line. Weekly average and goal ETA always visible. One bad morning doesn't throw off the picture.
+- **Progress photos.** Monthly shots attached to your account. Swipe between any two months to see what actually changed.
+- **Food library.** Barcode scanning, custom foods with exact macros, saved meals for one-tap relog, recents, favorites.
+- **Offline-first PWA.** Works fully offline. Syncs across devices when online. Export everything as JSON or CSV anytime — no paywall.
+
+## Who It's For
+
+- People taking FDA-approved GLP-1 medications: Ozempic, Wegovy, Mounjaro, Zepbound, Rybelsus, Saxenda, Victoza.
+- People on compounded tirzepatide or compounded semaglutide from a licensed compounding pharmacy.
+- Advanced users tracking research peptides: retatrutide, cagrilintide, survodutide, and custom compounds with user-supplied half-lives.
+- Anyone switching from MyFitnessPal, Cronometer, or Lose It who wants a tracker that actually understands GLP-1 physiology.
+
+## Supported Compounds (Built-in Library)
+
+| Compound | Brand names | Half-life | Route |
+|----------|-------------|-----------|-------|
+| Tirzepatide | Mounjaro, Zepbound | ~5 days | Sub-Q, weekly |
+| Semaglutide | Ozempic, Wegovy, Rybelsus | ~7 days | Sub-Q weekly / oral daily |
+| Liraglutide | Saxenda, Victoza | ~13 hours | Sub-Q, daily |
+| Dulaglutide | Trulicity | ~5 days | Sub-Q, weekly |
+| Retatrutide | (research) | ~6 days | Sub-Q, weekly |
+| Cagrilintide | (research) | ~7 days | Sub-Q, weekly |
+| Custom | — | user-defined | user-defined |
+
+Adding your own is two fields: a name and a half-life. The curve draws itself.
+
+## Pricing
+
+- **Free** — $0/forever. Food log, meals, barcode scan, weight, waist, symptoms, notes, dose tracking with half-life curves, rolling 7-day calorie budget, progress photos. No credit card required.
+- **Premium** — $9.99/month or $79/year ($6.58/month billed yearly, save ~35%). Everything in Free plus AI chat that reads your data, correlation charts, deeper dose stats, unlimited custom compounds, cloud sync, full data export. 14-day free trial.
+- **Unlimited** — $19.99/month or $149/year ($12.42/month billed yearly). Everything in Premium plus uncapped AI messages, longer conversation context, uncapped food image recognition, priority support. 14-day free trial.
+
+## FAQ
+
+### Does Protokol Lab work with Mounjaro, Zepbound, Ozempic, Wegovy?
+Yes. Mounjaro and Zepbound are both tirzepatide. Ozempic and Wegovy are both semaglutide. Pick the compound name from the built-in library and Protokol Lab handles the half-life modeling automatically.
+
+### Can I track compounded GLP-1s?
+Yes. Use the built-in Tirzepatide or Semaglutide preset for compounded versions of those peptides, or add a custom compound with any name and half-life.
+
+### Can I track retatrutide, cagrilintide, or other research peptides?
+Yes. Add a custom compound with the peptide's name, half-life (days), and dose schedule. The kinetic model supports bolus, subcutaneous, and depot absorption profiles.
+
+### How accurate is the half-life curve?
+Protokol Lab uses the Bateman equation — the standard two-compartment pharmacokinetic model for extravascular absorption. Defaults are based on published PK data: tirzepatide ~5 days (Urva et al., Lancet 2020), semaglutide ~7 days (Lau et al., J Med Chem 2015). Users can override half-life per compound to match individual metabolism or compounded formulations.
+
+### Is my health data private?
+Your data stays yours. Protokol Lab does not sell, share, or monetize user health data. Cloud sync is opt-in. Full JSON/CSV export is always free and unlimited. Offline-first architecture means your data lives on-device by default.
+
+### Does it work offline?
+Yes. Protokol Lab is a Progressive Web App (PWA) that installs to your home screen. Food logging, dose logging, weight, and symptoms all work fully offline and sync when you reconnect.
+
+### What's the difference between a 24-hour and a weekly calorie budget?
+A 24-hour budget resets at midnight, treating every day as independent. GLP-1s don't work that way — appetite is suppressed for a few days after each dose, then returns. A rolling 7-day budget lets unused calories from suppression days carry forward to higher-appetite days. You hit your weekly target instead of failing daily.
+
+### Can the AI actually log food for me?
+Yes. Describe what you ate in plain English — the AI checks your food library, searches the web for nutrition data if needed, creates a custom food entry, and writes it into your day. It has write access to your account, not just chat.
+
+### How is this different from MyFitnessPal?
+MyFitnessPal is a generic calorie counter. Protokol Lab is built specifically for GLP-1 patterns: it models dose half-lives, runs weekly rolling budgets instead of daily resets, tracks injection-site symptoms and medication timing, and its AI reads your dose and symptom data together.
+
+### Is Protokol Lab FDA-approved?
+No. Protokol Lab is an organizational and mathematical modeling tool, not a medical device. It does not diagnose, treat, or prescribe. Consult a licensed medical professional before making decisions about your medication or health.
+
+### Do you sell or ship GLP-1 medications?
+No. Protokol Lab is a tracker only. We do not sell, distribute, or endorse any compound in the library. Obtain medications from a licensed prescriber and pharmacy.
+
+### Can I export all my data?
+Yes. Full history export as JSON or CSV, anytime, no paywall, no support ticket. Your data belongs to you.
+
+### What if I want to track a compound that's not in the library?
+Add a custom compound in seconds: name, half-life (days), dose schedule, and optionally a kinetic shape (bolus, subcutaneous, depot). The PK curve is generated automatically.
+
+### Does Protokol Lab support multiple simultaneous compounds (stacks)?
+Yes. Model multiple active compounds at once — their curves are stacked correctly. Useful for combining tirzepatide with retatrutide or adding cagrilintide.
+
+## Marketing URLs
+
+- [Home](https://protokollab.com/) — main landing with hero PK chart, feature overview, pricing, CTA.
+- [Features](https://protokollab.com/features) — full feature reference: food library, meal presets, macro targets, weight trends, PK modeling, symptom dots, agentic AI, BMR projection, goal ETA, progress photos, offline sync, data export.
+- [Pricing](https://protokollab.com/pricing) — Free, Premium ($9.99/mo or $79/yr), Unlimited ($19.99/mo or $149/yr). 14-day trial on paid plans.
+- [AI](https://protokollab.com/ai) — how the agentic assistant works: tools it has, multi-thread history, privacy model.
+- [Compounds](https://protokollab.com/compounds) — full compound library with half-lives, pharmacokinetics notes, and references.
+- [FAQ](https://protokollab.com/faq) — common questions about GLP-1 tracking, compounded peptides, privacy, and features.
+- [About](https://protokollab.com/about) — who built Protokol Lab and why.
+- [Medical Advisory](https://protokollab.com/medical-advisory) — disclaimer, clinical references, and peer-reviewed sources.
+- [Advanced / Research Peptides](https://protokollab.com/advanced) — for users tracking retatrutide, cagrilintide, survodutide, and custom peptide stacks.
+- [Blog](https://protokollab.com/blog) — educational articles on GLP-1 physiology, dose timing, nausea management, and calorie strategies.
+
+## Blog
+
+- [Tirzepatide Half-Life Explained: Why Week 4 Feels Different](https://protokollab.com/blog/tirzepatide-half-life-explained.html)
+- [The Weekly Calorie Budget for GLP-1 Users](https://protokollab.com/blog/weekly-calorie-budget-for-glp1.html)
+- [GLP-1 Nausea Timeline: When It Peaks, When It Fades](https://protokollab.com/blog/glp1-nausea-timeline.html)
+- [Ozempic vs Wegovy vs Compounded Semaglutide: Dose Equivalencies](https://protokollab.com/blog/ozempic-vs-wegovy-vs-compounded-semaglutide.html)
+
+## Citations
+
+- Urva S, et al. "Effects of renal impairment on the pharmacokinetics of the dual GIP and GLP-1 receptor agonist tirzepatide." *Clinical Pharmacokinetics* (2021). Tirzepatide t½ ≈ 5 days.
+- Lau J, et al. "Discovery of the Once-Weekly Glucagon-Like Peptide-1 (GLP-1) Analogue Semaglutide." *Journal of Medicinal Chemistry* (2015). Semaglutide t½ ≈ 7 days.
+- Jastreboff AM, et al. "Triple–Hormone-Receptor Agonist Retatrutide for Obesity — A Phase 2 Trial." *New England Journal of Medicine* (2023). Retatrutide PK.
+- Lau J, et al. "Cagrilintide PK." Novo Nordisk clinical program data.

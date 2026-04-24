@@ -56,6 +56,7 @@ function fmtDate(v) {
           </select>
         </label>
         <router-link to="/admin/users" class="link-button">Users →</router-link>
+        <router-link to="/admin/support" class="link-button">Support →</router-link>
       </div>
     </header>
 

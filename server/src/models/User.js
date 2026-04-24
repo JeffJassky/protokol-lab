@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema({
 
   isAdmin: { type: Boolean, default: false },
 
+  // Optional public display name shown on feature-request comments.
+  // Falls back to email local-part when absent.
+  displayName: { type: String, default: null, trim: true, maxlength: 60 },
+
   createdAt: { type: Date, default: Date.now },
 });
 

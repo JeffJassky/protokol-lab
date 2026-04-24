@@ -51,6 +51,7 @@ async function handleLogout() {
         <router-link to="/">Log</router-link>
         <router-link to="/dashboard">Dashboard</router-link>
         <router-link to="/settings">Settings</router-link>
+        <router-link to="/support">Support</router-link>
         <router-link v-if="auth.user?.isAdmin" to="/admin" class="admin-link">Admin</router-link>
         <button
           class="theme-toggle"

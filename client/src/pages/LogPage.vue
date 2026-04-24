@@ -308,6 +308,24 @@ function startMoveGroup(group) {
   openPicker({ mode: 'move', ids: group.entries.map((e) => e._id), title: `Move "${group.mealName}" to...` });
 }
 
+// All food-log entry IDs across every meal slot for the current day. Used
+// by the "Copy day" button to fan a whole day's log out to one or more
+// target dates via the same picker infrastructure.
+const dayEntryIds = computed(() =>
+  mealTypes.flatMap((m) => foodlogStore.entries[m.key] || []).map((e) => e._id),
+);
+function formatDayLabel(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function startCopyDay() {
+  const ids = dayEntryIds.value;
+  if (!ids.length) return;
+  openPicker({ mode: 'copy', ids, title: `Copy ${formatDayLabel(date.value)} to...` });
+}
+
 // ---- Symptoms -----------------------------------------------------------
 
 const dotColors = [
@@ -618,7 +636,18 @@ function onNoteBlur() {
     <!-- FOOD LOG                                                     -->
     <!-- =========================================================== -->
     <div class="meal-card food-card">
-      <div class="meal-header"><h3>Food</h3></div>
+      <div class="meal-header">
+        <h3>Food</h3>
+        <button
+          type="button"
+          class="btn-text sm"
+          v-tooltip="'Copy every food entry on this day to one or more other dates'"
+          :disabled="!dayEntryIds.length"
+          @click="startCopyDay"
+        >
+          Copy day →
+        </button>
+      </div>
       <div
         v-for="meal in orderedMealTypes"
         :key="meal.key"
@@ -676,7 +705,12 @@ function onNoteBlur() {
                   >
                   <span
                     class="entry-name"
-                    >{{ row.entry.foodItemId?.name }}</span
+                    :class="{ planned: row.entry.consumed === false }"
+                    >{{ row.entry.foodItemId?.name
+                    }}<span
+                      v-if="row.entry.consumed === false"
+                      class="planned-tag"
+                    > (planned)</span></span
                   >
                 </td>
                 <td class="col-srv">
@@ -807,13 +841,20 @@ function onNoteBlur() {
                       />
                     </td>
                     <td class="col-name">
-                      <span class="entry-name indent">
+                      <span
+                        class="entry-name indent"
+                        :class="{ planned: child.consumed === false }"
+                      >
                         <span
                           v-if="child.foodItemId?.emoji"
                           class="entry-emoji"
                           >{{ child.foodItemId.emoji }}</span
                         >
-                        {{ child.foodItemId?.name }}
+                        {{ child.foodItemId?.name
+                        }}<span
+                          v-if="child.consumed === false"
+                          class="planned-tag"
+                        > (planned)</span>
                       </span>
                     </td>
                     <td class="col-srv">
@@ -1222,6 +1263,8 @@ function onNoteBlur() {
 .meal-table tfoot td.col-num:not(.col-p):not(.col-f):not(.col-c) { color: var(--color-cal); }
 
 .entry-name { font-weight: var(--font-weight-medium); color: var(--text); }
+.entry-name.planned { font-style: italic; }
+.planned-tag { color: var(--text-tertiary); font-weight: var(--font-weight-light); font-style: italic; }
 .entry-emoji { display: inline-block; margin-right: var(--space-1); font-size: var(--font-size-m); line-height: 1; }
 .servings {
   cursor: pointer;

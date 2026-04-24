@@ -1,32 +1,65 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import MarketingLayout from '../components/MarketingLayout.vue';
+import { useRouteSeo } from '../composables/useSeo.js';
+
+useRouteSeo();
 
 const router = useRouter();
 const goRegister = () => router.push('/register');
 const goLogin = () => router.push('/login');
 const goHome = () => router.push('/');
 
-// ---- Trend regression mini ---------------------------------------------
-const trend = computed(() => {
-  const W = 520, H = 180;
-  const pad = { t: 12, r: 14, b: 22, l: 34 };
+// ---- Multi-series dashboard chart mini ---------------------------------
+// Matches DashboardPage.vue: selectable series (weight / calories / compound
+// dose PK) on one chart, with a regression trend line for weight and amber
+// dose pills at the top of the plot area.
+const dashChart = computed(() => {
+  const W = 540, H = 210;
+  const pad = { t: 28, r: 38, b: 24, l: 36 };
   const W0 = W - pad.l - pad.r, H0 = H - pad.t - pad.b;
-  const N = 56;
-  const raw = Array.from({ length: N }, (_, i) => 222 - i * 0.22 + Math.sin(i * 0.9) * 1.4 + (i % 7 === 0 ? 1.6 : 0));
-  const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
-  const xs = raw.map((_, i) => i);
-  const xMean = mean(xs), yMean = mean(raw);
-  const slope = xs.reduce((a, x, i) => a + (x - xMean) * (raw[i] - yMean), 0) /
+  const N = 84;
+  const weight = Array.from({ length: N }, (_, i) => {
+    const t = i / (N - 1);
+    return 226 - t * 19 + Math.sin(i * 0.6) * 0.8 + Math.cos(i * 1.2) * 0.45;
+  });
+  const cal = Array.from({ length: N }, (_, i) => (
+    2100 + Math.sin(i * 0.9) * 240 + Math.cos(i * 0.35) * 160 + (i % 7 === 0 ? 180 : 0)
+  ));
+  const mgSteps = [2, 2.5, 3, 3.5, 4, 4, 4, 4, 4, 4, 4, 4];
+  const doses = [0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77].map((day, i) => ({ day, mg: mgSteps[i] }));
+  const halfLife = 5;
+  const pk = Array.from({ length: N }, (_, i) => {
+    let a = 0; for (const d of doses) a += subqDose(i - d.day, d.mg, halfLife);
+    return a;
+  });
+  const xs = weight.map((_, i) => i);
+  const xMean = xs.reduce((a, b) => a + b, 0) / N;
+  const yMean = weight.reduce((a, b) => a + b, 0) / N;
+  const slope = xs.reduce((a, x, i) => a + (x - xMean) * (weight[i] - yMean), 0) /
                 xs.reduce((a, x) => a + (x - xMean) ** 2, 0);
   const intercept = yMean - slope * xMean;
-  const fit = xs.map((x) => slope * x + intercept);
-  const yMin = Math.min(...raw) - 0.5, yMax = Math.max(...raw) + 0.5;
+  const trend = xs.map((x) => slope * x + intercept);
   const ix = (i) => pad.l + (i / (N - 1)) * W0;
-  const iy = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * H0;
-  const dots = raw.map((v, i) => ({ x: ix(i), y: iy(v) }));
-  const line = fit.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${iy(v).toFixed(1)}`).join(' ');
-  return { W, H, pad, dots, line, right: W - pad.r, padB: pad.t + H0, slope: (slope * 7).toFixed(2) };
+  const wMin = Math.min(...weight) - 1, wMax = Math.max(...weight) + 1;
+  const wy = (v) => pad.t + (1 - (v - wMin) / (wMax - wMin)) * H0;
+  const cMin = Math.min(...cal) * 0.94, cMax = Math.max(...cal) * 1.06;
+  const cy = (v) => pad.t + (1 - (v - cMin) / (cMax - cMin)) * H0;
+  const pkMax = Math.max(...pk) * 1.15;
+  const py = (v) => pad.t + (1 - v / pkMax) * H0;
+  const weightPath = weight.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${wy(v).toFixed(1)}`).join(' ');
+  const calPath = cal.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${cy(v).toFixed(1)}`).join(' ');
+  const pkPath = pk.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+  const pkArea = `${pkPath} L${ix(N - 1).toFixed(1)},${pad.t + H0} L${ix(0).toFixed(1)},${pad.t + H0} Z`;
+  const trendPath = trend.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${wy(v).toFixed(1)}`).join(' ');
+  const gridYs = Array.from({ length: 4 }, (_, i) => pad.t + ((i + 1) / 5) * H0);
+  return {
+    W, H, pad, weightPath, calPath, pkPath, pkArea, trendPath, gridYs,
+    padB: pad.t + H0, right: W - pad.r,
+    doses: doses.map((d) => ({ ...d, x: ix(d.day) })),
+    slope: (slope * 7).toFixed(2),
+  };
 });
 
 // Sub-Q Bateman PK — matches the `subq` profile in SettingsPage. Rises over
@@ -102,23 +135,6 @@ const kineticsProfiles = computed(() => {
   });
 });
 
-// ---- Score sparkline ----------------------------------------------------
-const score = computed(() => {
-  const W = 520, H = 100;
-  const pad = { t: 10, r: 14, b: 18, l: 14 };
-  const W0 = W - pad.l - pad.r, H0 = H - pad.t - pad.b;
-  const N = 30;
-  const values = Array.from({ length: N }, (_, i) => {
-    const base = 62 + i * 0.7 + Math.sin(i * 0.8) * 9 + (i % 6 === 0 ? -4 : 0);
-    return Math.max(20, Math.min(100, base));
-  });
-  const ix = (i) => pad.l + (i / (N - 1)) * W0;
-  const py = (v) => pad.t + (1 - v / 100) * H0;
-  const path = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${ix(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
-  const bars = values.map((v, i) => ({ x: ix(i) - 6, y: py(v), h: (H - pad.b) - py(v), over: v >= 80, low: v < 50 }));
-  return { W, H, path, bars, current: Math.round(values[values.length - 1]), avg: Math.round(values.reduce((a, b) => a + b, 0) / N) };
-});
-
 // ---- Correlation (reused from landing) ----------------------------------
 const correlation = computed(() => {
   const W = 520, H = 180;
@@ -170,24 +186,40 @@ const compounds = [
   { name: 'Semaglutide',  t: '7.0 d', shape: 'depot', every: '7d', active: false },
 ];
 
+// Matches SettingsPage: per-compound reminder is a boolean toggle + single
+// reminderTime; next dose day is computed from last log + intervalDays. The
+// app has no per-weekday picker — it fires on dose days only, at the chosen
+// hour. A separate trackReminder sends a nightly "did you log anything?"
+// nudge and skips if the day already has any entry.
 const schedule = [
-  { label: 'Tirzepatide', freq: 'Every 7d · Wed 8:00am',  color: 'var(--color-fat)' },
-  { label: 'Semaglutide', freq: 'Every 7d · Sun 8:00am',  color: 'var(--color-protein)' },
-  { label: 'Weight',      freq: 'Daily · 7:00am',         color: 'var(--text)' },
+  {
+    label: 'Tirzepatide',
+    kind: 'dose',
+    color: 'var(--color-fat)',
+    interval: 'Every 7 days',
+    time: '8:00 AM',
+    next: 'Next · Wed, Apr 24',
+    on: true,
+  },
+  {
+    label: 'Semaglutide',
+    kind: 'dose',
+    color: 'var(--color-protein)',
+    interval: 'Every 7 days',
+    time: '9:00 AM',
+    next: 'Next · Sun, Apr 28',
+    on: true,
+  },
+  {
+    label: 'Daily tracking',
+    kind: 'track',
+    color: 'var(--primary)',
+    interval: 'Every evening',
+    time: '8:00 PM',
+    next: 'Only if nothing logged that day',
+    on: true,
+  },
 ];
-
-const scheduleGrid = (() => {
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const rows = [
-    // Tirzepatide weekly Wed
-    [0, 0, 1, 0, 0, 0, 0],
-    // Semaglutide weekly Sun
-    [0, 0, 0, 0, 0, 0, 1],
-    // Weight daily
-    [1, 1, 1, 1, 1, 1, 1],
-  ];
-  return { days, rows };
-})();
 
 const symptomsList = [
   { name: 'Nausea',         severity: 2 },
@@ -222,68 +254,78 @@ const threads = [
   { name: 'Dose escalation plan',    when: '2w ago', active: false },
 ];
 
-const bmrNumbers = {
-  bmr: 1780,
-  tdee: 2380,
-  avgIntake: 1950,
-  deficitDay: 430,
-  lbsWeek: 0.86,
-};
+const dashRanges = [
+  { label: '30d', active: false },
+  { label: '90d', active: true  },
+  { label: '6m',  active: false },
+  { label: '1y',  active: false },
+  { label: 'All', active: false },
+];
 
-const goal = {
-  current: 207.4,
-  target: 185,
-  remaining: 22.4,
-  avgLoss: 1.3,
-  etaWeeks: 17,
-  etaDate: 'Sep 12',
-};
+const dashChips = [
+  { label: 'Weight',      color: 'var(--primary)' },
+  { label: 'Calories',    color: 'var(--color-cal)' },
+  { label: 'Tirzepatide', color: 'var(--color-fat)' },
+];
 
-const months = ['Dec', 'Jan', 'Feb', 'Mar', 'Apr'];
+const dashLogRows = [
+  { date: 'Tue Apr 22', today: true,  wgt: 207.4, waist: 35.5, dose: null,   cal: 1840, pro: 168, fat: 58, carbs: 172, score: 82, sym: 'ok',  note: false },
+  { date: 'Mon Apr 21', today: false, wgt: 207.6, waist: null, dose: null,   cal: 2100, pro: 182, fat: 64, carbs: 201, score: 87, sym: null,  note: false },
+  { date: 'Sun Apr 20', today: false, wgt: 208.2, waist: null, dose: null,   cal: 2390, pro: 175, fat: 78, carbs: 226, score: 68, sym: null,  note: true  },
+  { date: 'Sat Apr 19', today: false, wgt: 207.9, waist: null, dose: null,   cal: 2460, pro: 190, fat: 81, carbs: 248, score: 62, sym: 'warn', note: false },
+  { date: 'Fri Apr 18', today: false, wgt: 208.8, waist: null, dose: '4mg',  cal: 1180, pro: 120, fat: 40, carbs: 105, score: 71, sym: 'warn', note: true  },
+  { date: 'Thu Apr 17', today: false, wgt: 209.1, waist: null, dose: null,   cal: 1340, pro: 128, fat: 38, carbs: 128, score: 73, sym: 'ok',   note: false },
+];
+
+// Per-angle photo timeline (mirrors PhotoTimelineCard.vue grouping).
+// `sel` marks the first-selected thumbnail once a user taps one — drives the
+// "Pick a second photo to compare…" hint in the actual UI.
+const dashPhotoAngles = [
+  { label: 'Front', shots: [
+    { m: 'Dec', sel: false },
+    { m: 'Jan', sel: false },
+    { m: 'Feb', sel: true  },
+    { m: 'Mar', sel: false },
+    { m: 'Apr', sel: false },
+  ]},
+  { label: 'Side',  shots: [
+    { m: 'Dec', sel: false },
+    { m: 'Jan', sel: false },
+    { m: 'Feb', sel: false },
+    { m: 'Mar', sel: false },
+    { m: 'Apr', sel: false },
+  ]},
+  { label: 'Back',  shots: [
+    { m: 'Dec', sel: false },
+    { m: 'Feb', sel: false },
+    { m: 'Mar', sel: false },
+    { m: 'Apr', sel: false },
+  ]},
+];
 
 const platformRows = [
-  { k: 'Offline mode',        v: 'Enabled',    ok: true },
-  { k: 'Pending sync',        v: '0 changes',  ok: true },
-  { k: 'Last sync',           v: '2 min ago',  ok: true },
-  { k: 'Data export',         v: 'JSON · CSV', ok: true },
+  { k: 'Installable PWA',     v: 'iOS · Android · Desktop',  ok: true },
+  { k: 'Push reminders',      v: 'Per-compound + daily',     ok: true },
+  { k: 'Cloud-backed',        v: 'Any device you sign into', ok: true },
+  { k: 'Data export',         v: 'JSON · CSV',               ok: true },
 ];
 </script>
 
 <template>
-  <div class="features-root">
-    <div class="scanlines" aria-hidden="true"></div>
-
-    <!-- NAV -->
-    <div class="nav">
-      <div class="wrap nav-inner">
-        <span class="logo" @click="goHome" role="button">
-          <svg viewBox="0 0 64 64" width="22" height="22" class="logo-mark">
-            <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" />
-            <line x1="32" y1="2"  x2="32" y2="18" stroke="currentColor" stroke-width="2.5" />
-            <line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" />
-            <line x1="2"  y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" />
-            <line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" />
-            <circle cx="32" cy="32" r="7" fill="var(--primary)" />
-          </svg>
-          Protokol Lab
-        </span>
-        <div class="nav-links">
-          <a href="/" class="nav-link">Home</a>
-          <a href="/#pricing" class="nav-link">Pricing</a>
-        </div>
-        <button class="nav-cta" @click="goLogin">Sign in</button>
-      </div>
-    </div>
+  <MarketingLayout>
+    <div class="features-root">
 
     <!-- HEADER -->
     <section class="page-head">
       <div class="wrap">
         <div class="eyebrow">Reference · every feature</div>
-        <h1>Every feature.<br /><span class="accent">Illustrated.</span></h1>
+        <h1>Every Protokol Lab feature<br /><span class="accent">for GLP-1 tracking.</span></h1>
         <p class="lead">
-          A full tour of what the app does. Every card below is a real screen
-          from the app — not a mockup of a landing page, a mockup of the
-          product.
+          A full tour of what the app does — dose half-life curves, weekly
+          rolling calorie budgets, agentic AI, symptoms, weight, and photos
+          for Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound,
+          and compounded peptides. Every card below is a real screen from the
+          app.
         </p>
       </div>
     </section>
@@ -467,82 +509,89 @@ const platformRows = [
       </div>
     </section>
 
-    <!-- ===== TARGETS & SCORE ============================================= -->
+    <!-- ===== TARGETS & PROGRESS ========================================== -->
     <section class="group">
       <div class="wrap">
         <div class="group-head">
-          <div class="eyebrow">02 · Targets &amp; score</div>
+          <div class="eyebrow">02 · Targets &amp; progress</div>
           <h2>The numbers you're chasing.</h2>
         </div>
 
         <div class="card-grid">
-          <!-- Macros + auto-adjust -->
+          <!-- Week-aware macros -->
           <div class="card">
             <div class="card-head">
-              <span class="card-title">Macro targets · auto-adjust</span>
+              <span class="card-title">Week-aware macros · today, in context</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Lock in calorie, protein, fat, and carb numbers yourself — or
-              let the app rebalance them each week based on what you
-              actually ate and how you actually weighed.
+              Set daily targets once. The app keeps rolling 7-day totals so
+              a heavy Wednesday becomes a lighter Thursday. Every macro row
+              tells you exactly how much is left for today — your targets
+              don't rewrite themselves, but your plan for the day does.
             </div>
             <div class="mini">
               <div v-for="(r, i) in [
-                { label: 'Calories', val: 2180, prev: 2100, unit: 'kcal', pct: 74, kind: 'cal',  delta: +80  },
-                { label: 'Protein',  val: 190,  prev: 180,  unit: 'g',    pct: 92, kind: 'pro',  delta: +10  },
-                { label: 'Fat',      val: 62,   prev: 65,   unit: 'g',    pct: 42, kind: 'fat',  delta: -3   },
-                { label: 'Carbs',    val: 215,  prev: 210,  unit: 'g',    pct: 58, kind: 'carb', delta: +5   },
-              ]" :key="i" class="target-row">
+                { label: 'Calories', weekVal: 9480, weekMax: 10500, unit: 'kcal', pct: 90, kind: 'cal',  leftToday: 1020, overToday: false },
+                { label: 'Protein',  weekVal: 920,  weekMax: 1260,  unit: 'g',    pct: 73, kind: 'pro',  leftToday: 48,   overToday: false },
+                { label: 'Fat',      weekVal: 385,  weekMax: 455,   unit: 'g',    pct: 85, kind: 'fat',  leftToday: 10,   overToday: false },
+                { label: 'Carbs',    weekVal: 1560, weekMax: 1470,  unit: 'g',    pct: 100, kind: 'carb', leftToday: 90,   overToday: true  },
+              ]" :key="i" class="target-row week-row">
                 <div class="target-head">
-                  <span class="target-label">{{ r.label }}</span>
+                  <span class="target-label">
+                    {{ r.label }} <span class="target-sub">(week)</span>
+                  </span>
                   <span class="target-val">
-                    {{ r.val }} {{ r.unit }}
-                    <span class="target-delta" :class="{ up: r.delta > 0, down: r.delta < 0 }">
-                      {{ r.delta > 0 ? '+' : '' }}{{ r.delta }}
-                    </span>
+                    {{ r.weekVal.toLocaleString() }}<span class="dim"> / {{ r.weekMax.toLocaleString() }} {{ r.unit }}</span>
                   </span>
                 </div>
                 <div class="target-track">
                   <div class="target-fill" :class="`kind-${r.kind}`" :style="{ width: r.pct + '%' }"></div>
                 </div>
+                <div class="target-today" :class="{ over: r.overToday }">
+                  <template v-if="r.overToday">
+                    over by {{ r.leftToday }}{{ r.unit }} this week
+                  </template>
+                  <template v-else>
+                    {{ r.leftToday.toLocaleString() }}{{ r.unit }} left today
+                  </template>
+                </div>
               </div>
-              <div class="target-auto">
-                Auto-adjusted from last week · based on -1.3 lbs trend
+              <div class="target-auto tone-good">
+                ▸ On pace for your weekly target.
               </div>
             </div>
           </div>
 
-          <!-- Nutrition score -->
+          <!-- Dashboard stat grid -->
           <div class="card">
             <div class="card-head">
-              <span class="card-title">Nutrition score · 0–100</span>
+              <span class="card-title">Progress at a glance · 8 numbers</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Each day gets a score from hitting your targets, protein
-              density, and macro balance. It charts as a series — one number
-              to tell you whether the week was good, bad, or average.
+              The whole story in one grid: current weight, total change,
+              BMI, percent change, weekly average, regression trend, distance
+              to goal, and ETA. No scrolling, no drilling in — just the
+              numbers that move week over week.
             </div>
             <div class="mini">
-              <div class="score-row">
-                <div class="score-num">{{ score.current }}<span class="score-unit">/100</span></div>
-                <div class="score-meta">
-                  <div class="mini-eyebrow">Today</div>
-                  <div class="score-avg">30-day avg · {{ score.avg }}</div>
+              <div class="stat-grid">
+                <div v-for="s in [
+                  { label: 'Current',      val: '207.4',  unit: 'lbs' },
+                  { label: 'Total Change', val: '-18.6',  unit: 'lbs',   tone: 'good' },
+                  { label: 'BMI',          val: '28.4',   unit: '' },
+                  { label: '% Change',     val: '-8.2',   unit: '%',     tone: 'good' },
+                  { label: 'Weekly Avg',   val: '-1.3',   unit: 'lbs/wk', tone: 'good' },
+                  { label: 'Trend',        val: '-1.30',  unit: 'lbs/wk', tone: 'good' },
+                  { label: 'To Goal',      val: '22.4',   unit: 'lbs' },
+                  { label: 'ETA',          val: '17',     unit: 'weeks',  tone: 'good' },
+                ]" :key="s.label" class="stat-cell">
+                  <div class="stat-cell-label">{{ s.label }}</div>
+                  <div class="stat-cell-value" :class="s.tone">
+                    {{ s.val }}<span class="stat-cell-unit" v-if="s.unit"> {{ s.unit }}</span>
+                  </div>
                 </div>
-              </div>
-              <svg :viewBox="`0 0 ${score.W} ${score.H}`" class="block-svg">
-                <rect v-for="(b, i) in score.bars" :key="i"
-                      :x="b.x" :y="b.y" width="12" :height="b.h"
-                      :fill="b.over ? 'var(--primary)' : b.low ? 'var(--color-carbs)' : 'var(--color-fat)'"
-                      opacity="0.75" />
-                <path :d="score.path" fill="none" stroke="var(--text)" stroke-width="1.25" opacity="0.45" />
-              </svg>
-              <div class="score-legend">
-                <span><i class="sq green"></i> ≥ 80</span>
-                <span><i class="sq amber"></i> 50–79</span>
-                <span><i class="sq red"></i> &lt; 50</span>
               </div>
             </div>
           </div>
@@ -550,140 +599,219 @@ const platformRows = [
       </div>
     </section>
 
-    <!-- ===== WEIGHT & PROGRESS =========================================== -->
+    <!-- ===== DASHBOARD ANALYSIS ========================================== -->
     <section class="group">
       <div class="wrap">
         <div class="group-head">
-          <div class="eyebrow">03 · Weight &amp; progress</div>
-          <h2>The trend, not the noise.</h2>
+          <div class="eyebrow">03 · Dashboard analysis</div>
+          <h2>Every metric, on one chart.</h2>
         </div>
 
         <div class="card-grid">
-          <!-- Regression trend -->
+          <!-- Multi-series chart -->
           <div class="card wide">
             <div class="card-head">
-              <span class="card-title">Daily weigh-ins · regression trend line</span>
+              <span class="card-title">Multi-series chart · pick anything, compare everything</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Every weigh-in is a dot. The line is a least-squares fit —
-              one bad morning doesn't move it, a real shift does. The slope
-              is your actual weekly rate of loss.
+              Weight, waist, calories, protein, fat, carbs, nutrition score,
+              every active compound, every symptom — put any of them on the
+              same chart. Add or remove a series with one tap. Zoom from
+              30 days to five years. The regression line for weight draws
+              itself.
             </div>
             <div class="mini">
-              <div class="trend-header">
-                <div>
-                  <div class="mini-eyebrow">Slope · 56-day fit</div>
-                  <div class="trend-slope">{{ trend.slope }} lbs/wk</div>
+              <div class="dash-toolbar">
+                <div class="dash-range">
+                  <button
+                    v-for="r in dashRanges"
+                    :key="r.label"
+                    :class="{ active: r.active }"
+                    type="button"
+                  >{{ r.label }}</button>
                 </div>
-                <div class="right">
-                  <div class="mini-eyebrow">Latest</div>
-                  <div class="trend-latest">207.4 <span class="dim">lbs</span></div>
-                </div>
               </div>
-              <svg :viewBox="`0 0 ${trend.W} ${trend.H}`" class="block-svg">
-                <circle v-for="(d, i) in trend.dots" :key="i"
-                        :cx="d.x" :cy="d.y" r="2.25"
-                        fill="var(--text-tertiary)" opacity="0.7" />
-                <path :d="trend.line" fill="none" stroke="var(--primary)" stroke-width="2" />
-                <text :x="14" :y="trend.H - 8" class="svg-axis-dim">56d ago</text>
-                <text :x="trend.right" :y="trend.H - 8" text-anchor="end" class="svg-axis-dim">today</text>
-              </svg>
-            </div>
-          </div>
-
-          <!-- BMR projection -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">BMR projection · live deficit math</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Your BMR comes from your weight, height, age, sex, and
-              activity. Subtract your actual intake and you get the
-              deficit — in calories per day and pounds per week.
-            </div>
-            <div class="mini bmr-mini">
-              <div class="bmr-row">
-                <span class="bmr-k">BMR</span>
-                <span class="bmr-v">{{ bmrNumbers.bmr }}</span>
-                <span class="bmr-u">kcal/d</span>
+              <div class="dash-chips">
+                <span
+                  v-for="chip in dashChips"
+                  :key="chip.label"
+                  class="dash-chip"
+                >
+                  <span class="dash-chip-dot" :style="{ background: chip.color }"></span>
+                  {{ chip.label }}
+                  <span class="dash-chip-x">×</span>
+                </span>
+                <span class="dash-chip dash-chip-add">+ Add</span>
               </div>
-              <div class="bmr-row">
-                <span class="bmr-k">TDEE · moderate</span>
-                <span class="bmr-v">{{ bmrNumbers.tdee }}</span>
-                <span class="bmr-u">kcal/d</span>
+              <div class="dash-chart-wrap">
+                <svg :viewBox="`0 0 ${dashChart.W} ${dashChart.H}`" class="block-svg">
+                  <!-- grid -->
+                  <line
+                    v-for="(y, i) in dashChart.gridYs"
+                    :key="'g' + i"
+                    :x1="dashChart.pad.l" :x2="dashChart.right"
+                    :y1="y" :y2="y"
+                    stroke="var(--border)" stroke-width="1"
+                    stroke-dasharray="2 3" opacity="0.6"
+                  />
+                  <!-- PK fill + line (amber, dashed) -->
+                  <path :d="dashChart.pkArea" fill="var(--color-fat)" opacity="0.1" />
+                  <path :d="dashChart.pkPath"
+                        fill="none" stroke="var(--color-fat)" stroke-width="1.5"
+                        stroke-dasharray="4 3" />
+                  <!-- Calories (blue) -->
+                  <path :d="dashChart.calPath"
+                        fill="none" stroke="var(--color-cal)" stroke-width="1.25"
+                        opacity="0.75" />
+                  <!-- Weight trend regression (green dashed) -->
+                  <path :d="dashChart.trendPath"
+                        fill="none" stroke="var(--primary)" stroke-width="1.25"
+                        stroke-dasharray="6 4" opacity="0.55" />
+                  <!-- Weight line (green solid, primary series) -->
+                  <path :d="dashChart.weightPath"
+                        fill="none" stroke="var(--primary)" stroke-width="2" />
+                  <!-- Dose pills at top of chart area -->
+                  <g v-for="(d, i) in dashChart.doses" :key="'d' + i">
+                    <line
+                      :x1="d.x" :x2="d.x"
+                      :y1="dashChart.pad.t + 10" :y2="dashChart.padB"
+                      stroke="var(--color-fat)" stroke-width="1"
+                      stroke-dasharray="2 3" opacity="0.35"
+                    />
+                    <rect
+                      :x="d.x - 11" :y="dashChart.pad.t - 4"
+                      width="22" height="11"
+                      fill="var(--color-fat)"
+                    />
+                    <text
+                      :x="d.x" :y="dashChart.pad.t + 4"
+                      text-anchor="middle" class="dose-pill-text"
+                    >{{ d.mg }}mg</text>
+                  </g>
+                  <!-- Axis labels -->
+                  <text :x="dashChart.pad.l" :y="dashChart.H - 8" class="svg-axis-dim">84d ago</text>
+                  <text :x="dashChart.right" :y="dashChart.H - 8" text-anchor="end" class="svg-axis-dim">today</text>
+                  <text :x="dashChart.pad.l - 6" :y="dashChart.pad.t + 6"
+                        text-anchor="end" class="svg-axis-dim">lbs</text>
+                  <text :x="dashChart.right + 4" :y="dashChart.pad.t + 6"
+                        class="svg-axis-dim">mg</text>
+                </svg>
               </div>
-              <div class="bmr-row">
-                <span class="bmr-k">Avg intake · 14d</span>
-                <span class="bmr-v">{{ bmrNumbers.avgIntake }}</span>
-                <span class="bmr-u">kcal/d</span>
-              </div>
-              <div class="bmr-divider"></div>
-              <div class="bmr-row big">
-                <span class="bmr-k">Deficit</span>
-                <span class="bmr-v accent">−{{ bmrNumbers.deficitDay }}</span>
-                <span class="bmr-u">kcal/d</span>
-              </div>
-              <div class="bmr-row big">
-                <span class="bmr-k">Projected</span>
-                <span class="bmr-v accent">−{{ bmrNumbers.lbsWeek }}</span>
-                <span class="bmr-u">lbs/wk</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Goal countdown -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Goal weight · countdown</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Set a target weight. The app tracks how far you've come,
-              how far you have to go, and — based on your actual rate of
-              loss — when you'll hit it.
-            </div>
-            <div class="mini">
-              <div class="goal-big">
-                <div class="goal-num">−{{ goal.remaining }}<span class="goal-unit"> lbs</span></div>
-                <div class="goal-sub">to {{ goal.target }} lbs goal</div>
-              </div>
-              <div class="goal-bar">
-                <div class="goal-fill" style="width: 45%"></div>
-              </div>
-              <div class="goal-scale">
-                <span>Start 226</span>
-                <span>Now 207.4</span>
-                <span>Goal 185</span>
-              </div>
-              <div class="goal-eta">
-                At current pace · <span class="accent">{{ goal.etaWeeks }} weeks</span>
-                · ETA {{ goal.etaDate }}
+              <div class="dash-legend">
+                <span>Trend · <span class="accent">{{ dashChart.slope }} lbs/wk</span></span>
+                <span class="dim">· regression across the full range</span>
               </div>
             </div>
           </div>
 
-          <!-- Photos -->
-          <div class="card">
+          <!-- Log history table -->
+          <div class="card wide">
             <div class="card-head">
-              <span class="card-title">Progress photos · monthly</span>
+              <span class="card-title">Log history · one row per day</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Monthly shots attached to your account. Swipe between any
-              two months to see what actually changed when the scale is
-              being boring.
+              Every day in one table — weight, waist, dose, calories, macros,
+              nutrition score — plus a dot for symptoms and a pencil for any
+              day you left a note. Tap a row to jump back to that day's full
+              log.
             </div>
             <div class="mini">
-              <div class="photos-strip">
-                <div v-for="m in months" :key="m" class="photo-tile">
-                  <span class="photo-label">{{ m }}</span>
+              <table class="log-tbl">
+                <thead>
+                  <tr>
+                    <th class="lt-date">Date</th>
+                    <th class="lt-num">Wgt</th>
+                    <th class="lt-num">Waist</th>
+                    <th class="lt-num">Tirzep</th>
+                    <th class="lt-num lt-cal">Kcal</th>
+                    <th class="lt-num lt-pro">Pro</th>
+                    <th class="lt-num lt-fat">Fat</th>
+                    <th class="lt-num lt-carb">Carbs</th>
+                    <th class="lt-num lt-score">Score</th>
+                    <th class="lt-ctr">Sym</th>
+                    <th class="lt-ctr">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="row in dashLogRows"
+                    :key="row.date"
+                    :class="{ today: row.today }"
+                  >
+                    <td class="lt-date">{{ row.date }}</td>
+                    <td class="lt-num">{{ row.wgt }}</td>
+                    <td class="lt-num">{{ row.waist != null ? row.waist + '&quot;' : '' }}</td>
+                    <td class="lt-num">
+                      <span v-if="row.dose" class="lt-dose">{{ row.dose }}</span>
+                    </td>
+                    <td class="lt-num lt-cal">{{ row.cal.toLocaleString() }}</td>
+                    <td class="lt-num lt-pro">{{ row.pro }}g</td>
+                    <td class="lt-num lt-fat">{{ row.fat }}g</td>
+                    <td class="lt-num lt-carb">{{ row.carbs }}g</td>
+                    <td
+                      class="lt-num lt-score"
+                      :class="row.score >= 85 ? 'score-good' : row.score >= 60 ? 'score-ok' : 'score-bad'"
+                    >{{ row.score }}</td>
+                    <td class="lt-ctr">
+                      <span
+                        v-if="row.sym"
+                        class="lt-sym-dot"
+                        :class="row.sym"
+                      ></span>
+                    </td>
+                    <td class="lt-ctr">
+                      <svg
+                        v-if="row.note"
+                        viewBox="0 0 24 24" class="lt-note-icon"
+                        fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round"
+                      >
+                        <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                        <path d="m15 5 4 4" />
+                      </svg>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Photos by angle + compare -->
+          <div class="card wide">
+            <div class="card-head">
+              <span class="card-title">Progress photos · timeline by angle, drag to compare</span>
+              <span class="card-tag">CORE</span>
+            </div>
+            <div class="card-body">
+              Snap a front, side, and back shot whenever you can. The
+              timeline organizes them by angle so the strip stays readable
+              as months pile up. Tap any two shots and they drop into a
+              before/after slider — drag the divider to see what actually
+              changed.
+            </div>
+            <div class="mini">
+              <div
+                v-for="row in dashPhotoAngles"
+                :key="row.label"
+                class="photo-angle-row"
+              >
+                <span class="photo-angle-label">{{ row.label }}</span>
+                <div class="photo-angle-strip">
+                  <div
+                    v-for="shot in row.shots"
+                    :key="shot.m"
+                    class="photo-thumb"
+                    :class="{ sel: shot.sel }"
+                  >
+                    <span class="photo-thumb-m">{{ shot.m }}</span>
+                  </div>
                 </div>
               </div>
-              <div class="photos-compare">
-                <span class="accent">▸ Compare Dec ↔ Apr</span>
-                <span class="dim">−18.6 lbs · 5 months</span>
+              <div class="photo-compare-hint">
+                <span class="accent">▸ Pick a second photo to compare…</span>
+                <span class="dim">Feb selected · Front</span>
               </div>
             </div>
           </div>
@@ -799,34 +927,38 @@ const platformRows = [
             </div>
           </div>
 
-          <!-- Push scheduler -->
+          <!-- Push reminders -->
           <div class="card wide">
             <div class="card-head">
-              <span class="card-title">Push scheduler · per-compound times &amp; weekdays</span>
+              <span class="card-title">Push reminders · interval + one send-time</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              A real scheduler, not a daily nag. Pick which days, which
-              times, which compound. Push notifications go through your
-              phone's lock screen exactly when you asked.
+              Each compound has its own dose interval and a single reminder
+              time. The next dose day is computed from your last log plus
+              the interval — the push fires at your chosen hour on dose
+              days only. A separate daily tracking reminder nudges you in
+              the evening if you haven't logged anything yet.
             </div>
-            <div class="mini sched-mini">
+            <div class="mini">
               <div class="sched-list">
-                <div v-for="s in schedule" :key="s.label" class="sched-row">
+                <div
+                  v-for="s in schedule"
+                  :key="s.label"
+                  class="sched-row"
+                  :class="{ 'sched-track': s.kind === 'track' }"
+                >
                   <span class="sched-dot" :style="{ background: s.color }"></span>
-                  <span class="sched-label">{{ s.label }}</span>
-                  <span class="sched-freq">{{ s.freq }}</span>
-                </div>
-              </div>
-              <div class="sched-grid">
-                <div class="sched-grid-head">
-                  <span></span>
-                  <span v-for="(d, i) in scheduleGrid.days" :key="i">{{ d }}</span>
-                </div>
-                <div class="sched-grid-row" v-for="(row, i) in scheduleGrid.rows" :key="i">
-                  <span class="sched-grid-label">{{ schedule[i].label }}</span>
-                  <span v-for="(n, j) in row" :key="j" class="sched-cell" :class="{ on: n > 0 }">
-                    <template v-if="n > 0">{{ n === 2 ? '●●' : '●' }}</template>
+                  <div class="sched-info">
+                    <div class="sched-label">{{ s.label }}</div>
+                    <div class="sched-cadence">{{ s.interval }}</div>
+                  </div>
+                  <div class="sched-timing">
+                    <div class="sched-time">{{ s.time }}</div>
+                    <div class="sched-next">{{ s.next }}</div>
+                  </div>
+                  <span class="sched-toggle" :class="{ on: s.on }">
+                    <span class="sched-toggle-thumb"></span>
                   </span>
                 </div>
               </div>
@@ -836,30 +968,39 @@ const platformRows = [
           <!-- Smart reminder -->
           <div class="card">
             <div class="card-head">
-              <span class="card-title">Smart reminder · skips what you already did</span>
+              <span class="card-title">Smart daily reminder · skips if you already logged</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              The daily reminder checks your log first. If you already
-              weighed in or logged the dose, the push doesn't fire. No
-              duplicate pings, no "did I do that already?" lookups.
+              The evening tracking reminder checks your log first. If the
+              day already has any entry — a weigh-in, a dose, a meal — the
+              push doesn't fire. No "did I do that already?" lookups at
+              bedtime.
             </div>
-            <div class="mini">
-              <div class="push-mock">
-                <div class="push-top">
-                  <span class="push-app">Protokol Lab</span>
-                  <span class="push-time">8:00 AM</span>
+            <div class="mini push-stack">
+              <div class="ios-push">
+                <div class="ios-push-header">
+                  <span class="ios-push-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <line x1="12" y1="3" x2="12" y2="7" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                      <line x1="3" y1="12" x2="7" y2="12" />
+                      <line x1="17" y1="12" x2="21" y2="12" />
+                      <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
+                    </svg>
+                  </span>
+                  <span class="ios-push-app">PROTOKOL LAB</span>
+                  <span class="ios-push-time">now</span>
                 </div>
-                <div class="push-body">
-                  <b>Tirzepatide due</b><br />
-                  Tap to log. Expected dose: 5mg.
-                </div>
+                <div class="ios-push-title">Tirzepatide due</div>
+                <div class="ios-push-body">Tap to log. Expected dose: 4 mg.</div>
               </div>
               <div class="push-skip">
                 <span class="skip-dot"></span>
                 <span class="skip-body">
-                  <b>Semaglutide reminder skipped.</b>
-                  <span class="dim">Already logged at 6:42 AM.</span>
+                  <b>Daily tracking reminder skipped.</b>
+                  <span class="dim">You already logged a dose at 6:42 AM.</span>
                 </span>
               </div>
             </div>
@@ -1017,16 +1158,17 @@ const platformRows = [
         </div>
 
         <div class="card-grid">
-          <!-- Offline / sync / export -->
+          <!-- Installable PWA · push · export -->
           <div class="card wide">
             <div class="card-head">
-              <span class="card-title">Offline · cloud sync · export</span>
+              <span class="card-title">Installable PWA · push · export</span>
               <span class="card-tag">CORE</span>
             </div>
             <div class="card-body">
-              Installs as a PWA, works fully offline, syncs when you're
-              back online. Your whole history exports as JSON or CSV
-              whenever you want it — no paywall, no support ticket.
+              Installs to your home screen on iOS, Android, and desktop.
+              Push reminders deliver through your phone's lock screen.
+              Your whole history exports as JSON or CSV whenever you want —
+              no paywall, no support ticket.
             </div>
             <div class="mini">
               <div class="status-grid">
@@ -1050,14 +1192,15 @@ const platformRows = [
     <section class="final-cta">
       <div class="wrap">
         <h2>That's the tour.<br /><span class="accent">Start tracking.</span></h2>
-        <p>Free to start. Premium unlocks the AI and correlation charts for $4.99/mo.</p>
+        <p>Free to start. Premium unlocks the AI and correlation charts from $6.58/mo (billed annually).</p>
         <div class="cta-buttons">
           <button class="btn-primary big" @click="goRegister">Create account →</button>
           <button class="btn-secondary big" @click="goHome">Back to home</button>
         </div>
       </div>
     </section>
-  </div>
+    </div>
+  </MarketingLayout>
 </template>
 
 <style scoped>
@@ -1356,76 +1499,202 @@ const platformRows = [
   font-family: var(--font-mono);
   padding: 6px 8px; border: 1px dashed var(--border-strong);
 }
-
-/* ---- Score mini ------------------------------------------------ */
-.score-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-.score-num { font-size: 36px; font-weight: 700; font-family: var(--font-mono); color: var(--primary); }
-.score-unit { font-size: 14px; color: var(--text-tertiary); font-weight: 400; }
-.score-meta { text-align: right; }
-.score-avg { font-size: 13px; color: var(--text); font-family: var(--font-mono); }
-.score-legend {
-  margin-top: 8px; display: flex; gap: 14px;
-  font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono);
+.target-auto.tone-good {
+  color: var(--text-secondary);
+  border-left: 2px solid var(--primary);
+  border-top: 1px dashed var(--border-strong);
+  border-right: 1px dashed var(--border-strong);
+  border-bottom: 1px dashed var(--border-strong);
+  background: var(--bg);
 }
-.score-legend i {
-  display: inline-block; width: 10px; height: 10px;
-  margin-right: 5px; vertical-align: -1px;
+.target-sub {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  margin-left: 2px;
 }
-.score-legend i.green { background: var(--primary); }
-.score-legend i.amber { background: var(--color-fat); }
-.score-legend i.red   { background: var(--color-carbs); }
+.target-today {
+  margin-top: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+.target-today.over {
+  color: var(--color-carbs);
+}
+.week-row + .week-row { margin-top: 8px; }
 
-/* ---- Trend mini ------------------------------------------------ */
-.trend-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-.trend-header .right { text-align: right; }
-.trend-slope { font-size: 20px; font-weight: 700; color: var(--primary); font-family: var(--font-mono); }
-.trend-latest { font-size: 18px; font-family: var(--font-mono); font-weight: 700; }
-.trend-latest .dim { font-size: 11px; color: var(--text-tertiary); font-weight: 400; }
+/* ---- Stat grid mini -------------------------------------------- */
+.stat-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+}
+.stat-cell {
+  padding: 10px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  text-align: center;
+  min-width: 0;
+}
+.stat-cell-label {
+  font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--text-tertiary); font-weight: 700;
+  margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stat-cell-value {
+  font-size: 15px; font-family: var(--font-mono);
+  font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--text); line-height: 1; white-space: nowrap;
+}
+.stat-cell-value.good { color: var(--primary); }
+.stat-cell-value.bad  { color: var(--color-carbs); }
+.stat-cell-unit {
+  font-size: 9px; color: var(--text-tertiary); font-weight: 400;
+  letter-spacing: 0.02em; margin-left: 1px;
+}
+@media (max-width: 560px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
-/* ---- BMR mini -------------------------------------------------- */
-.bmr-mini { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-mono); font-size: 12px; }
-.bmr-row { display: grid; grid-template-columns: 1fr auto 60px; align-items: baseline; gap: 10px; }
-.bmr-row.big { font-size: 14px; }
-.bmr-row.big .bmr-v { font-size: 20px; font-weight: 700; }
-.bmr-k { color: var(--text-secondary); }
-.bmr-v { text-align: right; color: var(--text); font-weight: 600; }
-.bmr-u { color: var(--text-tertiary); font-size: 10px; text-align: left; }
-.bmr-divider { height: 1px; background: var(--border); margin: 6px 0; }
-.bmr-row.big .bmr-v.accent { color: var(--primary); }
-
-/* ---- Goal mini ------------------------------------------------- */
-.goal-big { margin-bottom: 14px; }
-.goal-num { font-size: 34px; font-weight: 700; color: var(--primary); font-family: var(--font-mono); letter-spacing: -0.02em; }
-.goal-unit { font-size: 14px; color: var(--text-tertiary); font-weight: 400; }
-.goal-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
-.goal-bar { height: 4px; background: var(--surface-raised); }
-.goal-fill { height: 100%; background: var(--primary); }
-.goal-scale {
-  display: flex; justify-content: space-between; margin-top: 6px;
-  font-size: 9px; color: var(--text-tertiary); font-family: var(--font-mono);
+/* ---- Dashboard multi-series chart mini ------------------------- */
+.dash-toolbar {
+  display: flex; justify-content: flex-end; margin-bottom: 8px;
+}
+.dash-range {
+  display: inline-flex; border: 1px solid var(--border);
+  background: var(--bg); padding: 2px; gap: 2px;
+}
+.dash-range button {
+  padding: 3px 9px; background: none; border: none;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-tertiary); cursor: default;
   letter-spacing: 0.06em;
 }
-.goal-eta {
-  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
-  font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono);
+.dash-range button.active {
+  background: var(--surface-raised); color: var(--text); font-weight: 700;
+}
+.dash-chips {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px;
+}
+.dash-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 7px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  font-size: 10px; font-family: var(--font-mono);
+  color: var(--text); letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.dash-chip-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.dash-chip-x {
+  color: var(--text-tertiary); font-size: 11px; margin-left: 2px; line-height: 1;
+}
+.dash-chip-add {
+  border-style: dashed; color: var(--text-tertiary);
+}
+.dash-chart-wrap { margin-bottom: 8px; }
+.dose-pill-text {
+  fill: var(--bg); font-family: var(--font-mono);
+  font-size: 8px; font-weight: 700; letter-spacing: 0.02em;
+}
+.dash-legend {
+  display: flex; gap: 6px; align-items: baseline;
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+  padding-top: 8px; border-top: 1px solid var(--border);
 }
 
-/* ---- Photos mini ---------------------------------------------- */
-.photos-strip { display: flex; gap: 6px; margin-bottom: 10px; }
-.photo-tile {
-  flex: 1; aspect-ratio: 3/4; background: var(--surface-raised);
-  border: 1px solid var(--border); display: flex; align-items: flex-end; padding: 4px;
-  position: relative;
-  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(91,245,145,0.04) 6px 7px);
+/* ---- Log history table mini ----------------------------------- */
+.log-tbl {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--font-mono); font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
 }
-.photo-label {
-  font-size: 9px; color: var(--text-tertiary); font-family: var(--font-mono);
-  text-transform: uppercase; letter-spacing: 0.08em;
+.log-tbl th {
+  font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.1em;
+  font-weight: 700; color: var(--text-tertiary);
+  padding: 6px 4px; text-align: right;
+  border-bottom: 1px solid var(--border);
 }
-.photos-compare {
-  display: flex; justify-content: space-between;
-  font-size: 11px; font-family: var(--font-mono);
+.log-tbl th.lt-date { text-align: left; }
+.log-tbl th.lt-ctr { text-align: center; }
+.log-tbl th.lt-cal   { color: var(--color-cal); }
+.log-tbl th.lt-pro   { color: var(--color-protein); }
+.log-tbl th.lt-fat   { color: var(--color-fat); }
+.log-tbl th.lt-carb  { color: var(--color-carbs); }
+.log-tbl td {
+  padding: 7px 4px; text-align: right; color: var(--text);
+  border-bottom: 1px dashed var(--border);
+}
+.log-tbl tbody tr:last-child td { border-bottom: none; }
+.log-tbl tbody tr.today td { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.log-tbl td.lt-date {
+  text-align: left; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+  font-size: 9.5px;
+}
+.log-tbl td.lt-ctr { text-align: center; }
+.log-tbl td.lt-cal  { color: var(--color-cal); font-weight: 700; }
+.log-tbl td.lt-pro  { color: var(--color-protein); }
+.log-tbl td.lt-fat  { color: var(--color-fat); }
+.log-tbl td.lt-carb { color: var(--color-carbs); }
+.log-tbl td.lt-score { font-weight: 700; }
+.log-tbl td.score-good { color: var(--primary); }
+.log-tbl td.score-ok   { color: var(--color-fat); }
+.log-tbl td.score-bad  { color: var(--color-carbs); }
+.lt-dose {
+  display: inline-block; padding: 1px 5px;
+  background: var(--color-fat); color: var(--bg);
+  font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
+}
+.lt-sym-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.lt-sym-dot.ok   { background: var(--primary); }
+.lt-sym-dot.warn { background: var(--color-carbs); }
+.lt-note-icon {
+  width: 11px; height: 11px; color: var(--text-tertiary); vertical-align: middle;
+}
+
+/* ---- Photos: angle timeline + compare hint -------------------- */
+.photo-angle-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0; border-bottom: 1px dashed var(--border);
+}
+.photo-angle-row:last-of-type { border-bottom: none; }
+.photo-angle-label {
+  flex-shrink: 0; width: 52px;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em;
   color: var(--text-tertiary);
+}
+.photo-angle-strip {
+  display: flex; gap: 6px; flex: 1; min-width: 0; overflow: hidden;
+}
+.photo-thumb {
+  width: 44px; aspect-ratio: 3/4; flex-shrink: 0;
+  background: var(--surface-raised); border: 1px solid var(--border);
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(91,245,145,0.04) 6px 7px);
+  display: flex; align-items: flex-end; justify-content: flex-start;
+  padding: 3px;
+}
+.photo-thumb.sel {
+  border-color: var(--primary);
+  outline: 1px solid var(--primary); outline-offset: 1px;
+}
+.photo-thumb-m {
+  font-family: var(--font-mono); font-size: 8px;
+  color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.photo-thumb.sel .photo-thumb-m { color: var(--primary); font-weight: 700; }
+.photo-compare-hint {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
 }
 
 /* ---- Compound + custom form mini ------------------------------- */
@@ -1505,59 +1774,97 @@ const platformRows = [
 }
 
 /* ---- Push scheduler mini -------------------------------------- */
-.sched-mini { display: grid; grid-template-columns: 1fr 1.1fr; gap: 20px; }
 .sched-list { display: flex; flex-direction: column; gap: 8px; }
 .sched-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; background: var(--surface-alt); border: 1px solid var(--border);
-  font-size: 12px;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
 }
-.sched-dot { width: 10px; height: 10px; display: inline-block; flex-shrink: 0; }
-.sched-label { flex: 1; color: var(--text); font-weight: 600; }
-.sched-freq { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); }
-
-.sched-grid {
-  border: 1px solid var(--border); background: var(--surface-alt);
+.sched-row.sched-track { border-left-color: var(--primary); }
+.sched-dot {
+  width: 10px; height: 10px; display: inline-block;
+  flex-shrink: 0; border-radius: 50%;
+}
+.sched-info { min-width: 0; }
+.sched-label { color: var(--text); font-weight: 700; font-size: 13px; }
+.sched-cadence {
+  font-size: 10px; color: var(--text-tertiary);
+  font-family: var(--font-mono); letter-spacing: 0.04em; margin-top: 2px;
+}
+.sched-timing { text-align: right; }
+.sched-time {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-weight: 700; color: var(--primary); font-size: 14px;
+}
+.sched-next {
   font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-tertiary); margin-top: 2px;
 }
-.sched-grid-head, .sched-grid-row {
-  display: grid; grid-template-columns: 1fr repeat(7, 1fr);
+.sched-toggle {
+  width: 28px; height: 16px; border-radius: 9px;
+  background: var(--surface-raised); border: 1px solid var(--border);
+  position: relative; flex-shrink: 0; transition: background 0.2s;
 }
-.sched-grid-head {
-  color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.1em;
-  background: var(--surface); border-bottom: 1px solid var(--border);
-  font-size: 9px;
+.sched-toggle.on { background: var(--primary); border-color: var(--primary); }
+.sched-toggle-thumb {
+  position: absolute; top: 1px; left: 1px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--bg); transition: left 0.2s;
 }
-.sched-grid-head span { padding: 6px 0; text-align: center; }
-.sched-grid-head > span:first-child { padding-left: 8px; text-align: left; }
-.sched-grid-row { border-bottom: 1px solid var(--border); }
-.sched-grid-row:last-child { border-bottom: none; }
-.sched-grid-label {
-  padding: 8px; font-size: 10px; color: var(--text); font-weight: 600;
-  border-right: 1px solid var(--border);
-}
-.sched-cell {
-  padding: 6px 0; text-align: center; color: var(--text-tertiary);
-  border-right: 1px solid var(--border);
-}
-.sched-cell:last-child { border-right: none; }
-.sched-cell.on { color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.sched-toggle.on .sched-toggle-thumb { left: 13px; }
 
-/* ---- Smart reminder mockup ------------------------------------ */
-.push-mock {
-  border: 1px solid var(--border); background: var(--surface-alt);
-  padding: 10px 12px; margin-bottom: 12px;
-  box-shadow: var(--shadow-m);
+/* ---- iOS-native push notification mockup ---------------------- */
+.push-stack { display: flex; flex-direction: column; gap: 12px; }
+.ios-push {
+  font-family: -apple-system, 'SF Pro', 'SF Pro Text', system-ui, sans-serif;
+  background: rgba(245, 245, 247, 0.98);
+  color: #000;
+  border-radius: 20px;
+  padding: 12px 14px 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
 }
-.push-top {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono);
-  letter-spacing: 0.08em; text-transform: uppercase;
-  margin-bottom: 6px;
+[data-theme='dark'] .ios-push {
+  background: rgba(44, 44, 46, 0.94);
+  color: #fff;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
 }
-.push-app { color: var(--primary); font-weight: 700; }
-.push-body { font-size: 12px; line-height: 1.5; color: var(--text); }
+.ios-push-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.ios-push-icon {
+  width: 20px; height: 20px;
+  border-radius: 5px;
+  background: var(--primary);
+  color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ios-push-icon svg { width: 13px; height: 13px; }
+.ios-push-app {
+  flex: 1;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+  color: inherit; opacity: 0.75;
+  text-transform: uppercase;
+  font-family: inherit;
+}
+.ios-push-time {
+  font-size: 13px; opacity: 0.5;
+  font-family: inherit; letter-spacing: 0;
+}
+.ios-push-title {
+  font-size: 15px; font-weight: 600; margin-bottom: 2px; line-height: 1.25;
+  color: inherit;
+}
+.ios-push-body {
+  font-size: 15px; line-height: 1.3; color: inherit; opacity: 0.85;
+}
 
+/* ---- "Skipped" callout -------------------------------------- */
 .push-skip {
   display: flex; gap: 10px; align-items: flex-start;
   padding: 10px 12px; border: 1px dashed var(--border-strong);
@@ -1720,7 +2027,7 @@ const platformRows = [
 @media (max-width: 980px) {
   .card-grid { grid-template-columns: 1fr; }
   .card.wide { grid-column: span 1; }
-  .notes-mini, .sched-mini { grid-template-columns: 1fr; }
+  .notes-mini { grid-template-columns: 1fr; }
   .page-head h1 { font-size: 40px; }
   .final-cta h2 { font-size: 36px; }
 }
