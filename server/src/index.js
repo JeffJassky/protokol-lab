@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -61,6 +63,14 @@ app.use('/api/compounds', requireAuth, compoundsRoutes);
 app.use('/api/chat', requireAuth, chatRoutes);
 app.use('/api/notes', requireAuth, notesRoutes);
 app.use('/api/photos', requireAuth, photosRoutes);
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.resolve(__dirname, '../../client/dist');
+app.use(express.static(clientDist));
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 // Swallow errors surfaced by async route handlers so stack traces don't leak
 // to clients. Express 5 forwards rejected promises here automatically.
