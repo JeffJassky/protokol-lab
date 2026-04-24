@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import User from '../models/User.js';
-import { stripe, STRIPE_WEBHOOK_SECRET, isStripeConfigured } from '../services/stripe.js';
+import {
+  stripe,
+  STRIPE_WEBHOOK_SECRET,
+  STRIPE_MODE,
+  isStripeConfigured,
+} from '../services/stripe.js';
 import {
   PLANS,
   getPlan,
@@ -93,9 +98,9 @@ router.post('/create-checkout-session', async (req, res) => {
     return res.status(400).json({ error: 'invalid_interval' });
   }
 
-  const priceId = getStripePriceId(planId, interval);
-  if (!priceId || priceId.endsWith('_REPLACE_ME')) {
-    rlog.error({ priceId }, 'missing stripe price id for plan');
+  const priceId = getStripePriceId(planId, interval, STRIPE_MODE);
+  if (!priceId) {
+    rlog.error({ mode: STRIPE_MODE }, 'missing stripe price id for plan/mode');
     return res.status(500).json({ error: 'stripe_price_not_configured' });
   }
 
@@ -282,7 +287,7 @@ async function onSubscriptionDeleted(sub, rlog) {
 // so the same logic runs regardless of which event arrived first.
 function applySubscriptionToUser(user, sub) {
   const priceId = sub.items?.data?.[0]?.price?.id;
-  const planIdFromPrice = priceId ? getPlanIdByStripePriceId(priceId) : null;
+  const planIdFromPrice = priceId ? getPlanIdByStripePriceId(priceId, STRIPE_MODE) : null;
   const planIdFromMeta = sub.metadata?.planId && PLANS[sub.metadata.planId]
     ? sub.metadata.planId
     : null;

@@ -680,8 +680,11 @@ router.post('/users/:userId/stripe-sync', async (req, res) => {
     const { getPlanIdByStripePriceId, PLANS, DEFAULT_PLAN_ID } = await import(
       '../../../shared/plans.js'
     );
+    const { STRIPE_MODE } = await import('../services/stripe.js');
     const priceId = preferred.items?.data?.[0]?.price?.id;
-    const planIdFromPrice = priceId ? getPlanIdByStripePriceId(priceId) : null;
+    const planIdFromPrice = priceId
+      ? getPlanIdByStripePriceId(priceId, STRIPE_MODE)
+      : null;
     const planIdFromMeta =
       preferred.metadata?.planId && PLANS[preferred.metadata.planId]
         ? preferred.metadata.planId

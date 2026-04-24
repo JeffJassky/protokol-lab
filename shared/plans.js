@@ -2,8 +2,10 @@
 // marketing copy, pricing, Stripe IDs, feature flags, and per-plan limits.
 // Importable from both server (Node ESM) and client (Vite) via relative path.
 //
-// Stripe price IDs are placeholders — replace with real IDs from the Stripe
-// Dashboard. Price IDs are not secret (they travel to the client for Checkout).
+// Stripe IDs are split per-mode (`test` / `live`). The server auto-picks a
+// mode from the Stripe secret key prefix so local dev with `sk_test_` keeps
+// hitting test IDs even when live IDs are also checked in. Price IDs are not
+// secret (they travel to the client for Checkout).
 
 /**
  * @typedef {Object} PlanMarketing
@@ -18,13 +20,19 @@
  */
 
 /**
+ * @typedef {Object} StripeIds
+ * @property {string|null} productId
+ * @property {string|null} priceIdMonthly
+ * @property {string|null} priceIdYearly
+ */
+
+/**
  * @typedef {Object} PlanPricing
  * @property {number} monthlyUsd                Display price per month.
  * @property {number|null} yearlyUsd            Display price per year (null = no annual).
  * @property {number|null} yearlyEffectiveMonthlyUsd  monthly equivalent of yearly.
- * @property {string|null} stripeProductId      Stripe product ID.
- * @property {string|null} stripePriceIdMonthly Stripe price ID, monthly recurring.
- * @property {string|null} stripePriceIdYearly  Stripe price ID, yearly recurring.
+ * @property {{test: StripeIds, live: StripeIds}} stripe  Per-mode Stripe IDs.
+ *                                              Populate via `server/src/scripts/stripe-seed.js`.
  * @property {boolean} requiresCheckout         False for free/comp tiers.
  * @property {number} trialDays                 Free-trial length. 0 = no trial.
  *                                              Card is collected upfront; auto-
@@ -128,9 +136,10 @@ export const PLANS = {
       monthlyUsd: 0,
       yearlyUsd: 0,
       yearlyEffectiveMonthlyUsd: 0,
-      stripeProductId: null,
-      stripePriceIdMonthly: null,
-      stripePriceIdYearly: null,
+      stripe: {
+        test: { productId: null, priceIdMonthly: null, priceIdYearly: null },
+        live: { productId: null, priceIdMonthly: null, priceIdYearly: null },
+      },
       requiresCheckout: false,
       trialDays: 0,
     },
@@ -204,9 +213,18 @@ export const PLANS = {
       monthlyUsd: 9.99,
       yearlyUsd: 79,
       yearlyEffectiveMonthlyUsd: 6.58,
-      stripeProductId: 'prod_UOZychwDRAIymy',
-      stripePriceIdMonthly: 'price_1TPmoYEbNm7I4te2Cvi8vu2Q',
-      stripePriceIdYearly: 'price_1TPmoaEbNm7I4te2pmuwtJJZ',
+      stripe: {
+        test: {
+          productId: 'prod_UOZychwDRAIymy',
+          priceIdMonthly: 'price_1TPmoYEbNm7I4te2Cvi8vu2Q',
+          priceIdYearly: 'price_1TPmoaEbNm7I4te2pmuwtJJZ',
+        },
+        live: {
+          productId: 'prod_UOexviue15srEj',
+          priceIdMonthly: 'price_1TPrdJEbNm7I4te2cwRSKfwX',
+          priceIdYearly: 'price_1TPrdKEbNm7I4te2yhQqPncw',
+        },
+      },
       requiresCheckout: true,
       trialDays: 14,
     },
@@ -281,9 +299,18 @@ export const PLANS = {
       monthlyUsd: 19.99,
       yearlyUsd: 149,
       yearlyEffectiveMonthlyUsd: 12.42,
-      stripeProductId: 'prod_UOZy7ERV0SymIH',
-      stripePriceIdMonthly: 'price_1TPmobEbNm7I4te2xz2qCrnh',
-      stripePriceIdYearly: 'price_1TPmodEbNm7I4te2WpXhy5HP',
+      stripe: {
+        test: {
+          productId: 'prod_UOZy7ERV0SymIH',
+          priceIdMonthly: 'price_1TPmobEbNm7I4te2xz2qCrnh',
+          priceIdYearly: 'price_1TPmodEbNm7I4te2WpXhy5HP',
+        },
+        live: {
+          productId: 'prod_UOexIwebs45JdP',
+          priceIdMonthly: 'price_1TPrdLEbNm7I4te2qK63j5TZ',
+          priceIdYearly: 'price_1TPrdLEbNm7I4te2MK4Np2kX',
+        },
+      },
       requiresCheckout: true,
       trialDays: 14,
     },
@@ -368,32 +395,56 @@ export function hasFeature(user, featureKey) {
 }
 
 /**
- * Resolve a Stripe price id from a plan id + interval. Returns null if the
- * plan is free or the interval isn't offered.
- * @param {string} planId
- * @param {'monthly'|'yearly'} interval
- * @returns {string|null}
+ * Derive Stripe mode ('test' | 'live') from a secret key. `sk_live_` → live,
+ * anything else (including missing key) → test. Keeps mode resolution in one
+ * place so routes and the seed script agree.
+ * @param {string|null|undefined} secretKey
+ * @returns {'test'|'live'}
  */
-export function getStripePriceId(planId, interval) {
-  const plan = PLANS[planId];
-  if (!plan) return null;
-  return interval === 'yearly'
-    ? plan.pricing.stripePriceIdYearly
-    : plan.pricing.stripePriceIdMonthly;
+export function resolveStripeMode(secretKey) {
+  return typeof secretKey === 'string' && secretKey.startsWith('sk_live_')
+    ? 'live'
+    : 'test';
 }
 
 /**
- * Reverse lookup: find the plan id for a given Stripe price id. Used in
- * Stripe webhook handlers to assign User.plan after checkout.
- * @param {string} stripePriceId
+ * Stripe IDs for a plan in the given mode. Always returns an object with
+ * null fields if the plan is free or the mode block is missing.
+ * @param {string} planId
+ * @param {'test'|'live'} mode
+ * @returns {StripeIds}
+ */
+export function getStripeIds(planId, mode) {
+  const plan = PLANS[planId];
+  const ids = plan?.pricing?.stripe?.[mode];
+  return ids || { productId: null, priceIdMonthly: null, priceIdYearly: null };
+}
+
+/**
+ * Resolve a Stripe price id from a plan id + interval + mode. Returns null
+ * if the plan is free, the interval isn't offered, or the mode is unseeded.
+ * @param {string} planId
+ * @param {'monthly'|'yearly'} interval
+ * @param {'test'|'live'} mode
  * @returns {string|null}
  */
-export function getPlanIdByStripePriceId(stripePriceId) {
+export function getStripePriceId(planId, interval, mode) {
+  const ids = getStripeIds(planId, mode);
+  return interval === 'yearly' ? ids.priceIdYearly : ids.priceIdMonthly;
+}
+
+/**
+ * Reverse lookup: find the plan id for a given Stripe price id in the given
+ * mode. Used in Stripe webhook handlers to assign User.plan after checkout.
+ * @param {string} stripePriceId
+ * @param {'test'|'live'} mode
+ * @returns {string|null}
+ */
+export function getPlanIdByStripePriceId(stripePriceId, mode) {
   for (const plan of Object.values(PLANS)) {
-    if (
-      plan.pricing.stripePriceIdMonthly === stripePriceId ||
-      plan.pricing.stripePriceIdYearly === stripePriceId
-    ) {
+    const ids = plan.pricing?.stripe?.[mode];
+    if (!ids) continue;
+    if (ids.priceIdMonthly === stripePriceId || ids.priceIdYearly === stripePriceId) {
       return plan.id;
     }
   }

@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { childLogger } from '../lib/logger.js';
+import { resolveStripeMode } from '../../../shared/plans.js';
 
 const log = childLogger('stripe-svc');
 
@@ -22,6 +23,14 @@ export const stripe = secretKey
   : null;
 
 export const STRIPE_WEBHOOK_SECRET = webhookSecret;
+
+// Derived once at boot. All id lookups route through this so test/live IDs
+// in shared/plans.js stay in sync with the key actually being used.
+export const STRIPE_MODE = resolveStripeMode(secretKey);
+
+if (secretKey) {
+  log.info({ mode: STRIPE_MODE }, 'stripe initialized');
+}
 
 export function isStripeConfigured() {
   return stripe !== null;
