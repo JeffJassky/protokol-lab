@@ -108,6 +108,38 @@ app.use(express.static(clientDist));
 
 const SHELL_FILE = path.join(clientDist, 'index.html');
 
+// Prerendered HTML is committed to git with whatever Vite hashes existed at
+// the time of `npm run build:full` locally. Production rebuilds dist/ with
+// fresh content hashes (Puppeteer can't run on the DO build image, so the
+// prerender step is skipped there). If we serve the committed HTML as-is,
+// it 404s on stale /assets/index-OLDHASH.{js,css} and the page renders
+// unstyled. So at server start we read the live shell to learn the *current*
+// asset filenames, and rewrite any matching paths in prerendered HTML on
+// the way out.
+let CURRENT_JS = null;
+let CURRENT_CSS = null;
+try {
+  const shellHtml = fs.readFileSync(SHELL_FILE, 'utf8');
+  CURRENT_JS = shellHtml.match(/<script[^>]+src="(\/assets\/index-[^"]+\.js)"/)?.[1] || null;
+  CURRENT_CSS = shellHtml.match(/<link[^>]+href="(\/assets\/index-[^"]+\.css)"/)?.[1] || null;
+  log.info({ js: CURRENT_JS, css: CURRENT_CSS }, 'resolved current dist asset paths for prerender rewrite');
+} catch (err) {
+  log.warn({ err: err.message }, 'could not read SHELL_FILE for prerender asset rewrite — prerendered routes may render unstyled');
+}
+
+function sendPrerendered(res, filepath) {
+  if (!CURRENT_JS && !CURRENT_CSS) return res.sendFile(filepath);
+  let html;
+  try {
+    html = fs.readFileSync(filepath, 'utf8');
+  } catch {
+    return res.sendFile(filepath);
+  }
+  if (CURRENT_JS) html = html.replace(/\/assets\/index-[A-Za-z0-9_-]+\.js/g, CURRENT_JS);
+  if (CURRENT_CSS) html = html.replace(/\/assets\/index-[A-Za-z0-9_-]+\.css/g, CURRENT_CSS);
+  res.type('html').send(html);
+}
+
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   if (req.path.startsWith('/api/')) return next();
@@ -115,7 +147,7 @@ app.use((req, res, next) => {
   // 1. Root "/" — look for prerendered home; fall back to SPA shell.
   if (req.path === '/') {
     const homePrerendered = path.join(clientPrerendered, 'index.html');
-    if (fs.existsSync(homePrerendered)) return res.sendFile(homePrerendered);
+    if (fs.existsSync(homePrerendered)) return sendPrerendered(res, homePrerendered);
     return res.sendFile(SHELL_FILE);
   }
 
@@ -123,7 +155,7 @@ app.use((req, res, next) => {
   //    prerendered HTML under client/prerendered/<path>/index.html.
   if (req.path.indexOf('.') === -1) {
     const prerendered = path.join(clientPrerendered, req.path, 'index.html');
-    if (fs.existsSync(prerendered)) return res.sendFile(prerendered);
+    if (fs.existsSync(prerendered)) return sendPrerendered(res, prerendered);
   }
 
   // 3. Fall back to the SPA shell for auth, app, and unknown routes.

@@ -376,14 +376,15 @@ const aiTrail = [
           </div>
           <h1>
             The tracker<br />
-            <span class="accent">built for <span class="nowrap">GLP-1s.</span></span
+            <span class="accent"
+              >built for <span class="nowrap">GLP-1s.</span></span
             ><span class="cursor"></span>
           </h1>
           <p class="hero-lead">
             Log macros, doses, weight, symptoms, and photos in one app. Built
-            for Tirzepatide, Semaglutide, and compounded versions of both —
-            with half-life curves, weekly rolling budgets, and an AI that
-            reads your whole history.
+            for Tirzepatide, Semaglutide, and compounded versions of both — with
+            half-life curves, weekly rolling budgets, and an AI that reads your
+            whole history.
           </p>
           <div class="hero-ctas">
             <button class="btn-primary" @click="goRegister">
@@ -397,6 +398,8 @@ const aiTrail = [
             </div>
             <div class="hero-meta-row">
               Free to start · Premium from ${{ premiumPlan.pricing.yearlyEffectiveMonthlyUsd
+
+
 
 
 
@@ -579,7 +582,9 @@ const aiTrail = [
                 :text-anchor="w.anchor"
                 class="svg-axis-dim"
                 :class="{ 'svg-axis-today': w.isToday }"
-              >{{ w.label }}</text>
+              >
+                {{ w.label }}
+              </text>
               <!-- Hover cursor: vertical line + focus dots on each curve at
                    the mouse x. Only rendered while heroTip exists. -->
               <g v-if="heroTip" class="hero-cursor" pointer-events="none">
@@ -652,11 +657,11 @@ const aiTrail = [
               Every dose has a half-life. Protokol Lab plots the active amount
               in real time so you know exactly how much medication is working
               right now — and why your appetite comes and goes the way it does.
-              One-tap presets for Tirzepatide (Mounjaro, Zepbound),
-              Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide, and
-              Dulaglutide. Compounded versions of those peptides, or anything
-              else you need to track, add as a custom compound in two fields:
-              a name and a half-life. The curve draws itself.
+              One-tap presets for Tirzepatide (Mounjaro, Zepbound), Semaglutide
+              (Ozempic, Wegovy, Rybelsus), Liraglutide, and Dulaglutide.
+              Compounded versions of those peptides, or anything else you need
+              to track, add as a custom compound in two fields: a name and a
+              half-life. The curve draws itself.
             </p>
             <ul class="feat-bullets section-bullets">
               <li>
@@ -695,23 +700,15 @@ const aiTrail = [
                 >Look at your week.</span
               >
             </h2>
-            <p class="lead">
-              GLP-1s flatten your hunger for a couple days, then it comes back.
-              A 24-hour calorie counter treats that like failure. Protokol Lab
-              doesn't. Your target is a 7-day total — eat light when you can't
-              eat, catch up when you can.
-            </p>
           </div>
           <div class="feat-row reverse">
             <div class="feat-text">
-              <h3 class="feat-head">
-                An off day<br />isn't a
-                <span class="accent">broken streak.</span>
-              </h3>
               <p class="feat-body">
-                Calories roll over. The strip shows how much of this week's
-                budget you've already spent and how much you've got left for
-                today — no math, no spreadsheet, no shame.
+                <b>An off day isn't a broken streak.</b> GLP-1s flatten your
+                hunger for a couple days, then it comes back — and a 24-hour
+                calorie counter treats that like failure. Your target here is a
+                7-day total: eat light when you can't eat, catch up when you
+                can.
               </p>
               <ul class="feat-bullets">
                 <li>
@@ -767,6 +764,8 @@ const aiTrail = [
 
 
 
+
+
                           }}<span class="rolling-tgt">
                             / {{ rolling.weekTgt }}</span
                           >
@@ -776,6 +775,8 @@ const aiTrail = [
                         <div class="mini-eyebrow">left</div>
                         <div class="rolling-left">
                           {{ rolling.leftAbs
+
+
 
 
 
@@ -1245,6 +1246,8 @@ const aiTrail = [
 
 
 
+
+
                 }}<span class="per"> / month</span>
               </div>
               <div class="price-desc">
@@ -1271,6 +1274,8 @@ const aiTrail = [
               <div class="price-kind">Unlimited</div>
               <div class="price-amount">
                 ${{ monthlyDisplay(unlimitedPlan)
+
+
 
 
 
