@@ -50,6 +50,13 @@ export function createApp({ serveClient = true } = {}) {
       // authorized list. 'strict-origin-when-cross-origin' is the modern browser
       // default: sends only the origin (not full URL) cross-origin over HTTPS.
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      // Helmet's default 'same-origin' for COOP severs window.opener between
+      // our page and any cross-origin popup. Google's GIS popup at
+      // accounts.google.com posts the credential back via window.opener.postMessage;
+      // under 'same-origin' the popup hangs on /gsi/transform and never closes.
+      // 'same-origin-allow-popups' keeps tab-level isolation for non-popup
+      // contexts but lets popups we open keep their opener reference.
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
