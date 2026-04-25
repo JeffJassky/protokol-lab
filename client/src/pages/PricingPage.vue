@@ -54,55 +54,99 @@ useRouteSeo();
     <section class="mkt-page">
       <div class="wrap">
         <div class="mkt-eyebrow">Pricing</div>
-        <h1 class="mkt-h1">Simple.<br /><span class="accent">Honest. Cheap.</span></h1>
+        <h1 class="mkt-h1">
+          Simple.<br /><span class="accent">Honest. Cheap.</span>
+        </h1>
         <p class="mkt-lead">
-          Free forever for the core tracker. Premium and Unlimited unlock the
-          AI coach, correlation charts, unlimited custom compounds, cloud
-          sync, and full data export. 14-day free trial on paid plans — cancel
-          before it ends and you're not charged.
+          Free forever for the core tracker — including AI chat, correlation
+          charts, cloud sync, and data export. Premium and Unlimited unlock
+          custom compounds, higher AI limits, and rolling 7-day macro targets.
+          14-day free trial on paid plans — cancel before it ends and you're not
+          charged.
         </p>
 
         <div class="price-toggle" role="tablist" aria-label="Billing interval">
-          <button type="button" class="price-toggle-btn" :class="{ active: billingInterval === 'monthly' }" role="tab" :aria-selected="billingInterval === 'monthly'" @click="billingInterval = 'monthly'">Monthly</button>
-          <button type="button" class="price-toggle-btn" :class="{ active: billingInterval === 'yearly' }" role="tab" :aria-selected="billingInterval === 'yearly'" @click="billingInterval = 'yearly'">Yearly <span class="save-tag">save {{ annualSavePct }}%</span></button>
+          <button
+            type="button"
+            class="price-toggle-btn"
+            :class="{ active: billingInterval === 'monthly' }"
+            role="tab"
+            :aria-selected="billingInterval === 'monthly'"
+            @click="billingInterval = 'monthly'"
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            class="price-toggle-btn"
+            :class="{ active: billingInterval === 'yearly' }"
+            role="tab"
+            :aria-selected="billingInterval === 'yearly'"
+            @click="billingInterval = 'yearly'"
+          >
+            Yearly <span class="save-tag">save {{ annualSavePct }}%</span>
+          </button>
         </div>
 
         <div class="price-cards">
           <div class="price-card">
             <div class="price-kind">Free</div>
-            <div class="price-amount">$0<span class="per"> / forever</span></div>
-            <p class="price-desc">Enough to actually run your week. No credit card, no trial timer.</p>
+            <div class="price-amount">
+              $0<span class="per"> / forever</span>
+            </div>
+            <p class="price-desc">
+              Enough to actually run your week. No credit card, no trial timer.
+            </p>
             <ul class="price-feats">
               <li>Food log, meals, barcode scan</li>
               <li>Weight and waist tracking</li>
               <li>Symptoms and day notes</li>
               <li>Dose tracking with half-life curves</li>
-              <li>Up to 3 compounds</li>
+              <li>
+                Built-in GLP-1 compounds (Mounjaro, Zepbound, Ozempic, Wegovy)
+              </li>
               <li>Progress photos with side-by-side compare</li>
             </ul>
-            <button class="mkt-btn-secondary wide" @click="goRegister()">Get started</button>
+            <button class="mkt-btn-secondary wide" @click="goRegister()">
+              Get started
+            </button>
           </div>
 
           <div class="price-card featured">
             <div class="price-kind accent">Premium</div>
-            <div class="price-amount">${{ monthlyDisplay(premium) }}<span class="per"> / month</span></div>
-            <p class="price-desc">Everything in Free, plus the tools that turn your data into answers.</p>
+            <div class="price-amount">
+              ${{ monthlyDisplay(premium) }}<span class="per"> / month</span>
+            </div>
+            <p class="price-desc">
+              Everything in Free, plus the tools that turn your data into
+              answers.
+            </p>
             <ul class="price-feats">
               <li>AI chat that reads your full log</li>
               <li>Rolling 7-day macro targets</li>
               <li>Correlation charts, any two metrics</li>
               <li>Deeper dose charts and stats</li>
-              <li>Up to 20 custom compounds</li>
+              <li>Up to 3 custom compounds</li>
               <li>Saved meals, cloud sync, data export</li>
             </ul>
-            <button class="mkt-btn-primary wide" @click="goRegister(premium.id, billingInterval)">Start {{ premium.pricing.trialDays }}-day free trial →</button>
+            <button
+              class="mkt-btn-primary wide"
+              @click="goRegister(premium.id, billingInterval)"
+            >
+              Start {{ premium.pricing.trialDays }}-day free trial →
+            </button>
             <div class="price-trial-note">{{ priceNote(premium) }}</div>
           </div>
 
           <div class="price-card">
             <div class="price-kind">Unlimited</div>
-            <div class="price-amount">${{ monthlyDisplay(unlimited) }}<span class="per"> / month</span></div>
-            <p class="price-desc">Everything in Premium, AI uncapped. For users who live in the chat.</p>
+            <div class="price-amount">
+              ${{ monthlyDisplay(unlimited) }}<span class="per"> / month</span>
+            </div>
+            <p class="price-desc">
+              Everything in Premium, AI uncapped. For users who live in the
+              chat.
+            </p>
             <ul class="price-feats">
               <li>Unlimited AI messages per day</li>
               <li>Longer conversation context</li>
@@ -110,7 +154,12 @@ useRouteSeo();
               <li>Unlimited custom compounds</li>
               <li>Priority support</li>
             </ul>
-            <button class="mkt-btn-secondary wide" @click="goRegister(unlimited.id, billingInterval)">Start {{ unlimited.pricing.trialDays }}-day free trial →</button>
+            <button
+              class="mkt-btn-secondary wide"
+              @click="goRegister(unlimited.id, billingInterval)"
+            >
+              Start {{ unlimited.pricing.trialDays }}-day free trial →
+            </button>
             <div class="price-trial-note">{{ priceNote(unlimited) }}</div>
           </div>
         </div>
@@ -120,30 +169,158 @@ useRouteSeo();
         <h2 class="mkt-h2">What's in each tier</h2>
         <table class="mkt-table">
           <thead>
-            <tr><th>Feature</th><th>Free</th><th>Premium</th><th>Unlimited</th></tr>
+            <tr>
+              <th>Features</th>
+              <th>Free</th>
+              <th>Premium</th>
+              <th>Unlimited</th>
+            </tr>
           </thead>
           <tbody>
-            <tr><td>Dose tracking with half-life curves</td><td>✓</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Food log, barcode scan, meals</td><td>✓</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Weight, waist, symptoms, notes</td><td>✓</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Progress photos</td><td>✓</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Custom compounds</td><td>3</td><td>20</td><td>Unlimited</td></tr>
-            <tr><td>AI chat coach</td><td>—</td><td>60 msgs/day</td><td>Unlimited</td></tr>
-            <tr><td>Rolling 7-day macro targets</td><td>—</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Correlation charts</td><td>—</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Food image recognition</td><td>—</td><td>Limited</td><td>Unlimited</td></tr>
-            <tr><td>Cloud sync + data export</td><td>—</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Priority support</td><td>—</td><td>—</td><td>✓</td></tr>
+            <tr>
+              <td>Dose tracking with half-life curves</td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+            </tr>
+            <tr>
+              <td>Food log, barcode scan, meals</td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+            </tr>
+            <tr>
+              <td>Weight, waist, symptoms, notes</td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+            </tr>
+            <tr>
+              <td>Cloud sync + data export</td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+            </tr>
+            <tr>
+              <td>Custom food items</td>
+              <td class="cell-y">25</td>
+              <td class="cell-y">50</td>
+              <td class="cell-y">Unlimited</td>
+            </tr>
+            <tr>
+              <td>Saved meals</td>
+              <td class="cell-y">5</td>
+              <td class="cell-y">Unlimited</td>
+              <td class="cell-y">Unlimited</td>
+            </tr>
+            <tr>
+              <td>Correlation charts</td>
+              <td class="cell-y">2 metrics</td>
+              <td class="cell-y">Unlimited</td>
+              <td class="cell-y">Unlimited</td>
+            </tr>
+            <tr>
+              <td>Progress photos</td>
+              <td class="cell-y">Monthly</td>
+              <td class="cell-y">Weekly</td>
+              <td class="cell-y">Unlimited</td>
+            </tr>
+            <tr>
+              <td>Custom compounds</td>
+              <td class="cell-n"><span class="dot" /></td>
+              <td class="cell-y">3</td>
+              <td class="cell-y">Unlimited</td>
+            </tr>
+            <tr>
+              <td>Rolling 7-day macro targets</td>
+              <td class="cell-n"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+            </tr>
+            <tr>
+              <td>Priority support</td>
+              <td class="cell-n"><span class="dot" /></td>
+              <td class="cell-n"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+            </tr>
+            <tr class="group-head">
+              <th colspan="4">AI Features</th>
+            </tr>
+            <tr class="indent">
+              <td>Chat messages</td>
+              <td class="cell-y">5 / day</td>
+              <td class="cell-y">60 / day</td>
+              <td class="cell-y">Unlimited</td>
+            </tr>
+            <tr class="indent">
+              <td>Context length</td>
+              <td class="cell-y">Low</td>
+              <td class="cell-y">Medium</td>
+              <td class="cell-y">Extreme</td>
+            </tr>
+            <tr class="indent">
+              <td>Food image recognition</td>
+              <td class="cell-n"><span class="dot" /></td>
+              <td class="cell-y">50 / day</td>
+              <td class="cell-y">Unlimited</td>
+            </tr>
+            <tr class="indent">
+              <td>Tools (meal edits, web search)</td>
+              <td class="cell-n"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+              <td class="cell-y"><span class="dot" /></td>
+            </tr>
           </tbody>
         </table>
 
         <h2 class="mkt-h2">Pricing FAQ</h2>
-        <div class="faq-item"><h3 class="faq-q">Is there a free trial?</h3><p class="faq-body">Yes. Both Premium and Unlimited include a 14-day free trial. Your card is collected upfront and charged at trial end. Cancel any time before trial ends and you're not charged.</p></div>
-        <div class="faq-item"><h3 class="faq-q">Can I cancel anytime?</h3><p class="faq-body">Yes. Cancel from Settings. Access continues through the end of the paid period. No hidden fees.</p></div>
-        <div class="faq-item"><h3 class="faq-q">Can I switch between Premium and Unlimited?</h3><p class="faq-body">Yes. Upgrades are prorated immediately. Downgrades take effect at the end of the current billing cycle.</p></div>
-        <div class="faq-item"><h3 class="faq-q">Does Free work with Mounjaro, Zepbound, Ozempic, Wegovy?</h3><p class="faq-body">Yes. Free includes full dose tracking with half-life curves for all built-in GLP-1 compounds.</p></div>
-        <div class="faq-item"><h3 class="faq-q">Do I need Premium to track compounded peptides?</h3><p class="faq-body">No. Free supports up to 3 custom compounds — enough for most compounded GLP-1 users. Premium raises the cap to 20, Unlimited is unlimited.</p></div>
-        <div class="faq-item"><h3 class="faq-q">How do you handle refunds?</h3><p class="faq-body">Cancel before your 14-day trial ends and you pay nothing. After that, we'll refund on request within 7 days of an accidental renewal — email support.</p></div>
+        <div class="faq-item">
+          <h3 class="faq-q">Is there a free trial?</h3>
+          <p class="faq-body">
+            Yes. Both Premium and Unlimited include a 14-day free trial. Your
+            card is collected upfront and charged at trial end. Cancel any time
+            before trial ends and you're not charged.
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-q">Can I cancel anytime?</h3>
+          <p class="faq-body">
+            Yes. Cancel from Settings. Access continues through the end of the
+            paid period. No hidden fees.
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-q">Can I switch between Premium and Unlimited?</h3>
+          <p class="faq-body">
+            Yes. Upgrades are prorated immediately. Downgrades take effect at
+            the end of the current billing cycle.
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-q">
+            Does Free work with Mounjaro, Zepbound, Ozempic, Wegovy?
+          </h3>
+          <p class="faq-body">
+            Yes. Free includes full dose tracking with half-life curves for all
+            built-in GLP-1 compounds.
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-q">Do I need Premium to track compounded peptides?</h3>
+          <p class="faq-body">
+            Free covers the built-in GLP-1 compounds (Mounjaro, Zepbound,
+            Ozempic, Wegovy). Custom compounds are a paid feature: Premium
+            supports up to 3, Unlimited is unlimited.
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-q">How do you handle refunds?</h3>
+          <p class="faq-body">
+            Cancel before your 14-day trial ends and you pay nothing. After
+            that, we'll refund on request within 7 days of an accidental renewal
+            — email support.
+          </p>
+        </div>
       </div>
     </section>
   </MarketingLayout>
@@ -231,4 +408,26 @@ useRouteSeo();
   text-align: center;
 }
 .err { color: var(--color-carbs); margin-top: 16px; font-size: 13px; }
+
+.mkt-table .cell-y { color: var(--primary); }
+.mkt-table .cell-n { color: var(--text-disabled); }
+.mkt-table .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+}
+.mkt-table .cell-n .dot { opacity: 0.5; }
+.mkt-table tr.group-head th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.mkt-table tr.indent td:first-child { padding-left: 44px; }
 </style>

@@ -2,7 +2,6 @@ import mongoose from 'mongoose';
 import ChatUsage from '../models/ChatUsage.js';
 import {
   getEffectiveChatLimits,
-  getEffectivePlanFeatures,
   getRecommendedUpgradePlanId,
   getQuotaWindows,
   getPlanForUser,
@@ -13,13 +12,14 @@ const log = childLogger('chat-quota');
 
 // Machine-readable deny reasons. Keep stable — client may branch on them.
 const REASONS = {
-  FEATURE_DISABLED: 'chat_feature_disabled',
   PER_MINUTE: 'per_minute_rate_limit',
   DAILY_MESSAGES: 'daily_messages_cap',
   DAILY_INPUT_TOKENS: 'daily_input_tokens_cap',
   DAILY_OUTPUT_TOKENS: 'daily_output_tokens_cap',
   DAILY_COST: 'daily_cost_cap',
   MONTHLY_COST: 'monthly_cost_cap',
+  IMAGES_LIFETIME: 'images_lifetime_cap',
+  IMAGES_DAILY: 'images_daily_cap',
 };
 
 function formatUsd(n) {
@@ -43,7 +43,7 @@ function formatRelative(seconds) {
 
 function denyResponse(res, user, denial) {
   const upgradePlanId = getRecommendedUpgradePlanId(user);
-  const statusCode = denial.reason === REASONS.FEATURE_DISABLED ? 403 : 429;
+  const statusCode = 429;
   if (denial.retryAfter) {
     // Standard HTTP header lets any future non-chat consumer honor the
     // backoff without parsing the JSON body.
@@ -68,16 +68,23 @@ export async function requireChatQuota(req, res, next) {
   const user = req.user;
   if (!user) return res.status(401).json({ error: 'Not authenticated' });
 
-  const features = getEffectivePlanFeatures(user);
-  if (!features.chatAi) {
-    return denyResponse(res, user, {
-      reason: REASONS.FEATURE_DISABLED,
-      message: 'AI chat is not included in your plan. Upgrade to start chatting with your data.',
-    });
-  }
-
   const limits = getEffectiveChatLimits(user);
   const windows = getQuotaWindows();
+  const imageCount = Array.isArray(req.files) ? req.files.length : 0;
+  const isImageTurn = imageCount > 0;
+
+  const lifetimeImgCap = Number.isFinite(limits.imagesLifetime)
+    ? limits.imagesLifetime
+    : Infinity;
+  const usedLifetime = user.imageRecognitionCount || 0;
+  if (isImageTurn && usedLifetime + imageCount > lifetimeImgCap) {
+    return denyResponse(res, user, {
+      reason: REASONS.IMAGES_LIFETIME,
+      message: `You've used all ${lifetimeImgCap} food-photo recognitions allowed on your plan.`,
+      limit: lifetimeImgCap,
+      used: usedLifetime,
+    });
+  }
 
   let stats;
   try {
@@ -86,7 +93,26 @@ export async function requireChatQuota(req, res, next) {
     rlog.error({ err: err.message }, 'chat-quota: aggregate failed');
     // Fail open: never block chat because telemetry query broke.
     req.chatLimits = limits;
+    req.isImageTurn = isImageTurn;
+    req.imageCount = imageCount;
     return next();
+  }
+
+  if (isImageTurn) {
+    const dailyImgCap = Number.isFinite(limits.imagesPerDay)
+      ? limits.imagesPerDay
+      : Infinity;
+    if (stats.today.imageCount + imageCount > dailyImgCap) {
+      const retrySec = (windows.startOfTomorrow.getTime() - windows.now.getTime()) / 1000;
+      return denyResponse(res, user, {
+        reason: REASONS.IMAGES_DAILY,
+        message: `You've hit today's food-photo limit (${dailyImgCap}). Resets ${formatRelative(retrySec)}.`,
+        retryAfter: retrySec,
+        resetAt: windows.startOfTomorrow,
+        limit: dailyImgCap,
+        used: stats.today.imageCount,
+      });
+    }
   }
 
   const denial = evaluateQuota({ limits, stats, windows });
@@ -99,6 +125,8 @@ export async function requireChatQuota(req, res, next) {
   }
 
   req.chatLimits = limits;
+  req.isImageTurn = isImageTurn;
+  req.imageCount = imageCount;
   next();
 }
 
@@ -125,6 +153,7 @@ async function aggregateUsage(userId, windows) {
               inputTokens: { $sum: '$inputTokens' },
               outputTokens: { $sum: '$outputTokens' },
               costUsd: { $sum: '$totalCostUsd' },
+              imageCount: { $sum: '$imageCount' },
             },
           },
         ],
@@ -144,6 +173,7 @@ async function aggregateUsage(userId, windows) {
       inputTokens: pickRow(r.today).inputTokens || 0,
       outputTokens: pickRow(r.today).outputTokens || 0,
       costUsd: pickRow(r.today).costUsd || 0,
+      imageCount: pickRow(r.today).imageCount || 0,
     },
     month: { costUsd: pickRow(r.month).costUsd || 0 },
   };

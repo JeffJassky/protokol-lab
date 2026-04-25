@@ -42,19 +42,10 @@
 /**
  * @typedef {Object} PlanFeatures
  * Feature flags. Checked on both client (hide UI) and server (enforce).
- * @property {boolean} chatAi
- * @property {boolean} chatWebSearch          Allow Gemini Google Search grounding.
- * @property {boolean} chatAgentTools         Allow agentic tool-calling (vs plain Q&A).
- * @property {boolean} barcodeScanner
  * @property {boolean} foodImageRecognition
+ * @property {boolean} aiToolsEnabled        Agentic tools (meal edits, web search, lookups).
  * @property {boolean} rolling7DayTargets
- * @property {boolean} pkDecayCharts
- * @property {boolean} correlationCharts
  * @property {boolean} advancedSymptomAnalytics
- * @property {boolean} dataExport
- * @property {boolean} customThemes
- * @property {boolean} savedMeals
- * @property {boolean} pushReminders
  * @property {boolean} prioritySupport
  */
 
@@ -72,14 +63,18 @@
  * @property {number} maxContextMessages        History trim cap sent to model.
  * @property {number} maxInputTokensPerMessage  Per-message prompt size cap.
  * @property {number} maxThreadCount            Total saved threads per user.
+ * @property {number} imagesPerDay              Food-image recognition per UTC day.
+ * @property {number} imagesLifetime            Lifetime total (used for free-tier teaser). Infinity for paid tiers.
  */
 
 /**
  * @typedef {Object} StorageLimits
  * @property {number} customFoodItems
  * @property {number} savedMeals
- * @property {number} compounds
- * @property {number} photosPerDay
+ * @property {number} customCompounds
+ * @property {number} photosPerMonth         Progress photo uploads per calendar month.
+ *                                            1 = monthly. 4 = ~weekly. Infinity = no limit.
+ * @property {number} maxCorrelationMetrics  Concurrent metrics on a correlation chart.
  */
 
 /**
@@ -144,39 +139,35 @@ export const PLANS = {
       trialDays: 0,
     },
     features: {
-      chatAi: false,
-      chatWebSearch: false,
-      chatAgentTools: false,
-      barcodeScanner: true,
       foodImageRecognition: false,
+      aiToolsEnabled: false,
       rolling7DayTargets: false,
-      pkDecayCharts: true,
-      correlationCharts: false,
       advancedSymptomAnalytics: false,
-      dataExport: false,
-      customThemes: false,
-      savedMeals: false,
-      pushReminders: true,
       prioritySupport: false,
     },
     chat: {
-      messagesPerMinute: 0,
-      messagesPerDay: 0,
-      inputTokensPerDay: 0,
-      outputTokensPerDay: 0,
-      costUsdPerDay: 0,
-      costUsdPerMonth: 0,
-      maxIterationsPerMessage: 0,
+      // Free tier: 5 text msgs/day + 3 lifetime food-photo recognitions.
+      // Token/cost caps sized as a safety net around the 5-msg ceiling.
+      messagesPerMinute: 2,
+      messagesPerDay: 5,
+      inputTokensPerDay: 50 * K,
+      outputTokensPerDay: 10 * K,
+      costUsdPerDay: 0.05,
+      costUsdPerMonth: 0.5,
+      maxIterationsPerMessage: 2,
       maxSearchCallsPerMessage: 0,
-      maxContextMessages: 0,
-      maxInputTokensPerMessage: 0,
-      maxThreadCount: 0,
+      maxContextMessages: 10,
+      maxInputTokensPerMessage: 8 * K,
+      maxThreadCount: 1,
+      imagesPerDay: 0,
+      imagesLifetime: 0,
     },
     storage: {
-      customFoodItems: 50,
-      savedMeals: 0,
-      compounds: 3,
-      photosPerDay: 5,
+      customFoodItems: 25,
+      savedMeals: 5,
+      customCompounds: 0,
+      photosPerMonth: 1,
+      maxCorrelationMetrics: 2,
     },
   },
 
@@ -229,19 +220,10 @@ export const PLANS = {
       trialDays: 14,
     },
     features: {
-      chatAi: true,
-      chatWebSearch: true,
-      chatAgentTools: true,
-      barcodeScanner: true,
       foodImageRecognition: true,
+      aiToolsEnabled: true,
       rolling7DayTargets: true,
-      pkDecayCharts: true,
-      correlationCharts: true,
       advancedSymptomAnalytics: true,
-      dataExport: true,
-      customThemes: true,
-      savedMeals: true,
-      pushReminders: true,
       prioritySupport: false,
     },
     chat: {
@@ -258,12 +240,16 @@ export const PLANS = {
       maxContextMessages: 30,
       maxInputTokensPerMessage: 40 * K,
       maxThreadCount: 100,
+      // Image cost per call is meaningful; cap daily to keep unit economics.
+      imagesPerDay: 50,
+      imagesLifetime: Infinity,
     },
     storage: {
-      customFoodItems: 5_000,
-      savedMeals: 500,
-      compounds: 20,
-      photosPerDay: 50,
+      customFoodItems: 50,
+      savedMeals: Infinity,
+      customCompounds: 3,
+      photosPerMonth: 4,
+      maxCorrelationMetrics: Infinity,
     },
   },
 
@@ -315,19 +301,10 @@ export const PLANS = {
       trialDays: 14,
     },
     features: {
-      chatAi: true,
-      chatWebSearch: true,
-      chatAgentTools: true,
-      barcodeScanner: true,
       foodImageRecognition: true,
+      aiToolsEnabled: true,
       rolling7DayTargets: true,
-      pkDecayCharts: true,
-      correlationCharts: true,
       advancedSymptomAnalytics: true,
-      dataExport: true,
-      customThemes: true,
-      savedMeals: true,
-      pushReminders: true,
       prioritySupport: true,
     },
     chat: {
@@ -342,12 +319,15 @@ export const PLANS = {
       maxContextMessages: 60,
       maxInputTokensPerMessage: 100 * K,
       maxThreadCount: Infinity,
+      imagesPerDay: Infinity,
+      imagesLifetime: Infinity,
     },
     storage: {
       customFoodItems: Infinity,
       savedMeals: Infinity,
-      compounds: Infinity,
-      photosPerDay: Infinity,
+      customCompounds: Infinity,
+      photosPerMonth: Infinity,
+      maxCorrelationMetrics: Infinity,
     },
   },
 };
