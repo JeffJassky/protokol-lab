@@ -205,18 +205,24 @@ button:focus-visible {
 @media (max-width: 768px) {
   .card,
   .meal-card,
-  .price-card {
+  .price-card,
+  .timeline-card {
     border-left: none !important;
     border-right: none !important;
     border-radius: 0 !important;
     margin: 0 !important;
   }
-  /* Adjacent cards collapse to a single shared divider — drop the bottom
-     border so we don't get a doubled line between cards. */
+  /* Adjacent section cards collapse to a single shared divider — drop the
+     top border so we don't get a doubled line between cards. */
   .card + .card,
   .card + .meal-card,
+  .card + .timeline-card,
   .meal-card + .card,
-  .meal-card + .meal-card {
+  .meal-card + .meal-card,
+  .meal-card + .timeline-card,
+  .timeline-card + .card,
+  .timeline-card + .meal-card,
+  .timeline-card + .timeline-card {
     border-top: none !important;
   }
 }
