@@ -84,6 +84,9 @@ async function handleEditSaved() {
 // date so logging is implicit — no per-form date picker required.
 const newWeight = ref('');
 const savingWeight = ref(false);
+const weightInputFocused = ref(false);
+const waistInputFocused = ref(false);
+const doseInputFocused = reactive({});
 // Dose inputs are keyed by compoundId since the user may have multiple compounds.
 const newDoseByCompound = reactive({});
 const savingDoseByCompound = reactive({});
@@ -526,133 +529,15 @@ function onNoteBlur() {
 
 <template>
   <div class="log-page">
-    <h2>Daily Log</h2>
+    <h2 class="page-title">Daily Log</h2>
     <DateSelector v-model="date" />
 
     <!-- =========================================================== -->
     <!-- TOP ROW: Nutrition (half) + stacked Weight/Dose (half)       -->
     <!-- =========================================================== -->
-    <div class="top-row">
-      <div v-if="foodlogStore.summary" class="meal-card nutrition-card top-col">
-        <div class="meal-header"><h3>Nutrition</h3></div>
-        <DailySummary :summary="foodlogStore.summary" />
-      </div>
-
-      <div class="top-col stacked-col">
-        <div class="meal-card compact">
-          <div class="body-metrics">
-            <div class="metric-col" v-tooltip="'Log your weight'">
-              <div class="metric-label">Weight</div>
-              <form
-                v-if="!todaysWeight"
-                class="quick-form"
-                @submit.prevent="handleAddWeight"
-              >
-                <input
-                  type="number"
-                  v-model.number="newWeight"
-                  step="0.1"
-                  placeholder="lbs"
-                  required
-                />
-                <button
-                  class="btn-primary"
-                  type="submit"
-                  :disabled="savingWeight"
-                >
-                  Log
-                </button>
-              </form>
-              <div v-else class="logged-row">
-                <span class="logged-value"
-                  >{{ todaysWeight.weightLbs }} lbs</span
-                >
-                <button class="delete-btn" @click="handleDeleteWeight">
-                  x
-                </button>
-              </div>
-            </div>
-            <div class="metric-col" v-tooltip="'Log your waist'">
-              <div class="metric-label">Waist</div>
-              <form
-                v-if="!todaysWaist"
-                class="quick-form"
-                @submit.prevent="handleAddWaist"
-              >
-                <input
-                  type="number"
-                  v-model.number="newWaist"
-                  step="0.25"
-                  placeholder="in"
-                  required
-                />
-                <button
-                  class="btn-primary"
-                  type="submit"
-                  :disabled="savingWaist"
-                >
-                  Log
-                </button>
-              </form>
-              <div v-else class="logged-row">
-                <span class="logged-value">{{ todaysWaist.waistInches }}"</span>
-                <button class="delete-btn" @click="handleDeleteWaist">x</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="enabledCompounds.length" class="meal-card compact compounds-card">
-          <div
-            v-for="compound in enabledCompounds"
-            :key="compound._id"
-            class="compound-row"
-            v-tooltip="`Log ${compound.name} dose`"
-          >
-            <div class="metric-label">{{ compound.name }}</div>
-            <form
-              v-if="!todaysDoseFor(compound._id)"
-              class="quick-form"
-              @submit.prevent="handleAddDose(compound)"
-            >
-              <input
-                type="number"
-                v-model.number="newDoseByCompound[compound._id]"
-                step="0.25"
-                :placeholder="compound.doseUnit"
-                required
-              />
-              <button
-                class="btn-primary"
-                type="submit"
-                :disabled="savingDoseByCompound[compound._id]"
-              >
-                {{ savingDoseByCompound[compound._id] ? 'Saving...' : 'Log' }}
-              </button>
-            </form>
-            <div v-else class="logged-row">
-              <span class="logged-value">
-                {{ todaysDoseFor(compound._id).value }} {{ compound.doseUnit }}
-              </span>
-              <button
-                class="delete-btn"
-                @click="handleDeleteDose(todaysDoseFor(compound._id))"
-              >
-                x
-              </button>
-            </div>
-            <div
-              v-if="nextDoseLabelFor(compound)"
-              class="next-dose"
-              :class="{ urgent: nextDoseLabelFor(compound).urgent }"
-            >
-              <span class="next-dose-label">Next dose:</span>
-              {{ nextDoseLabelFor(compound).text }}
-            </div>
-          </div>
-        </div>
-
-      </div>
+    <div v-if="foodlogStore.summary" class="meal-card nutrition-card">
+      <div class="meal-header"><h3>Nutrition</h3></div>
+      <DailySummary :summary="foodlogStore.summary" />
     </div>
 
     <!-- =========================================================== -->
@@ -677,20 +562,140 @@ function onNoteBlur() {
     </div>
 
     <!-- =========================================================== -->
+    <!-- BODY METRICS + COMPOUNDS                                      -->
+    <!-- =========================================================== -->
+    <div class="meal-card compact">
+      <div class="body-metrics">
+        <div class="metric-col" v-tooltip="'Log your weight'">
+          <div class="metric-label">Weight</div>
+          <form
+            v-if="!todaysWeight"
+            class="quick-form"
+            @submit.prevent="handleAddWeight"
+          >
+            <input
+              type="number"
+              v-model.number="newWeight"
+              step="0.1"
+              placeholder="lbs"
+              required
+              @focus="weightInputFocused = true"
+              @blur="weightInputFocused = false"
+            />
+            <button
+              class="btn-primary"
+              :class="{ muted: !weightInputFocused && !newWeight }"
+              type="submit"
+              :disabled="savingWeight"
+            >
+              Log
+            </button>
+          </form>
+          <div v-else class="logged-row">
+            <span class="logged-value"
+              >{{ todaysWeight.weightLbs }} lbs</span
+            >
+            <button class="delete-btn" @click="handleDeleteWeight">
+              x
+            </button>
+          </div>
+        </div>
+        <div class="metric-col" v-tooltip="'Log your waist'">
+          <div class="metric-label">Waist</div>
+          <form
+            v-if="!todaysWaist"
+            class="quick-form"
+            @submit.prevent="handleAddWaist"
+          >
+            <input
+              type="number"
+              v-model.number="newWaist"
+              step="0.25"
+              placeholder="in"
+              required
+              @focus="waistInputFocused = true"
+              @blur="waistInputFocused = false"
+            />
+            <button
+              class="btn-primary"
+              :class="{ muted: !waistInputFocused && !newWaist }"
+              type="submit"
+              :disabled="savingWaist"
+            >
+              Log
+            </button>
+          </form>
+          <div v-else class="logged-row">
+            <span class="logged-value">{{ todaysWaist.waistInches }}"</span>
+            <button class="delete-btn" @click="handleDeleteWaist">x</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="enabledCompounds.length" class="meal-card compact compounds-card">
+      <div
+        v-for="compound in enabledCompounds"
+        :key="compound._id"
+        class="compound-row"
+        v-tooltip="`Log ${compound.name} dose`"
+      >
+        <div class="metric-label">{{ compound.name }}</div>
+        <form
+          v-if="!todaysDoseFor(compound._id)"
+          class="quick-form"
+          @submit.prevent="handleAddDose(compound)"
+        >
+          <input
+            type="number"
+            v-model.number="newDoseByCompound[compound._id]"
+            step="0.25"
+            :placeholder="compound.doseUnit"
+            required
+            @focus="doseInputFocused[compound._id] = true"
+            @blur="doseInputFocused[compound._id] = false"
+          />
+          <button
+            class="btn-primary"
+            :class="{
+              muted:
+                !doseInputFocused[compound._id] &&
+                !newDoseByCompound[compound._id],
+            }"
+            type="submit"
+            :disabled="savingDoseByCompound[compound._id]"
+          >
+            {{ savingDoseByCompound[compound._id] ? 'Saving...' : 'Log' }}
+          </button>
+        </form>
+        <div v-else class="logged-row">
+          <span class="logged-value">
+            {{ todaysDoseFor(compound._id).value }} {{ compound.doseUnit }}
+          </span>
+          <button
+            class="delete-btn"
+            @click="handleDeleteDose(todaysDoseFor(compound._id))"
+          >
+            x
+          </button>
+        </div>
+        <div
+          v-if="nextDoseLabelFor(compound)"
+          class="next-dose"
+          :class="{ urgent: nextDoseLabelFor(compound).urgent }"
+        >
+          <span class="next-dose-label">Next dose:</span>
+          {{ nextDoseLabelFor(compound).text }}
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
     <!-- FOOD LOG                                                     -->
     <!-- =========================================================== -->
     <div class="meal-card food-card">
       <div class="meal-header">
         <h3>Food</h3>
-        <button
-          type="button"
-          class="btn-text sm"
-          v-tooltip="'Copy every food entry on this day to one or more other dates'"
-          :disabled="!dayEntryIds.length"
-          @click="startCopyDay"
-        >
-          Copy day →
-        </button>
       </div>
       <div
         v-for="meal in orderedMealTypes"
@@ -968,6 +973,18 @@ function onNoteBlur() {
         </table>
         <p v-else class="empty">No items.</p>
       </div>
+
+      <div class="food-card-footer">
+        <button
+          type="button"
+          class="btn-text sm"
+          v-tooltip="'Copy every food entry on this day to one or more other dates'"
+          :disabled="!dayEntryIds.length"
+          @click="startCopyDay"
+        >
+          Copy day →
+        </button>
+      </div>
     </div>
 
     <!-- =========================================================== -->
@@ -1189,6 +1206,13 @@ function onNoteBlur() {
 }
 
 .weekly-wrap { margin-bottom: var(--space-3); }
+.food-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
 .weekly-upsell {
   display: flex;
   flex-direction: column;
@@ -1481,6 +1505,20 @@ function onNoteBlur() {
   padding: 0 var(--space-2);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
+}
+/* Quick-log buttons stay muted until the user actually engages the input
+   (focus or value present). Cuts the visual noise when the user is
+   browsing the page rather than logging. */
+.metric-col .quick-form .btn-primary.muted,
+.compound-row .quick-form .btn-primary.muted {
+  background: var(--bg);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+}
+.metric-col .quick-form .btn-primary.muted:hover,
+.compound-row .quick-form .btn-primary.muted:hover {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .logged-row {

@@ -204,11 +204,6 @@ const targetLinePct = computed(() => {
         </div>
       </div>
 
-      <div v-if="weekNote" class="wb-note" :class="`tone-${weekNote.tone}`">
-        <span class="wb-note-arrow">▸</span>
-        {{ weekNote.body }}
-      </div>
-
       <div class="wb-macros">
         <MacroBar
           v-for="m in weekMacroBars"

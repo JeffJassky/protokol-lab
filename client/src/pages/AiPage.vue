@@ -14,64 +14,98 @@ useRouteSeo();
         <h1 class="mkt-h1">An assistant<br /><span class="accent">that does the work.</span></h1>
         <p class="mkt-lead">
           Most trackers give you a chat window and call it AI. Protokol Lab's
-          AI has tools. It reads your full log — every food, dose, weigh-in,
-          symptom, and note — searches the web for anything new, creates
-          custom foods, and writes entries directly into your day. Describe
-          what you ate. It handles the rest.
+          AI has tools. Snap a photo of your plate, or just describe what you
+          ate — it identifies the food, looks it up across your library and
+          common nutrition databases, falls back to a web search if needed,
+          and writes the entry into your day. It also knows every dose,
+          symptom, target, and weigh-in you've logged, so its answers are
+          grounded in your data, not generic GLP-1 talking points.
         </p>
 
         <h2 class="mkt-h2">What it can actually do</h2>
         <div class="mkt-card-grid">
           <div class="mkt-card">
-            <h3>Reads your data</h3>
-            <p>Every food entry, dose, weigh-in, symptom rating, and day note is available as context. No copy-pasting.</p>
+            <h3>Photo of your plate</h3>
+            <p>Upload a meal photo. The AI identifies what's on the plate, estimates portions, finds matching items in your library or online, and writes a log entry per item — all in one round-trip.</p>
           </div>
           <div class="mkt-card">
-            <h3>Searches the web</h3>
-            <p>New restaurant, new supplement, any nutrition fact — the AI runs a Google search and grounds the answer in what it finds.</p>
+            <h3>Multi-source food lookup</h3>
+            <p>Your library first, then common nutrition databases, then a web search as fallback. Whatever route gets the macros, it picks. Restaurant menu, supplement label, obscure protein bar — handled.</p>
+          </div>
+          <div class="mkt-card">
+            <h3>Reads your full history</h3>
+            <p>Every food entry, dose, weigh-in, waist measurement, symptom rating, day note, and saved meal is available as context. No copy-pasting, no "let me explain my situation."</p>
+          </div>
+          <div class="mkt-card">
+            <h3>Symptom × dose reasoning</h3>
+            <p>"Why is the nausea hitting on day 2?" "When does hunger usually come back?" The AI cross-references your symptom log against your actual dose schedule, not population averages.</p>
+          </div>
+          <div class="mkt-card">
+            <h3>Target-aware suggestions</h3>
+            <p>Knows your daily and rolling 7-day calorie + macro targets, and what you've eaten so far. Ask "what should I have for dinner?" and it suggests real foods from your library that close the gap.</p>
           </div>
           <div class="mkt-card">
             <h3>Creates custom foods</h3>
-            <p>If you eat something not in your library, the AI can build a custom food entry with accurate macros and save it for next time.</p>
+            <p>If you eat something not in your library, the AI builds a custom food entry with accurate macros and saves it for next time. One-off meals don't stay one-off — they become reusable.</p>
           </div>
           <div class="mkt-card">
             <h3>Writes log entries</h3>
-            <p>"I just ate a Sweetgreen Kale Caesar" — it logs it to the right meal slot, counting toward your daily and weekly totals.</p>
+            <p>Single items, multi-item meals from a photo, copies of yesterday's lunch — all written directly to today's log in the right meal slot, counting toward daily and weekly totals.</p>
+          </div>
+          <div class="mkt-card">
+            <h3>Dose-cycle awareness</h3>
+            <p>It knows where you are in your tirzepatide or semaglutide cycle — half-life, last dose, time since peak — and can explain why appetite is suppressed today or expected to return tomorrow.</p>
           </div>
           <div class="mkt-card">
             <h3>Multi-thread history</h3>
-            <p>Keep "Dose escalation plan" separate from "Nausea tolerance" from "Hitting protein on low-appetite days." Each thread keeps its own context.</p>
-          </div>
-          <div class="mkt-card">
-            <h3>Dose-aware answers</h3>
-            <p>It knows where you are in your tirzepatide or semaglutide cycle and can reason about why appetite is suppressed today or expected tomorrow.</p>
+            <p>Keep "Dose escalation plan" separate from "Nausea tolerance" from "Hitting protein on low-appetite days." Each thread keeps its own context and runs forward independently.</p>
           </div>
         </div>
 
-        <h2 class="mkt-h2">Example: real round-trip</h2>
+        <h2 class="mkt-h2">Example: photo to logged entries</h2>
         <div class="mkt-callout">
-          <strong>You:</strong> I just ate a Sweetgreen Kale Caesar at lunch.<br /><br />
+          <strong>You:</strong> [photo of grilled salmon, asparagus, and rice]<br />
+          "Just had this for dinner — best guess on macros?"<br /><br />
           <strong>AI (tool trail):</strong><br />
-          • Reading request<br />
+          • Reading request + image<br />
+          ⚙ Identifying items in photo<br />
+          ✓ Found: ~6 oz grilled salmon, ~1 cup asparagus, ~¾ cup white rice<br />
           ⚙ Checking your food library<br />
-          ✓ Not in library yet<br />
-          ⚙ Searching the web for nutrition info<br />
-          ✓ Found · 560 cal · 40g P · 31g F · 42g C<br />
-          ⚙ Saving as a custom food<br />
+          ✓ Salmon and rice match recents — asparagus is new<br />
+          ⚙ Searching nutrition databases<br />
+          ✓ Asparagus · 27 kcal · 3g P · 0g F · 5g C per cup<br />
+          ⚙ Saving asparagus as a custom food<br />
           ✓ Added to your library<br />
-          ⚙ Writing the entry to today<br />
-          ✓ Logged to lunch<br /><br />
-          <strong>AI:</strong> Logged. You're at 1,240 cal, 340 to go for the
-          day. Protein's at 92g — you'll want another shake before bed to hit
-          180.
+          ⚙ Writing 3 entries to dinner<br />
+          ✓ Logged · 540 kcal · 42g P · 16g F · 38g C<br /><br />
+          <strong>AI:</strong> Logged 3 items. You're at 1,940 kcal — 160
+          to go on the day, well under your weekly budget. Protein's at
+          165g, comfortably above target. Solid macro split for tomorrow's
+          tirzepatide peak day.
+        </div>
+
+        <h2 class="mkt-h2">Example: target-aware suggestion</h2>
+        <div class="mkt-callout">
+          <strong>You:</strong> What should I have for dinner? Trying to hit
+          protein.<br /><br />
+          <strong>AI (tool trail):</strong><br />
+          ⚙ Reading today's log + targets + saved meals<br />
+          ✓ Today: 1,420 kcal · 92g protein · 680 kcal + 88g protein left<br />
+          ✓ Saved meal "Post-lift chicken bowl" hits 680 kcal · 65g P<br /><br />
+          <strong>AI:</strong> You've got 680 kcal and 88g protein to hit
+          today. Your saved <em>Post-lift chicken bowl</em> covers most of
+          it (65g P, 680 kcal) — add a Greek yogurt cup after and you'll
+          land at exactly your target. Want me to log both now?
         </div>
 
         <h2 class="mkt-h2">How it's built</h2>
         <p class="mkt-p">
-          The AI is a Gemini-based agent with tool-calling. It has structured
-          access to your data via API, runs bounded iteration loops per
-          message (no runaway tool use), and can ground web searches through
-          Google Search integration when a nutrition fact isn't in your
+          The AI is a multimodal Gemini-based agent with tool-calling. It
+          accepts text and image inputs in the same turn, has structured
+          access to your data via internal APIs (food log, doses, symptoms,
+          weight, settings, saved meals), runs bounded iteration loops per
+          message so it can't loop forever, and grounds external lookups
+          through a web search tool when a nutrition fact isn't in your
           library.
         </p>
         <p class="mkt-p">

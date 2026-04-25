@@ -39,6 +39,9 @@ const chatUsageSchema = new mongoose.Schema({
   iterations: { type: Number, default: 0 },
   toolCalls: { type: Number, default: 0 },
   searchCalls: { type: Number, default: 0 },
+  // How many food images were sent on this turn. Used by requireChatQuota to
+  // enforce daily image caps and by analytics to track feature adoption.
+  imageCount: { type: Number, default: 0 },
   durationMs: { type: Number, default: 0 },
   // 'ok' | 'error' | 'max_iterations' | 'aborted'
   status: { type: String, default: 'ok' },

@@ -17,6 +17,13 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value = data.settings;
   }
 
+  // Partial save — used by the onboarding wizard to persist each step without
+  // clearing fields the user hasn't reached yet.
+  async function patchSettings(patch) {
+    const data = await api.patch('/api/settings', patch);
+    settings.value = data.settings;
+  }
+
   // Partial update for just the notification-related fields — avoids sending
   // the whole profile when the user only touched a reminder toggle.
   async function updateNotifications(patch) {
@@ -24,5 +31,5 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value = data.settings;
   }
 
-  return { settings, loaded, fetchSettings, updateSettings, updateNotifications };
+  return { settings, loaded, fetchSettings, updateSettings, patchSettings, updateNotifications };
 });

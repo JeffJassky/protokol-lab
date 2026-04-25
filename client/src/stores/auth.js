@@ -27,6 +27,11 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = data.user;
   }
 
+  async function loginWithGoogle(credential) {
+    const data = await api.post('/api/auth/google', { credential });
+    user.value = data.user;
+  }
+
   async function requestPasswordReset(email) {
     await api.post('/api/auth/forgot-password', { email });
   }
@@ -40,5 +45,19 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null;
   }
 
-  return { user, checked, fetchMe, login, register, requestPasswordReset, resetPassword, logout };
+  async function setOnboardingStep(step) {
+    const data = await api.post('/api/auth/onboarding/step', { step });
+    user.value = data.user;
+  }
+
+  async function completeOnboarding() {
+    const data = await api.post('/api/auth/onboarding/complete');
+    user.value = data.user;
+  }
+
+  return {
+    user, checked,
+    fetchMe, login, register, loginWithGoogle, requestPasswordReset, resetPassword, logout,
+    setOnboardingStep, completeOnboarding,
+  };
 });

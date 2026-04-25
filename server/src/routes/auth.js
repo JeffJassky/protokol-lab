@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import { OAuth2Client } from 'google-auth-library';
 import User from '../models/User.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { sendPasswordResetEmail, sendWelcomeEmail } from '../services/email.js';
@@ -28,6 +29,27 @@ function signToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
 
+function serializeUser(u) {
+  return {
+    id: u._id,
+    email: u.email,
+    displayName: u.displayName || null,
+    isAdmin: Boolean(u.isAdmin),
+    plan: u.plan,
+    planActivatedAt: u.planActivatedAt,
+    planExpiresAt: u.planExpiresAt,
+    hasStripeCustomer: Boolean(u.stripeCustomerId),
+    hasActiveSubscription: Boolean(u.stripeSubscriptionId),
+    imageRecognitionCount: u.imageRecognitionCount || 0,
+    onboardingComplete: Boolean(u.onboardingComplete),
+    onboardingStep: u.onboardingStep || 'basics',
+  };
+}
+
+const ONBOARDING_STEPS = [
+  'basics', 'activity', 'goal', 'targets', 'compounds', 'install', 'notifications', 'done',
+];
+
 function validatePassword(pw) {
   if (typeof pw !== 'string') return 'Password required';
   if (pw.length < 8) return 'Password must be at least 8 characters';
@@ -35,11 +57,18 @@ function validatePassword(pw) {
   return null;
 }
 
+// Tests share a single app instance + fixed IP (127.0.0.1), so rate-limit
+// counters bleed across specs and cause spurious 429s. Skip in test/e2e envs;
+// prod behavior unchanged.
+const skipInTest = () =>
+  process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'e2e';
+
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipInTest,
   message: { error: 'Too many attempts, try again later' },
   handler: (req, res, next, options) => {
     (req.log || log).warn({ ip: req.ip, path: req.path }, 'rate limit: register');
@@ -52,6 +81,7 @@ const forgotLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipInTest,
   message: { error: 'Too many attempts, try again later' },
   handler: (req, res, next, options) => {
     (req.log || log).warn({ ip: req.ip }, 'rate limit: forgot-password');
@@ -64,6 +94,7 @@ const resetLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipInTest,
   message: { error: 'Too many attempts, try again later' },
   handler: (req, res, next, options) => {
     (req.log || log).warn({ ip: req.ip }, 'rate limit: reset-password');
@@ -76,12 +107,22 @@ const loginLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipInTest,
   message: { error: 'Too many attempts, try again later' },
   handler: (req, res, next, options) => {
     (req.log || log).warn({ ip: req.ip }, 'rate limit: login');
     res.status(options.statusCode).json(options.message);
   },
 });
+
+// Lazy singleton — client is only constructed on first /google call so that
+// boot does not require GOOGLE_CLIENT_ID. Tests can mock OAuth2Client at the
+// module level without it ever being instantiated.
+let googleClient = null;
+function getGoogleClient() {
+  if (!googleClient) googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  return googleClient;
+}
 
 router.post('/register', registerLimiter, async (req, res) => {
   const rlog = req.log || log;
@@ -115,7 +156,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     rlog.error({ ...errContext(err), userId: String(user._id) }, 'register: welcome email failed');
   });
 
-  res.status(201).json({ user: { id: user._id, email: user.email } });
+  res.status(201).json({ user: serializeUser(user) });
 });
 
 router.post('/login', loginLimiter, async (req, res) => {
@@ -139,24 +180,91 @@ router.post('/login', loginLimiter, async (req, res) => {
   res.cookie('token', token, COOKIE_OPTS);
   rlog.info({ userId: String(user._id), email: normalized }, 'login: success');
 
-  res.json({ user: { id: user._id, email: user.email } });
+  res.json({ user: serializeUser(user) });
+});
+
+// Google Identity Services flow: client gets an ID token from the GIS popup
+// and POSTs the raw JWT here as `credential`. We verify it server-side against
+// Google's published keys (handled inside verifyIdToken), then either log in,
+// auto-link by email, or create a new user. Auto-link is safe because Google
+// signals email verification via the `email_verified` claim — we require it.
+router.post('/google', loginLimiter, async (req, res) => {
+  const rlog = req.log || log;
+  const credential = typeof req.body?.credential === 'string' ? req.body.credential : '';
+  if (!credential) {
+    return res.status(400).json({ error: 'Missing credential' });
+  }
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    rlog.error('google sign-in: GOOGLE_CLIENT_ID not configured');
+    return res.status(503).json({ error: 'Google sign-in not configured' });
+  }
+
+  let payload;
+  try {
+    const ticket = await getGoogleClient().verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    payload = ticket.getPayload();
+  } catch (err) {
+    rlog.warn({ ...errContext(err) }, 'google sign-in: token verification failed');
+    return res.status(401).json({ error: 'Invalid Google credential' });
+  }
+
+  if (!payload?.sub || !payload?.email) {
+    rlog.warn({ payload: { hasSub: Boolean(payload?.sub), hasEmail: Boolean(payload?.email) } }, 'google sign-in: payload missing required claims');
+    return res.status(401).json({ error: 'Invalid Google credential' });
+  }
+  if (!payload.email_verified) {
+    rlog.warn({ email: payload.email }, 'google sign-in: email not verified by Google');
+    return res.status(401).json({ error: 'Google email not verified' });
+  }
+
+  const googleId = payload.sub;
+  const email = String(payload.email).toLowerCase().trim();
+  const avatarUrl = payload.picture || null;
+  const displayName = payload.name || null;
+
+  let user = await User.findOne({ googleId });
+  let created = false;
+
+  if (!user) {
+    // Auto-link to an existing email/password account, or create new.
+    user = await User.findOne({ email });
+    if (user) {
+      user.googleId = googleId;
+      if (!user.avatarUrl && avatarUrl) user.avatarUrl = avatarUrl;
+      if (!user.displayName && displayName) user.displayName = displayName;
+      await user.save();
+      rlog.info({ userId: String(user._id), email }, 'google sign-in: auto-linked existing account');
+    } else {
+      user = await User.create({
+        email,
+        googleId,
+        avatarUrl,
+        displayName,
+      });
+      created = true;
+      rlog.info({ userId: String(user._id), email }, 'google sign-in: new user created');
+    }
+  } else {
+    rlog.info({ userId: String(user._id), email: user.email }, 'google sign-in: success');
+  }
+
+  const token = signToken(user._id);
+  res.cookie('token', token, COOKIE_OPTS);
+
+  if (created) {
+    sendWelcomeEmail(user.email).catch((err) => {
+      rlog.error({ ...errContext(err), userId: String(user._id) }, 'google sign-in: welcome email failed');
+    });
+  }
+
+  res.status(created ? 201 : 200).json({ user: serializeUser(user) });
 });
 
 router.get('/me', requireAuth, (req, res) => {
-  const u = req.user;
-  res.json({
-    user: {
-      id: u._id,
-      email: u.email,
-      displayName: u.displayName || null,
-      isAdmin: Boolean(u.isAdmin),
-      plan: u.plan,
-      planActivatedAt: u.planActivatedAt,
-      planExpiresAt: u.planExpiresAt,
-      hasStripeCustomer: Boolean(u.stripeCustomerId),
-      hasActiveSubscription: Boolean(u.stripeSubscriptionId),
-    },
-  });
+  res.json({ user: serializeUser(req.user) });
 });
 
 router.patch('/me', requireAuth, async (req, res) => {
@@ -176,19 +284,31 @@ router.patch('/me', requireAuth, async (req, res) => {
     .select('-passwordHash');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   rlog.info({ userId: String(user._id), fields: Object.keys(update) }, 'auth: profile updated');
-  res.json({
-    user: {
-      id: user._id,
-      email: user.email,
-      displayName: user.displayName || null,
-      isAdmin: Boolean(user.isAdmin),
-      plan: user.plan,
-      planActivatedAt: user.planActivatedAt,
-      planExpiresAt: user.planExpiresAt,
-      hasStripeCustomer: Boolean(user.stripeCustomerId),
-      hasActiveSubscription: Boolean(user.stripeSubscriptionId),
-    },
-  });
+  res.json({ user: serializeUser(user) });
+});
+
+router.post('/onboarding/step', requireAuth, async (req, res) => {
+  const step = req.body?.step;
+  if (!ONBOARDING_STEPS.includes(step)) {
+    return res.status(400).json({ error: 'invalid step' });
+  }
+  const user = await User.findByIdAndUpdate(
+    req.userId,
+    { $set: { onboardingStep: step } },
+    { new: true },
+  ).select('-passwordHash');
+  (req.log || log).info({ userId: String(user._id), step }, 'onboarding: step updated');
+  res.json({ user: serializeUser(user) });
+});
+
+router.post('/onboarding/complete', requireAuth, async (req, res) => {
+  const user = await User.findByIdAndUpdate(
+    req.userId,
+    { $set: { onboardingComplete: true, onboardingStep: 'done' } },
+    { new: true },
+  ).select('-passwordHash');
+  (req.log || log).info({ userId: String(user._id) }, 'onboarding: complete');
+  res.json({ user: serializeUser(user) });
 });
 
 router.post('/logout', (req, res) => {

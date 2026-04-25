@@ -226,13 +226,17 @@ export async function startScheduler() {
     defaultLockLifetime: 60 * 1000,
   });
 
-  agenda.define('reminder-tick', { lockLifetime: 60 * 1000 }, async () => {
-    try {
-      await runTick();
-    } catch (err) {
-      log.error(errContext(err), 'scheduler: tick failed');
-    }
-  });
+  agenda.define(
+    'reminder-tick',
+    async () => {
+      try {
+        await runTick();
+      } catch (err) {
+        log.error(errContext(err), 'scheduler: tick failed');
+      }
+    },
+    { lockLifetime: 60 * 1000 },
+  );
 
   agenda.on('fail', (err, job) => {
     log.error({ ...errContext(err), jobName: job?.attrs?.name }, 'scheduler: agenda job fail');

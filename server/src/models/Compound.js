@@ -8,6 +8,10 @@ const compoundSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     name: { type: String, required: true, trim: true },
+    // Trade/brand names the same active substance is sold under (e.g.
+    // Tirzepatide → ["Mounjaro", "Zepbound"]). Surfaced in pickers so users
+    // can recognize what their prescription is. Optional; empty for custom.
+    brandNames: { type: [String], default: [] },
     isSystem: { type: Boolean, default: false },
     enabled: { type: Boolean, default: true },
     halfLifeDays: { type: Number, required: true, min: 0 },

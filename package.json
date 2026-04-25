@@ -11,9 +11,15 @@
     "build": "npm run build --prefix client",
     "heroku-postbuild": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
     "start": "npm start --prefix server",
-    "seed": "node server/src/scripts/seed-user.js"
+    "seed": "node server/src/scripts/seed-user.js",
+    "test": "npm test --prefix server && npm test --prefix client",
+    "test:server": "npm test --prefix server",
+    "test:client": "npm test --prefix client",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "concurrently": "^9.1.2"
   }
 }

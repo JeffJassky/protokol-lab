@@ -44,6 +44,11 @@ const photosStore = usePhotosStore();
 const planLimits = usePlanLimits();
 const upgradeModal = useUpgradeModalStore();
 
+const rolling7DayUpgradeTier = computed(() => {
+  const target = planLimits.planRequiredFor({ feature: 'rolling7DayTargets' });
+  return target?.id || null;
+});
+
 // Used to scale the calorie-axis range so the user's daily-burn baseline is
 // always visible on the chart. `bmr` here is a misnomer kept from a prior
 // schema — the value compared against calorie intake is total daily burn.
@@ -790,7 +795,7 @@ const etaToGoal = computed(() => {
 
 <template>
   <div class="dashboard">
-    <h2>Dashboard</h2>
+    <h2 class="page-title">Dashboard</h2>
 
     <OnboardingChecklist />
 
@@ -840,9 +845,23 @@ const etaToGoal = computed(() => {
     </div>
 
     <!-- Rolling 7-day budget -->
-    <div class="card weekly-card">
+    <div v-if="planLimits.hasFeature('rolling7DayTargets')" class="card weekly-card">
       <WeeklyBudgetStrip :default-expanded="true" />
     </div>
+    <button
+      v-else-if="rolling7DayUpgradeTier"
+      type="button"
+      class="card weekly-upsell"
+      @click="upgradeModal.openForGate({ featureKey: 'rolling7DayTargets' })"
+    >
+      <span class="weekly-upsell-label">
+        Rolling 7-day macro targets
+        <UpgradeBadge :tier="rolling7DayUpgradeTier" />
+      </span>
+      <span class="weekly-upsell-sub">
+        Smooth out weekly variance — over today, under tomorrow, still on plan.
+      </span>
+    </button>
 
     <!-- Chart -->
     <div class="card chart-section">
@@ -1047,6 +1066,29 @@ const etaToGoal = computed(() => {
 }
 .card h3 { font-size: var(--font-size-m); margin-bottom: var(--space-3); }
 .weekly-card { padding: 0; overflow: hidden; }
+.weekly-upsell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border);
+  background: var(--surface);
+  padding: 14px 18px;
+  transition: border-color 0.15s ease;
+}
+.weekly-upsell:hover { border-color: var(--primary); }
+.weekly-upsell-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.weekly-upsell-sub { font-size: 12px; }
 .weekly-card :deep(.weekly-budget) {
   background: transparent;
   border: none;
@@ -1060,7 +1102,13 @@ const etaToGoal = computed(() => {
   margin-bottom: var(--space-4);
 }
 @media (max-width: 720px) {
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    /* Section cards above/below this grid go edge-to-edge on mobile,
+       so the stat tiles need their own horizontal inset to avoid hugging
+       the screen edges. */
+    padding: 0 var(--space-4);
+  }
 }
 .stat-card {
   background: var(--surface);

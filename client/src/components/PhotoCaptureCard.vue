@@ -143,11 +143,13 @@ async function handleDelete(entry, event) {
           title="Delete"
           @click="handleDelete(slot.entry, $event)"
         >×</button>
+        <!-- No `capture` attribute → on mobile the OS prompts "Take Photo
+             or Choose from Library" instead of forcing the camera. On
+             desktop it's a normal file picker. -->
         <input
           :ref="(el) => (fileInputs[slot.key] = el)"
           type="file"
           accept="image/*"
-          capture="environment"
           class="file-input"
           @change="onFile(slot.key, $event)"
         />

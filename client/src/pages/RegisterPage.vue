@@ -4,6 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { startCheckout } from '../api/stripe.js';
 import { PLANS } from '../../../shared/plans.js';
+import GoogleSignInButton from '../components/GoogleSignInButton.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -45,13 +46,27 @@ async function handleRegister() {
   loading.value = true;
   try {
     await auth.register(email.value, password.value);
-    if (intendedPlanId.value) {
-      // Browser will navigate to Stripe. Keep loading=true so the button stays
-      // disabled through the redirect — avoids double-clicks.
-      await startCheckout(intendedPlanId.value, intendedInterval.value);
-      return;
-    }
-    router.push('/');
+    await postAuthRedirect();
+  } catch (err) {
+    error.value = err.message;
+    loading.value = false;
+  }
+}
+
+async function postAuthRedirect() {
+  if (intendedPlanId.value) {
+    await startCheckout(intendedPlanId.value, intendedInterval.value);
+    return;
+  }
+  router.push('/');
+}
+
+async function handleGoogleCredential(credential) {
+  error.value = '';
+  loading.value = true;
+  try {
+    await auth.loginWithGoogle(credential);
+    await postAuthRedirect();
   } catch (err) {
     error.value = err.message;
     loading.value = false;
@@ -69,6 +84,11 @@ async function handleRegister() {
         No charge until the trial ends.
       </p>
       <p v-else class="subtitle">Start tracking your nutrition and weight</p>
+      <GoogleSignInButton
+        text="signup_with"
+        @credential="handleGoogleCredential"
+      />
+      <div class="divider"><span>or</span></div>
       <form @submit.prevent="handleRegister">
         <div class="field">
           <label for="email">Email</label>
@@ -156,6 +176,23 @@ async function handleRegister() {
   border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
   border-radius: var(--radius-small);
   line-height: 1.5;
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: var(--space-4) 0;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 .field {
   margin-bottom: var(--space-4);

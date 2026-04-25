@@ -44,7 +44,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   <div class="macro-bar">
     <div class="macro-header">
       <span class="macro-label">{{ label }}</span>
-      <span class="macro-values"><span class="macro-current">{{ Math.round(current).toLocaleString() }}</span><span class="macro-budget"> / {{ Math.round(target).toLocaleString() }}{{ unit }}<template v-if="note"> ·</template></span><span v-if="note" class="macro-note" :class="`note-${noteTone}`"> {{ note }}</span></span>
+      <span class="macro-values"><span class="macro-current">{{ Math.round(current).toLocaleString() }}</span><span class="macro-budget"> / {{ Math.round(target).toLocaleString() }}{{ unit }}</span><template v-if="note"><span class="macro-sep"> · </span><span class="macro-note" :class="`note-${noteTone}`">{{ note }}</span></template></span>
     </div>
     <div class="bar-track">
       <div class="bar-fill" :style="{ width: normalWidth + '%', background: color }" />
@@ -55,8 +55,8 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 </template>
 
 <style scoped>
-.macro-bar { margin-bottom: var(--space-2); }
-.macro-bar:last-child { margin-bottom: 0; }
+.macro-bar { margin: 0; }
+.macro-bar + .macro-bar { margin-top: var(--space-4); }
 .macro-header {
   display: flex;
   justify-content: space-between;
@@ -64,6 +64,19 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   gap: var(--space-2);
   font-size: var(--font-size-xs);
   margin-bottom: var(--space-1);
+}
+
+/* Mobile: too much info ("CAL (WEEK) 14,227 / 14,700 kcal · 473kcal left
+   today") to fit on one line — wrapping looks ragged. Stack the label on
+   top of the numbers, then the bar follows below. */
+@media (max-width: 640px) {
+  .macro-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .macro-values { font-size: var(--font-size-xs); }
+  .macro-bar + .macro-bar { margin-top: var(--space-6); }
 }
 .macro-label {
   font-size: var(--font-size-xs);
@@ -75,6 +88,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 }
 .macro-values { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .macro-current { font-weight: var(--font-weight-bold); color: var(--text); }
+.macro-sep { color: var(--text-tertiary); }
 .macro-budget { color: var(--text-tertiary); }
 .macro-note { font-weight: var(--font-weight-bold); }
 .note-muted { color: var(--text-secondary); }

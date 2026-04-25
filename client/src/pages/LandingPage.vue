@@ -872,49 +872,60 @@ const aiTrail = [
               An assistant that<br /><span class="accent">does the work.</span>
             </h2>
             <p class="lead">
-              Not a chatbot. The AI has tools — it reads your log, searches the
-              web for anything new, creates custom foods, and writes entries
-              directly into your day. You describe what you ate. It handles the
-              rest.
+              Not a chatbot. Snap a photo of your plate or just tell it what
+              you ate — the AI identifies the food, checks your library,
+              searches common nutrition databases, falls back to a web
+              search, and writes the entry into your day. It also knows
+              every dose and symptom you've logged, so its advice is
+              grounded in your data, not generic GLP-1 talking points.
             </p>
           </div>
           <div class="feat-row">
             <div class="feat-text">
               <h3 class="feat-head">
-                Tell it what you ate.<br /><span class="accent"
+                Show it. Tell it.<br /><span class="accent"
                   >It logs it.</span
                 >
               </h3>
               <p class="feat-body">
                 Most trackers give you a chat window and call it AI. This one
-                actually does things. Watch the tool trail on the right — it
-                checks your food database, falls back to web search when a new
-                item isn't there, saves it to your library, and writes the entry
-                into today's log.
+                actually does things. Snap a meal photo or describe what you
+                ate — it identifies the items, looks them up across your
+                library and common nutrition databases, falls back to a web
+                search if it has to, and writes the entries into today's log.
+                Then it tells you what you've got left to hit your targets.
               </p>
               <ul class="feat-bullets">
                 <li>
                   <span>
-                    <b>Reads your data</b> · every food, dose, weigh-in,
-                    symptom, and note is available context
+                    <b>Show it your plate</b> · photo → identification →
+                    macros → log entry, end to end
                   </span>
                 </li>
                 <li>
                   <span>
-                    <b>Searches the web</b> · new restaurant, new supplement,
-                    any nutrition fact it needs to check
+                    <b>Looks everywhere</b> · your library first, then common
+                    nutrition databases, then web search as fallback
                   </span>
                 </li>
                 <li>
                   <span>
-                    <b>Creates &amp; logs</b> · custom foods and log entries
-                    written straight to your account
+                    <b>Knows your context</b> · every food, dose, weigh-in,
+                    symptom, and note is available — every answer is grounded
+                    in your data
                   </span>
                 </li>
                 <li>
                   <span>
-                    <b>Multi-thread history</b> · keep "Dose escalation plan"
-                    separate from "Nausea tolerance"
+                    <b>Hits your numbers</b> · "340 kcal and 80g protein to
+                    go" — and a list of foods from your library that get you
+                    there
+                  </span>
+                </li>
+                <li>
+                  <span>
+                    <b>Reads symptoms with doses</b> · why the nausea is
+                    hitting on day 2, why your hunger comes back day 4
                   </span>
                 </li>
               </ul>
@@ -1654,13 +1665,13 @@ section.hero { padding-top: 72px; padding-bottom: 96px; }
 .rolling-col { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .rolling-track {
   position: relative; height: 70px;
-  background: color-mix(in srgb, var(--text) 8%, transparent);
+  background: var(--bg);
   overflow: hidden;
 }
 .rolling-track.today { outline: 1.5px solid var(--primary); outline-offset: -1.5px; }
 .rolling-fill {
   position: absolute; left: 0; right: 0; bottom: 0;
-  background: var(--color-cal); opacity: 0.75;
+  background: var(--color-cal); opacity: 1;
 }
 .rolling-fill.today { background: var(--primary); opacity: 1; }
 .rolling-over {

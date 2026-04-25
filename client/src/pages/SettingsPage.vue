@@ -601,7 +601,7 @@ watch(
 <template>
   <div class="settings-page">
     <div class="settings-head">
-      <h2>Settings</h2>
+      <h2 class="page-title">Settings</h2>
       <span v-if="saving" class="autosave-status">Saving…</span>
       <span v-else-if="saved" class="autosave-status ok">Saved</span>
     </div>
@@ -1332,6 +1332,23 @@ watch(
 .bio-row + .bio-row { grid-template-columns: 1fr 1fr; }
 .bio-group { display: flex; align-items: center; gap: var(--space-2); }
 .bio-group-wide { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); }
+
+@media (max-width: 720px) {
+  /* Sex / Age / Height (and the Activity / Goal-rate row below) overflow
+     a phone-width container in a single row. Stack each group with its
+     label on top of the control. */
+  .bio-row,
+  .bio-row + .bio-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+  .bio-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+  .seg-control { align-self: flex-start; }
+}
 .bio-select {
   padding: 0.4rem 0.55rem;
   font-size: var(--font-size-s);

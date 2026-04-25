@@ -20,6 +20,7 @@ import ResetPasswordPage from '../pages/ResetPasswordPage.vue';
 import DashboardPage from '../pages/DashboardPage.vue';
 import SettingsPage from '../pages/SettingsPage.vue';
 import LogPage from '../pages/LogPage.vue';
+import WelcomePage from '../pages/WelcomePage.vue';
 import FoodSearchPage from '../pages/FoodSearchPage.vue';
 import AdminDashboardPage from '../pages/AdminDashboardPage.vue';
 import AdminUsersPage from '../pages/AdminUsersPage.vue';
@@ -49,6 +50,7 @@ const routes = [
   { path: '/register', name: 'register', component: RegisterPage, meta: { guest: true, public: true } },
   { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage, meta: { guest: true, public: true } },
   { path: '/reset-password', name: 'reset-password', component: ResetPasswordPage, meta: { guest: true, public: true } },
+  { path: '/welcome', name: 'welcome', component: WelcomePage, meta: { requiresAuth: true, hideAppChrome: true } },
   { path: '/log', name: 'log', component: LogPage, meta: { requiresAuth: true } },
   { path: '/dashboard', name: 'dashboard', component: DashboardPage, meta: { requiresAuth: true } },
   { path: '/settings', name: 'settings', component: SettingsPage, meta: { requiresAuth: true } },
@@ -92,6 +94,20 @@ router.beforeEach(async (to) => {
     return { name: 'login' };
   }
   if (to.meta.requiresAdmin && !auth.user?.isAdmin) {
+    return { name: 'log' };
+  }
+  // Force unfinished users through the wizard. Logout is handled inside the
+  // wizard itself; everything else under requiresAuth is gated until done.
+  if (
+    auth.user &&
+    !auth.user.onboardingComplete &&
+    to.meta.requiresAuth &&
+    to.name !== 'welcome'
+  ) {
+    return { name: 'welcome' };
+  }
+  // Already onboarded — don't let users land on /welcome again.
+  if (to.name === 'welcome' && auth.user?.onboardingComplete) {
     return { name: 'log' };
   }
   // Logged-in users on a guest-only page bounce to the app —

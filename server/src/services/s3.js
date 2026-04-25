@@ -1,4 +1,9 @@
-import { S3Client, DeleteObjectCommand, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  DeleteObjectCommand,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import crypto from 'crypto';
 import { childLogger, errContext } from '../lib/logger.js';
@@ -67,6 +72,39 @@ export function buildPhotoKey(userId, date, ext = 'jpg', variant = 'full') {
   const mm = date.slice(5, 7);
   const suffix = variant === 'thumb' ? '.thumb' : '';
   return `photos/${userId}/${yyyy}/${mm}/${date}-${rand}${suffix}.${ext}`;
+}
+
+// Meal photos attached to chat messages live under a separate prefix so the
+// progress-photos UI never accidentally lists them. threadId + messageId keep
+// keys correlated with the conversation they came from.
+export function buildMealPhotoKey(userId, threadId, messageId, idx, ext = 'jpg') {
+  const rand = crypto.randomBytes(4).toString('hex');
+  const tid = threadId || 'nothread';
+  const mid = messageId || 'nomsg';
+  return `meal-photos/${userId}/${tid}/${mid}/${idx}-${rand}.${ext}`;
+}
+
+// Direct server-side upload for cases where the client posts bytes to the
+// Node server rather than doing a browser-direct PUT via a presigned URL.
+// Meal photos arrive as multipart in the chat endpoint, so we upload them
+// here synchronously after the LLM stream succeeds.
+export async function putObject(key, body, contentType) {
+  assertConfigured();
+  const t0 = Date.now();
+  try {
+    await client().send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+    log.info({ key, contentType, bytes: body?.length, durationMs: Date.now() - t0 }, 's3 put ok');
+  } catch (err) {
+    log.error({ ...errContext(err), key, contentType }, 's3 put failed');
+    throw err;
+  }
 }
 
 export async function presignPut(key, contentType) {

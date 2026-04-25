@@ -11,7 +11,9 @@
     "inject-blog-nav": "node scripts/inject-blog-nav.mjs",
     "og": "node scripts/generate-og.mjs",
     "sitemap": "node scripts/generate-sitemap.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@unhead/vue": "^3.0.5",
@@ -31,8 +33,11 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/test-utils": "^2.4.8",
+    "happy-dom": "^20.9.0",
     "puppeteer": "^24.42.0",
     "sharp": "^0.34.5",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^4.1.5"
   }
 }

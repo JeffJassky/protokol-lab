@@ -206,10 +206,20 @@ button:focus-visible {
   .card,
   .meal-card,
   .price-card,
-  .timeline-card {
+  .timeline-card,
+  .weekly-budget,
+  .weekly-upsell {
     border-left: none !important;
     border-right: none !important;
     border-radius: 0 !important;
+    margin: 0 !important;
+    /* Margins collapsed → bump inner padding so content has breathing room
+       and adjacent cards don't feel cramped against each other. */
+    padding: var(--space-5) var(--space-5) !important;
+  }
+  /* Wrappers that don't render their own border but introduce vertical
+     gap — kill their margin so adjacent containers tile flush. */
+  .weekly-wrap {
     margin: 0 !important;
   }
   /* Adjacent section cards collapse to a single shared divider — drop the
@@ -222,7 +232,19 @@ button:focus-visible {
   .meal-card + .timeline-card,
   .timeline-card + .card,
   .timeline-card + .meal-card,
-  .timeline-card + .timeline-card {
+  .timeline-card + .timeline-card,
+  .weekly-wrap + .meal-card,
+  .meal-card + .weekly-wrap {
     border-top: none !important;
+  }
+  .weekly-wrap > .weekly-budget,
+  .weekly-wrap > .weekly-upsell {
+    border-top: none !important;
+  }
+
+  /* Page titles ("Daily Log", "Dashboard", "Settings") are redundant on
+     mobile where the bottom nav already labels the current page. */
+  .page-title {
+    display: none !important;
   }
 }
