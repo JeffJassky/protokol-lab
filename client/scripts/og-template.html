@@ -75,14 +75,28 @@
     .left { display: flex; flex-direction: column; gap: 28px; }
 
     .brand {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
+      gap: 12px;
+      font-family: "JetBrains Mono", monospace;
+      line-height: 1;
     }
-    .brand svg { width: 22px; height: 22px; }
+    .brand .brand-icon { width: 32px; height: 32px; flex-shrink: 0; }
+    .brand .brand-name {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .brand .brand-lab {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      color: var(--text);
+      border: 1px solid var(--text);
+      padding: 3px 8px;
+      align-self: center;
+    }
 
     .eyebrow {
       font-size: 13px;
@@ -223,15 +237,12 @@
   <div class="frame">
     <div class="left">
       <div class="brand">
-        <svg viewBox="0 0 64 64">
-          <circle cx="32" cy="32" r="26" fill="none" stroke="#e7ecea" stroke-width="2.5" />
-          <line x1="32" y1="2" x2="32" y2="18" stroke="#e7ecea" stroke-width="2.5" />
-          <line x1="32" y1="46" x2="32" y2="62" stroke="#e7ecea" stroke-width="2.5" />
-          <line x1="2" y1="32" x2="18" y2="32" stroke="#e7ecea" stroke-width="2.5" />
-          <line x1="46" y1="32" x2="62" y2="32" stroke="#e7ecea" stroke-width="2.5" />
-          <circle cx="32" cy="32" r="7" fill="#5bf591" />
+        <!-- T02 PK glyph — keep in sync with src/brand/pk-glyph.js. Regenerate via `node scripts/extract-pk-glyph.mjs`. -->
+        <svg class="brand-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M28.760 62L19.760 62L19.760 18.200L34.700 18.200Q39.320 18.200 42.770 19.940Q46.220 21.680 48.110 24.800Q50.000 27.920 50.000 32.120L50.000 32.120Q50.000 36.260 48.080 39.410Q46.160 42.560 42.740 44.300Q39.320 46.040 34.700 46.040L34.700 46.040L28.760 46.040L28.760 62ZM28.760 26L28.760 38.240L34.700 38.240Q37.580 38.240 39.290 36.500Q41 34.760 41 32.120L41 32.120Q41 29.480 39.290 27.740Q37.580 26 34.700 26L34.700 26L28.760 26Z M61.100 62L52.100 62L52.100 18.200L61.100 18.200L61.100 35.360L65.300 35.360L72.620 18.200L82.340 18.200L73.220 38.900L82.700 62L72.860 62L65.360 43.220L61.100 43.220L61.100 62Z" fill="#e7ecea"/>
         </svg>
-        <span>Protokol Lab</span>
+        <span class="brand-name">Protokol</span>
+        <span class="brand-lab">LAB</span>
       </div>
 
       <div class="eyebrow"><span class="dot"></span><span id="eyebrow">Loading…</span></div>

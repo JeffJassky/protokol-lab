@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth.js';
 import { startCheckout } from '../api/stripe.js';
 import { PLANS } from '../../../shared/plans.js';
 import GoogleSignInButton from '../components/GoogleSignInButton.vue';
+import BrandWordmark from '../components/BrandWordmark.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -77,6 +78,7 @@ async function handleGoogleCredential(credential) {
 <template>
   <div class="auth-page">
     <div class="auth-card">
+      <BrandWordmark class="auth-brand" :size="24" />
       <h1>Create your account</h1>
       <p v-if="intendedPlan" class="subtitle trial-subtitle">
         Start your <strong>14-day free trial</strong> of
@@ -163,6 +165,11 @@ async function handleGoogleCredential(credential) {
   font-size: var(--font-size-xl);
   text-align: center;
   margin-bottom: var(--space-1);
+}
+.auth-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-6);
 }
 .subtitle {
   text-align: center;

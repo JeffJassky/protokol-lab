@@ -116,6 +116,7 @@
   --text-tertiary: #7a9a8a;
   --text-on-primary: #05080a;
   --text-disabled: #b6c8b3;
+  --text-max-contrast: #000;
 
   /* Brand — phosphor green */
   --primary: var(--palette-green-500);
@@ -171,6 +172,7 @@ html[data-theme="dark"] {
     --palette-slate-950
   ); /* green buttons → near-black text */
   --text-disabled: var(--palette-slate-400); /* #355046 */
+  --text-max-contrast: #fff;
 
   /* Brand — terminal phosphor */
   --primary: var(--palette-green-400); /* #5bf591 */

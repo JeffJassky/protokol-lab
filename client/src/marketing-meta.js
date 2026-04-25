@@ -357,10 +357,8 @@ export const MARKETING_META = {
     schema: [breadcrumb('/blog', 'Blog')],
   },
 
-  // ----- Static blog posts (bypass SPA, served as /public/blog/*.html) -----
-  // Flagged `static: true` so prerender skips them; OG + sitemap still run.
-  '/blog/tirzepatide-half-life-explained.html': {
-    static: true,
+  // ----- Blog posts — Vue pages prerendered like other marketing routes.
+  '/blog/tirzepatide-half-life-explained': {
     title: 'Tirzepatide Half-Life Explained: Why Week 4 Feels Different | Protokol Lab',
     description: "A 5-day half-life sounds simple until you're on your fourth weekly injection and your active blood level is ~2.5× your dose.",
     og: {
@@ -373,8 +371,7 @@ export const MARKETING_META = {
     },
     sitemap: { priority: 0.7, changefreq: 'monthly' },
   },
-  '/blog/weekly-calorie-budget-for-glp1.html': {
-    static: true,
+  '/blog/weekly-calorie-budget-for-glp1': {
     title: 'The Weekly Calorie Budget for GLP-1 Users | Protokol Lab',
     description: 'Why daily calorie targets fail on Ozempic, Wegovy, Mounjaro, and Zepbound — and how a 7-day rolling window fixes the problem.',
     og: {
@@ -387,8 +384,7 @@ export const MARKETING_META = {
     },
     sitemap: { priority: 0.7, changefreq: 'monthly' },
   },
-  '/blog/glp1-nausea-timeline.html': {
-    static: true,
+  '/blog/glp1-nausea-timeline': {
     title: 'GLP-1 Nausea Timeline: When It Peaks, When It Fades | Protokol Lab',
     description: 'Nausea patterns on tirzepatide and semaglutide are predictable. Knowing when the peak lands is the difference between white-knuckling and planning.',
     og: {
@@ -401,8 +397,7 @@ export const MARKETING_META = {
     },
     sitemap: { priority: 0.7, changefreq: 'monthly' },
   },
-  '/blog/ozempic-vs-wegovy-vs-compounded-semaglutide.html': {
-    static: true,
+  '/blog/ozempic-vs-wegovy-vs-compounded-semaglutide': {
     title: 'Ozempic vs Wegovy vs Compounded Semaglutide: Dose Equivalencies | Protokol Lab',
     description: 'Same peptide, three deliveries. The practical differences between Ozempic, Wegovy, and compounded semaglutide — and why the tracker treats them identically.',
     og: {
@@ -415,8 +410,7 @@ export const MARKETING_META = {
     },
     sitemap: { priority: 0.7, changefreq: 'monthly' },
   },
-  '/blog/managing-glp1-side-effects.html': {
-    static: true,
+  '/blog/managing-glp1-side-effects': {
     title: 'Managing GLP-1 Side Effects: A Practical Overview | Protokol Lab',
     description: 'Educational overview of nausea, reflux, sulfur burps, constipation, diarrhea, and fatigue on Ozempic, Wegovy, Mounjaro, Zepbound — what causes each, what users commonly try, and when to call a prescriber.',
     og: {

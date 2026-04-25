@@ -7,6 +7,7 @@ import { usePushStore } from '../stores/push.js';
 import { useTheme } from '../composables/useTheme.js';
 import ChatDrawer from './ChatDrawer.vue';
 import OnboardingBanner from './OnboardingBanner.vue';
+import BrandLockup from './BrandLockup.vue';
 
 const auth = useAuthStore();
 const onboarding = useOnboardingStore();
@@ -46,7 +47,10 @@ async function handleLogout() {
   <div class="app-layout">
     <OnboardingBanner />
     <nav class="top-nav">
-      <router-link to="/" class="brand">Protokol Lab</router-link>
+      <router-link to="/" class="brand" aria-label="Protokol Lab — home">
+        <BrandLockup class="brand-desktop" :size="16" />
+        <BrandLockup class="brand-mobile" :size="16" :show-wordmark="false" />
+      </router-link>
       <div class="nav-links">
         <router-link to="/">Log</router-link>
         <router-link to="/dashboard">Dashboard</router-link>
@@ -133,11 +137,13 @@ async function handleLogout() {
   flex: none;
 }
 .brand {
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-m);
+  display: inline-flex;
+  align-items: center;
   color: var(--text);
   text-decoration: none;
 }
+.brand-mobile { display: none; }
+.brand-desktop { display: inline-flex; }
 .nav-links {
   display: flex;
   align-items: center;
@@ -259,12 +265,16 @@ async function handleLogout() {
     height: 100dvh; /* dvh handles iOS URL-bar height changes */
   }
 
-  /* Hide brand, theme toggle, and logout on mobile — bar is for nav links
-     only. Theme picker + sign out live on /settings. */
-  .top-nav .brand,
+  /* Mobile bottom bar: icon-only brand on the left, nav links flex the rest.
+     Theme toggle + logout move to /settings. */
   .top-nav .logout-btn,
   .top-nav .theme-toggle {
     display: none;
+  }
+  .top-nav .brand-desktop { display: none; }
+  .top-nav .brand-mobile {
+    display: inline-flex;
+    padding: 12px 14px;
   }
 
   .top-nav {
@@ -282,7 +292,7 @@ async function handleLogout() {
   }
 
   .nav-links {
-    width: 100%;
+    flex: 1;
     justify-content: space-around;
     gap: 0;
   }

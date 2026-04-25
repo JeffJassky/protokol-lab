@@ -11,6 +11,11 @@ import TermsPage from '../pages/TermsPage.vue';
 import PrivacyPage from '../pages/PrivacyPage.vue';
 import MedicalAdvisoryPage from '../pages/MedicalAdvisoryPage.vue';
 import BlogIndexPage from '../pages/BlogIndexPage.vue';
+import TirzepatideHalfLifePage from '../pages/blog/TirzepatideHalfLifePage.vue';
+import WeeklyCalorieBudgetPage from '../pages/blog/WeeklyCalorieBudgetPage.vue';
+import Glp1NauseaTimelinePage from '../pages/blog/Glp1NauseaTimelinePage.vue';
+import OzempicVsWegovyPage from '../pages/blog/OzempicVsWegovyPage.vue';
+import ManagingSideEffectsPage from '../pages/blog/ManagingSideEffectsPage.vue';
 import CompareIndexPage from '../pages/CompareIndexPage.vue';
 import ComparisonPage from '../pages/ComparisonPage.vue';
 import LoginPage from '../pages/LoginPage.vue';
@@ -44,6 +49,11 @@ const routes = [
   { path: '/privacy', name: 'privacy', component: PrivacyPage, meta: { public: true, marketing: true } },
   { path: '/medical-advisory', name: 'medical-advisory', component: MedicalAdvisoryPage, meta: { public: true, marketing: true } },
   { path: '/blog', name: 'blog', component: BlogIndexPage, meta: { public: true, marketing: true } },
+  { path: '/blog/tirzepatide-half-life-explained', name: 'blog-tirzepatide-half-life', component: TirzepatideHalfLifePage, meta: { public: true, marketing: true } },
+  { path: '/blog/weekly-calorie-budget-for-glp1', name: 'blog-weekly-calorie-budget', component: WeeklyCalorieBudgetPage, meta: { public: true, marketing: true } },
+  { path: '/blog/glp1-nausea-timeline', name: 'blog-glp1-nausea-timeline', component: Glp1NauseaTimelinePage, meta: { public: true, marketing: true } },
+  { path: '/blog/ozempic-vs-wegovy-vs-compounded-semaglutide', name: 'blog-ozempic-vs-wegovy', component: OzempicVsWegovyPage, meta: { public: true, marketing: true } },
+  { path: '/blog/managing-glp1-side-effects', name: 'blog-managing-side-effects', component: ManagingSideEffectsPage, meta: { public: true, marketing: true } },
   { path: '/compare', name: 'compare', component: CompareIndexPage, meta: { public: true, marketing: true } },
   { path: '/compare/:slug', name: 'comparison', component: ComparisonPage, meta: { public: true, marketing: true } },
   { path: '/login', name: 'login', component: LoginPage, meta: { guest: true, public: true } },

@@ -3,9 +3,9 @@ import MarketingLayout from '../components/MarketingLayout.vue';
 import { useRouteSeo, ORIGIN } from '../composables/useSeo.js';
 import '../styles/marketing.css';
 
-// Blog posts live as static HTML in /public/blog/*.html so crawlers (and AI
-// crawlers that don't execute JS) see full article text. This index lists them
-// but doesn't render them — it links out to the static URLs.
+// Blog posts are Vue pages prerendered at build time so crawlers (and AI
+// crawlers that don't execute JS) see full article text. This index lists
+// them with a link to each route.
 const posts = [
   {
     slug: 'tirzepatide-half-life-explained',
@@ -50,7 +50,7 @@ useRouteSeo({
       blogPost: posts.map((p) => ({
         '@type': 'BlogPosting',
         headline: p.title,
-        url: `${ORIGIN}/blog/${p.slug}.html`,
+        url: `${ORIGIN}/blog/${p.slug}`,
         datePublished: p.date,
       })),
     },
@@ -75,7 +75,7 @@ useRouteSeo({
           <a
             v-for="p in posts"
             :key="p.slug"
-            :href="`/blog/${p.slug}.html`"
+            :href="`/blog/${p.slug}`"
             class="blog-item"
           >
             <div class="blog-date">{{ p.date }}</div>

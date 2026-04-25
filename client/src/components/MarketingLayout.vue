@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { MARKETING_NAV } from '../marketing-nav.js';
+import BrandWordmark from './BrandWordmark.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -22,15 +23,7 @@ watch(() => route.fullPath, closeMenu);
     <div class="nav">
       <div class="wrap nav-inner">
         <span class="logo" @click="goHome" role="button" tabindex="0">
-          <svg viewBox="0 0 64 64" width="22" height="22" class="logo-mark" aria-hidden="true">
-            <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" />
-            <line x1="32" y1="2"  x2="32" y2="18" stroke="currentColor" stroke-width="2.5" />
-            <line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" />
-            <line x1="2"  y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" />
-            <line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" />
-            <circle cx="32" cy="32" r="7" fill="var(--primary)" />
-          </svg>
-          Protokol Lab
+          <BrandWordmark :size="16" />
         </span>
         <nav class="nav-links" aria-label="Primary">
           <a v-for="l in MARKETING_NAV" :key="l.href" :href="l.href" class="nav-link">{{ l.label }}</a>
@@ -75,15 +68,7 @@ watch(() => route.fullPath, closeMenu);
         <div class="footer-grid">
           <div>
             <div class="logo footer-logo">
-              <svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true">
-                <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2.5" />
-                <line x1="32" y1="2"  x2="32" y2="18" stroke="currentColor" stroke-width="2.5" />
-                <line x1="32" y1="46" x2="32" y2="62" stroke="currentColor" stroke-width="2.5" />
-                <line x1="2"  y1="32" x2="18" y2="32" stroke="currentColor" stroke-width="2.5" />
-                <line x1="46" y1="32" x2="62" y2="32" stroke="currentColor" stroke-width="2.5" />
-                <circle cx="32" cy="32" r="7" fill="var(--primary)" />
-              </svg>
-              Protokol Lab
+              <BrandWordmark :size="16" />
             </div>
             <div class="footer-blurb">
               The GLP-1 tracker for Tirzepatide, Semaglutide, and compounded
@@ -169,7 +154,7 @@ watch(() => route.fullPath, closeMenu);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
 }
-.nav-inner { display: flex; align-items: center; gap: 28px; padding: 14px 0; }
+.nav-inner { display: flex; align-items: center; gap: 28px; padding-block: 14px; }
 .logo {
   display: inline-flex; align-items: center; gap: 10px;
   font-weight: 700; letter-spacing: 0.02em; font-size: 15px;
@@ -198,7 +183,7 @@ watch(() => route.fullPath, closeMenu);
   display: none;
   margin-left: auto;
   background: transparent;
-  border: 1px solid var(--border);
+  border: none;
   width: 40px; height: 40px;
   padding: 0;
   cursor: pointer;

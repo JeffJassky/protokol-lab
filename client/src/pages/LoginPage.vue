@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth.js';
 import { startCheckout } from '../api/stripe.js';
 import { PLANS } from '../../../shared/plans.js';
 import GoogleSignInButton from '../components/GoogleSignInButton.vue';
+import BrandWordmark from '../components/BrandWordmark.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -61,7 +62,7 @@ async function handleGoogleCredential(credential) {
 <template>
   <div class="login-page">
     <div class="login-card">
-      <h1>Protokol Lab</h1>
+      <BrandWordmark class="auth-brand" :size="24" />
       <p class="subtitle">Track your nutrition and weight</p>
       <GoogleSignInButton
         text="signin_with"
@@ -134,6 +135,11 @@ async function handleGoogleCredential(credential) {
   font-size: var(--font-size-xl);
   text-align: center;
   margin-bottom: var(--space-1);
+}
+.auth-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-6);
 }
 .subtitle {
   text-align: center;

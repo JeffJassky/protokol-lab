@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import BrandWordmark from '../components/BrandWordmark.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -45,6 +46,7 @@ async function handleSubmit() {
 <template>
   <div class="auth-page">
     <div class="auth-card">
+      <BrandWordmark class="auth-brand" :size="24" />
       <h1>Choose a new password</h1>
 
       <template v-if="!token">
@@ -99,6 +101,11 @@ async function handleSubmit() {
   font-size: var(--font-size-xl);
   text-align: center;
   margin-bottom: var(--space-1);
+}
+.auth-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-6);
 }
 .subtitle {
   text-align: center;

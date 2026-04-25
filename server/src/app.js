@@ -168,6 +168,11 @@ export function createApp({ serveClient = true } = {}) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return next();
       if (req.path.startsWith('/api/')) return next();
 
+      // Old static blog URLs → 301 to the canonical Vue route. Dropping
+      // `.html` keeps inbound links and search-engine equity intact.
+      const blogHtml = req.path.match(/^\/blog\/([a-z0-9-]+)\.html$/i);
+      if (blogHtml) return res.redirect(301, `/blog/${blogHtml[1]}`);
+
       if (req.path === '/') {
         const homePrerendered = path.join(clientPrerendered, 'index.html');
         if (fs.existsSync(homePrerendered)) return sendPrerendered(res, homePrerendered);
