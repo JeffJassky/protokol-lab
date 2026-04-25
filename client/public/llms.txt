@@ -98,10 +98,11 @@ Yes. Model multiple active compounds at once — their curves are summed correct
 
 ## Blog
 
-- [Tirzepatide Half-Life Explained: Why Week 4 Feels Different](https://protokollab.com/blog/tirzepatide-half-life-explained.html)
-- [The Weekly Calorie Budget for GLP-1 Users](https://protokollab.com/blog/weekly-calorie-budget-for-glp1.html)
-- [GLP-1 Nausea Timeline: When It Peaks, When It Fades](https://protokollab.com/blog/glp1-nausea-timeline.html)
-- [Ozempic vs Wegovy vs Compounded Semaglutide: Dose Equivalencies](https://protokollab.com/blog/ozempic-vs-wegovy-vs-compounded-semaglutide.html)
+- [Tirzepatide Half-Life Explained: Why Week 4 Feels Different](https://protokollab.com/blog/tirzepatide-half-life-explained)
+- [The Weekly Calorie Budget for GLP-1 Users](https://protokollab.com/blog/weekly-calorie-budget-for-glp1)
+- [GLP-1 Nausea Timeline: When It Peaks, When It Fades](https://protokollab.com/blog/glp1-nausea-timeline)
+- [Ozempic vs Wegovy vs Compounded Semaglutide: Dose Equivalencies](https://protokollab.com/blog/ozempic-vs-wegovy-vs-compounded-semaglutide)
+- [Managing GLP-1 Side Effects: A Practical Overview](https://protokollab.com/blog/managing-glp1-side-effects)
 
 ## Citations
 
