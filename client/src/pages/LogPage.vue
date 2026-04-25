@@ -3,6 +3,8 @@ import { ref, watch, onMounted, computed, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useFoodLogStore } from '../stores/foodlog.js';
 import { useMealsStore } from '../stores/meals.js';
+import { useUpgradeModalStore } from '../stores/upgradeModal.js';
+import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useSymptomsStore } from '../stores/symptoms.js';
 import { useNotesStore } from '../stores/notes.js';
 import { useWeightStore } from '../stores/weight.js';
@@ -21,6 +23,8 @@ const route = useRoute();
 const router = useRouter();
 const foodlogStore = useFoodLogStore();
 const mealsStore = useMealsStore();
+const upgradeModal = useUpgradeModalStore();
+const planLimits = usePlanLimits();
 const symptomsStore = useSymptomsStore();
 const notesStore = useNotesStore();
 const weightStore = useWeightStore();
@@ -262,6 +266,15 @@ async function addEntryToMeal(entry, mealId) {
 }
 
 async function addEntryToNewMeal(entry) {
+  // Pre-flight cap check before prompting for a name — gives a clean upsell
+  // path instead of showing the prompt and then failing with a 403.
+  if (!planLimits.canAddStorage('savedMeals', mealsStore.meals.length)) {
+    upgradeModal.openForGate({
+      limitKey: 'savedMeals',
+      used: mealsStore.meals.length,
+    });
+    return;
+  }
   const name = prompt('New meal name:');
   if (!name || !name.trim()) return;
   const foodItemId = entry.foodItemId?._id;

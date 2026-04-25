@@ -10,7 +10,10 @@ import Symptom from "../models/Symptom.js";
 import SymptomLog from "../models/SymptomLog.js";
 import UserSettings from "../models/UserSettings.js";
 import Meal from "../models/Meal.js";
+import MealProposal from "../models/MealProposal.js";
+import User from "../models/User.js";
 import { childLogger, errContext } from "../lib/logger.js";
+import { evaluateStorageCap } from "../lib/planLimits.js";
 
 const log = childLogger('agent');
 
@@ -211,7 +214,7 @@ const functionDeclarations = [
   {
     name: "log_food_entry",
     description:
-      "Add a food entry to the user's food log for a specific date and meal. Requires a foodItemId from search_food_items or create_food_item. If the user described a new food that is not in the catalog, first call create_food_item, then call this with the returned id.",
+      "RARE — direct, unconfirmed write to the user's food log. Only use when the user has EXPLICITLY said they want to skip the confirmation step (e.g., 'just log it, don't ask me'). For ALL other logging requests — even when the user says 'log this' — prefer propose_food_entries so the user can review portions and macros before anything is written. Requires a foodItemId from search_food_items or create_food_item.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -237,6 +240,56 @@ const functionDeclarations = [
       required: ["foodItemId", "date", "mealType"],
     },
   },
+  {
+    name: "propose_food_entries",
+    description:
+      "DEFAULT food-logging tool. Use for ANY food logging request — text-described, photo-identified, or both. The client renders inline Confirm / Edit / Cancel buttons with a per-item serving multiplier so the user can review and adjust before anything is written to their food log. Make ONE call with all items in a single meal. Always prefer this over log_food_entry; silent writes are an anti-pattern.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        date: {
+          type: Type.STRING,
+          description: "Date for the entries (YYYY-MM-DD). Use today if unspecified.",
+        },
+        mealType: {
+          type: Type.STRING,
+          description: "One of: breakfast, lunch, dinner, snack. Infer from time of day if user didn't specify.",
+        },
+        items: {
+          type: Type.ARRAY,
+          description: "Each distinct food identified in the meal.",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING, description: 'e.g. "Grilled chicken breast"' },
+              brand: { type: Type.STRING, description: "Brand name if a packaged product" },
+              emoji: { type: Type.STRING, description: "Single emoji for the food" },
+              portion: { type: Type.STRING, description: 'Human-readable portion: "1 medium", "3/4 cup"' },
+              grams: { type: Type.NUMBER, description: "Estimated grams" },
+              calories: { type: Type.NUMBER, description: "Total calories for the portion (not per 100g)" },
+              protein: { type: Type.NUMBER, description: "Total protein grams for the portion" },
+              fat: { type: Type.NUMBER, description: "Total fat grams for the portion" },
+              carbs: { type: Type.NUMBER, description: "Total carb grams for the portion" },
+              confidence: {
+                type: Type.STRING,
+                description: "high | medium | low — how sure are you about this item and portion",
+              },
+              source: {
+                type: Type.STRING,
+                description: "database | web | estimate — where the macros came from",
+              },
+              foodItemId: {
+                type: Type.STRING,
+                description: "Optional: id from search_food_items if you matched an existing catalog entry",
+              },
+            },
+            required: ["name", "calories"],
+          },
+        },
+      },
+      required: ["mealType", "items"],
+    },
+  },
 ];
 
 function dateRange(startDate, endDate) {
@@ -245,12 +298,12 @@ function dateRange(startDate, endDate) {
   return { $gte: start, $lte: end };
 }
 
-async function executeTool(name, args, userId) {
+async function executeTool(name, args, userId, ctx = {}) {
   const t0 = Date.now();
   const tLog = log.child({ userId: String(userId), tool: name });
   tLog.debug({ args }, 'tool: exec begin');
   try {
-    const result = await executeToolImpl(name, args, userId);
+    const result = await executeToolImpl(name, args, userId, ctx);
     const summary = Array.isArray(result)
       ? { rows: result.length }
       : typeof result === 'object' && result !== null
@@ -264,7 +317,7 @@ async function executeTool(name, args, userId) {
   }
 }
 
-async function executeToolImpl(name, args, userId) {
+async function executeToolImpl(name, args, userId, ctx = {}) {
   switch (name) {
     case "get_food_log": {
       const filter = { userId, date: dateRange(args.startDate, args.endDate) };
@@ -417,10 +470,14 @@ async function executeToolImpl(name, args, userId) {
       if (!settings) return { error: "No settings configured yet" };
       return {
         sex: settings.sex,
+        age: settings.age,
         heightInches: settings.heightInches,
         currentWeightLbs: settings.currentWeightLbs,
         goalWeightLbs: settings.goalWeightLbs,
         bmr: settings.bmr,
+        tdee: settings.tdee,
+        activityLevel: settings.activityLevel,
+        goalRateLbsPerWeek: settings.goalRateLbsPerWeek,
         targets: settings.targets,
       };
     }
@@ -449,6 +506,7 @@ async function executeToolImpl(name, args, userId) {
       const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 25);
       const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       const items = await FoodItem.find({
+        userId,
         $or: [{ name: regex }, { brand: regex }],
       })
         .limit(limit)
@@ -471,7 +529,29 @@ async function executeToolImpl(name, args, userId) {
       if (!args.name || args.caloriesPer == null) {
         return { error: "name and caloriesPer required" };
       }
+      // Plan cap on user-custom foods. OpenFoodFacts barcode imports stay
+      // global (userId=null) and never count. We only count items this user
+      // created via this tool (userId set + isCustom=true).
+      const user = await User.findById(userId).select('plan limitsOverride').lean();
+      const used = await FoodItem.countDocuments({ userId, isCustom: true });
+      const denial = evaluateStorageCap(user, 'customFoodItems', used);
+      if (denial) {
+        return {
+          error: 'plan_limit_exceeded',
+          reason: denial.reason,
+          limitKey: denial.limitKey,
+          limit: denial.limit,
+          used: denial.used,
+          upgradeAvailable: denial.upgradeAvailable,
+          upgradePlanId: denial.upgradePlanId,
+          message: denial.upgradePlanId
+            ? `Your ${denial.currentPlan} plan allows ${denial.limit} custom food${denial.limit === 1 ? '' : 's'}. Upgrade to add more.`
+            : `You've reached the ${denial.limit}-food limit for your plan.`,
+        };
+      }
       const item = await FoodItem.create({
+        userId,
+        isCustom: true,
         name: args.name,
         brand: args.brand || "",
         emoji: args.emoji || "",
@@ -502,7 +582,7 @@ async function executeToolImpl(name, args, userId) {
       if (!validMeals.includes(args.mealType)) {
         return { error: `mealType must be one of: ${validMeals.join(", ")}` };
       }
-      const food = await FoodItem.findById(args.foodItemId).lean();
+      const food = await FoodItem.findOne({ _id: args.foodItemId, userId }).lean();
       if (!food)
         return { error: `No food item found with id ${args.foodItemId}` };
 
@@ -525,6 +605,64 @@ async function executeToolImpl(name, args, userId) {
           fat: Math.round((food.fatPer || 0) * servings),
           carbs: Math.round((food.carbsPer || 0) * servings),
         },
+      };
+    }
+
+    case "propose_food_entries": {
+      const validMeals = ["breakfast", "lunch", "dinner", "snack"];
+      if (!args.mealType || !validMeals.includes(args.mealType)) {
+        return { error: `mealType must be one of: ${validMeals.join(", ")}` };
+      }
+      if (!Array.isArray(args.items) || args.items.length === 0) {
+        return { error: "items array required" };
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const date = args.date && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? args.date : today;
+
+      const items = args.items.map((i) => ({
+        foodItemId: i.foodItemId || null,
+        name: String(i.name || "").slice(0, 120),
+        brand: String(i.brand || "").slice(0, 80),
+        emoji: String(i.emoji || "").slice(0, 8),
+        portion: String(i.portion || "").slice(0, 80),
+        grams: i.grams != null ? Number(i.grams) : null,
+        calories: Math.max(0, Math.round(Number(i.calories) || 0)),
+        protein: Math.max(0, Math.round(Number(i.protein) || 0)),
+        fat: Math.max(0, Math.round(Number(i.fat) || 0)),
+        carbs: Math.max(0, Math.round(Number(i.carbs) || 0)),
+        confidence: ["high", "medium", "low"].includes(i.confidence) ? i.confidence : "medium",
+        source: ["database", "web", "estimate"].includes(i.source) ? i.source : "estimate",
+      }));
+
+      const proposal = await MealProposal.create({
+        userId,
+        threadId: ctx.threadId || null,
+        date,
+        mealType: args.mealType,
+        items,
+      });
+
+      const totals = items.reduce(
+        (acc, i) => {
+          acc.calories += i.calories;
+          acc.protein += i.protein;
+          acc.fat += i.fat;
+          acc.carbs += i.carbs;
+          return acc;
+        },
+        { calories: 0, protein: 0, fat: 0, carbs: 0 },
+      );
+
+      return {
+        ok: true,
+        proposalId: proposal._id.toString(),
+        date,
+        mealType: args.mealType,
+        itemCount: items.length,
+        totals,
+        status: "awaiting_confirmation",
+        message:
+          "Proposal shown to the user with Confirm / Edit / Cancel buttons. Do not log anything directly — wait for the user's next message.",
       };
     }
 
@@ -556,8 +694,10 @@ async function buildDataSnapshot(userId) {
 
   if (settings && !settings.error) {
     sections.push(`PROFILE & TARGETS:
-Sex: ${settings.sex}, Height: ${settings.heightInches}in, Current weight: ${settings.currentWeightLbs}lbs, Goal: ${settings.goalWeightLbs}lbs
-BMR: ${settings.bmr}
+Sex: ${settings.sex}, Age: ${settings.age ?? 'unknown'}, Height: ${settings.heightInches}in, Current weight: ${settings.currentWeightLbs}lbs, Goal: ${settings.goalWeightLbs}lbs
+Activity level: ${settings.activityLevel ?? 'unknown'}
+BMR (resting): ${settings.bmr ?? 'unknown'} kcal/day, TDEE (daily burn): ${settings.tdee ?? 'unknown'} kcal/day
+Goal rate: ${settings.goalRateLbsPerWeek ?? 'unknown'} lb/week
 Daily targets: ${settings.targets.calories} cal, ${settings.targets.proteinGrams}g protein, ${settings.targets.fatGrams}g fat, ${settings.targets.carbsGrams}g carbs`);
   }
 
@@ -651,9 +791,10 @@ function renderSources(groundingMetadata) {
   return `\n\n---\n**Sources:**\n${lines.join("\n")}`;
 }
 
-export async function* chatStream(userId, history) {
+export async function* chatStream(userId, history, opts = {}) {
   const sLog = log.child({ userId: String(userId) });
   const streamStart = Date.now();
+  const toolCtx = { threadId: opts.threadId || null };
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -692,16 +833,33 @@ You already have the last 7 days of user data above. Tool usage:
   - Use when the user asks about a date range OUTSIDE the last 7 days
   - Use when the user asks for detailed food-by-food breakdown (snapshot only has daily totals)
   - Use when you need data not covered by the snapshot
-- Write tools (search_food_items, create_food_item, log_food_entry):
-  - Use when the user asks you to LOG or ADD a food to their diary.
-  - Flow: 1) call search_food_items first to see if the food already exists. 2) If a close match exists, reuse its foodItemId. 3) Otherwise call create_food_item with best-effort nutrition (use Google Search to find accurate macros if the user didn't provide them). 4) Call log_food_entry with the foodItemId to put it on their log.
-  - If the user provides explicit macros, use those as-is. If not, estimate from known nutrition data and be transparent about the estimate.
-  - For "today" use today's date from the TODAY'S DATE line below.
-  - Confirm what you logged in your final reply with a brief summary.
+- Food-logging proposal tool (propose_food_entries) — THE DEFAULT FOR ALL FOOD LOGGING:
+  - Use this for ANY request to log, add, track, or record food — whether the user described the food in text ("log a chicken sandwich"), uploaded a photo, or both. The client renders an inline confirmation card with Confirm / Edit / Cancel buttons and a per-item serving multiplier so the user can review and adjust BEFORE anything is written.
+  - Always prefer propose_food_entries over log_food_entry. Even when the user says "log this", they still want to confirm portions and macros — silently writing to the diary is an anti-pattern.
+  - You MAY use search_food_items first to look up existing catalog entries (pass the matching foodItemId in the proposal so we don't create duplicates). You MAY use Google Search for branded products you can identify. But the final logging step is ALWAYS propose_food_entries — never log_food_entry, except in the narrow exception below.
+  - After calling propose_food_entries, STOP. Briefly narrate what you identified and tell the user to review the card. Do not repeat the macro table in prose. Do not call log_food_entry afterward.
+  - For "today" use today's date from the TODAY'S DATE line below. Default mealType from time of day: before 11 → breakfast, 11–15 → lunch, 15–20 → dinner, else snack.
+- Direct-log tool (log_food_entry) — RARE EXCEPTION ONLY:
+  - Only use when the user EXPLICITLY says they want to skip confirmation (e.g. "just log it, don't ask", "no need to confirm"). If you are uncertain, use propose_food_entries instead.
+  - Requires a real foodItemId from search_food_items or create_food_item.
 - Google Search (built-in):
   - Use when the user asks questions that require external knowledge — research on supplements, medications, studies, recent health news, dosing protocols, exercise science, etc.
   - Use when you need accurate nutrition facts for a food the user wants logged.
+  - Use to look up macros for a branded product visible in a photo (read the label text, then search the brand + product name).
   - Use when you want to cite evidence for a recommendation.
+
+IMAGE HANDLING:
+When the user sends an image of food, your job is to identify every distinct item and calculate realistic macros for each portion. Approach:
+1. Look carefully at the photo. Identify each separate food (main protein, starches, vegetables, sauces, drinks, packaged items, toppings). Don't miss small things — dressings, oils, and sauces add meaningful calories.
+2. Estimate portion size using visual references: plate diameter (typically 10–11 inches / 25–28cm), utensils (standard fork ~7 inches), standard container sizes, or objects in frame. Call out your reference if useful ("roughly the size of a deck of cards").
+3. For each item, pick macros using this preference order:
+   a. If it's a packaged product with a visible label/brand → use googleSearch for that exact product, then cite the label values.
+   b. Otherwise call search_food_items to check the shared catalog. Reuse an existing foodItemId when the match is clear.
+   c. If nothing matches, use your own nutritional knowledge for the generic food. Be transparent: set confidence="low" and source="estimate".
+4. Multiply per-100g (or per-serving) values by your portion estimate so the numbers you pass to propose_food_entries are TOTALS for the portion shown — not per 100g.
+5. Call propose_food_entries exactly once with all items, the inferred mealType (use time of day if unclear — before 11: breakfast, 11–15: lunch, 15–20: dinner, else snack), and today's date unless the user says otherwise.
+6. Mark confidence honestly: high only when you clearly read a label or the food is unambiguous AND portion is well-constrained. Medium for known foods with visual portion estimation. Low for ambiguous items or hidden ingredients.
+7. In your final reply, give a short friendly summary — what you saw, the estimated total calories, and any caveats (hidden oils, dressings, etc). Then tell the user to review the card below to confirm or edit.
 
 DO NOT call get_user_settings, get_daily_nutrition, get_weight_log, get_waist_log, get_dose_log, get_symptom_log, or get_compounds for the last 7 days — that data is already in the snapshot above.
 
@@ -730,7 +888,38 @@ TODAY'S DATE: ${today}`;
   const lastMsg = history[history.length - 1];
   const userMessage =
     lastMsg.text || (lastMsg.html || "").replace(/<[^>]*>/g, " ").trim();
-  contents.push({ role: "user", parts: [{ text: userMessage }] });
+  const lastParts = [];
+  // Gemini requires at least one text part. Provide a hint when the user sent
+  // only images so the model knows what to do instead of echoing the filename.
+  const hasImages = Array.isArray(lastMsg.images) && lastMsg.images.length > 0;
+  lastParts.push({
+    text:
+      userMessage ||
+      (hasImages
+        ? "Identify the food in this photo and calculate the macros."
+        : "(empty)"),
+  });
+  if (hasImages) {
+    for (const img of lastMsg.images) {
+      const base64 =
+        typeof img.data === "string"
+          ? img.data
+          : Buffer.isBuffer(img.data)
+          ? img.data.toString("base64")
+          : Buffer.from(img.data).toString("base64");
+      lastParts.push({
+        inlineData: {
+          data: base64,
+          mimeType: img.mimeType || "image/jpeg",
+        },
+      });
+    }
+    sLog.info(
+      { imageCount: lastMsg.images.length, totalBytes: lastMsg.images.reduce((n, i) => n + (i.size || 0), 0) },
+      'agent: multimodal turn',
+    );
+  }
+  contents.push({ role: "user", parts: lastParts });
 
   const config = {
     systemInstruction,
@@ -854,12 +1043,12 @@ TODAY'S DATE: ${today}`;
         let output;
         let ok = true;
         try {
-          output = await executeTool(name, args || {}, userId);
+          output = await executeTool(name, args || {}, userId, toolCtx);
         } catch (e) {
           output = { error: e.message };
           ok = false;
         }
-        return { id, name, output, ok };
+        return { id, name, args: args || {}, output, ok };
       }),
     );
 
@@ -870,6 +1059,20 @@ TODAY'S DATE: ${today}`;
           name: r.name,
           ok: false,
           summary: "Something went wrong",
+        };
+        continue;
+      }
+      // Special handling: propose_food_entries emits an inline confirmation
+      // card to the chat bubble so the user can review the agent's portion
+      // estimates before anything is written to their food log.
+      if (r.name === "propose_food_entries" && r.output?.proposalId) {
+        yield {
+          type: "tool_proposal",
+          proposalId: r.output.proposalId,
+          date: r.output.date,
+          mealType: r.output.mealType,
+          items: r.args.items || [],
+          totals: r.output.totals,
         };
       }
     }
@@ -978,6 +1181,10 @@ function describeToolCall(name, args) {
       return `Creating food item: ${args?.name || "new item"}`;
     case "log_food_entry":
       return `Logging ${args?.servingCount || 1}× to ${args?.mealType || "meal"} on ${args?.date || "today"}`;
+    case "propose_food_entries": {
+      const n = Array.isArray(args?.items) ? args.items.length : 0;
+      return `Preparing a ${args?.mealType || "meal"} summary (${n} item${n === 1 ? "" : "s"}) for you to confirm`;
+    }
     default:
       return `Running ${name}`;
   }

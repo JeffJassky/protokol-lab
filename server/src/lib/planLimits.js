@@ -17,6 +17,42 @@ export function getEffectivePlanFeatures(user) {
   return { ...plan.features, ...override };
 }
 
+// Storage caps (counts of user-owned resources: compounds, foods, meals,
+// photos, etc.). Mirrors the chat/features overlay pattern.
+export function getEffectiveStorageLimits(user) {
+  const plan = getPlanForUser(user);
+  const override = user?.limitsOverride?.storage || null;
+  if (!override) return { ...plan.storage };
+  return { ...plan.storage, ...override };
+}
+
+/**
+ * Decide whether creating one more resource would breach the user's cap on
+ * `limitKey` given their current count. Returns null when allowed, or a
+ * structured denial when blocked. Keep the shape stable — clients branch on
+ * `reason` and `limitKey` to pick the right upsell copy/modal.
+ *
+ * Routes typically wrap the denial in a 403 JSON response.
+ */
+export function evaluateStorageCap(user, limitKey, currentCount) {
+  const limits = getEffectiveStorageLimits(user);
+  const limit = limits[limitKey];
+  if (!Number.isFinite(limit)) return null; // Infinity / missing = no cap
+  if (currentCount < limit) return null;
+
+  const upgradePlanId = getRecommendedUpgradePlanId(user);
+  return {
+    error: 'plan_limit_exceeded',
+    reason: 'storage_cap',
+    limitKey,
+    limit,
+    used: currentCount,
+    currentPlan: getPlanForUser(user).id,
+    upgradeAvailable: Boolean(upgradePlanId),
+    upgradePlanId,
+  };
+}
+
 // Pick a plan to suggest when the current plan blocks an action. Returns the
 // next public plan with higher sortOrder than the user's current plan, or
 // null if already on the top public tier.

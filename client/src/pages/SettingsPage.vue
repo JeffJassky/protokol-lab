@@ -8,12 +8,22 @@ import { usePushStore } from '../stores/push.js';
 import { usePwa } from '../composables/usePwa.js';
 import { useTheme } from '../composables/useTheme.js';
 import InstallInstructions from '../components/InstallInstructions.vue';
+import MacroAllocator from '../components/MacroAllocator.vue';
+import UpgradeBadge from '../components/UpgradeBadge.vue';
+import { usePlanLimits } from '../composables/usePlanLimits.js';
+import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import {
   startCheckout,
   openBillingPortal,
   fetchSubscription,
 } from '../api/stripe.js';
 import { getPublicPlans, PLAN_IDS } from '../../../shared/plans.js';
+import {
+  ACTIVITY_LEVELS,
+  GOAL_RATES,
+  bmrMifflin,
+  tdee as computeTdee,
+} from '../../../shared/bodyMath.js';
 
 const store = useSettingsStore();
 const compoundsStore = useCompoundsStore();
@@ -21,6 +31,22 @@ const dosesStore = useDosesStore();
 const pushStore = usePushStore();
 const pwa = usePwa();
 const theme = useTheme();
+const planLimits = usePlanLimits();
+const upgradeModal = useUpgradeModalStore();
+
+// Plan-cap awareness for the custom-compounds section. System (built-in)
+// compounds are universal and don't count.
+const customCompoundCount = computed(() =>
+  compoundsStore.compounds.filter((c) => !c.isSystem).length,
+);
+const customCompoundCap = computed(() => planLimits.storageCap('customCompounds'));
+const compoundsAtCap = computed(
+  () => !planLimits.canAddStorage('customCompounds', customCompoundCount.value),
+);
+const compoundsUpgradeTier = computed(() => {
+  const target = planLimits.planRequiredFor({ storageKey: 'customCompounds' });
+  return target?.id || null;
+});
 const route = useRoute();
 const router = useRouter();
 
@@ -224,11 +250,20 @@ async function sendTest() {
 }
 
 const sex = ref('male');
+const age = ref('');
 const heightFeet = ref(5);
 const heightInches = ref(10);
 const currentWeightLbs = ref(180);
 const goalWeightLbs = ref(170);
+// Resting metabolic rate (Mifflin-St Jeor). Displayed as a derived readout
+// alongside TDEE; rarely user-set.
 const bmr = ref('');
+// Total daily energy expenditure. Drives the calorie-deficit math. Auto-fills
+// from bmr × activity multiplier on first hydration if not already set; the
+// user can override (e.g. measured RMR/TDEE from a metabolic test).
+const tdee = ref('');
+const activityLevel = ref('');
+const goalRateLbsPerWeek = ref(null);
 const calories = ref(2000);
 const proteinGrams = ref(150);
 const fatGrams = ref(65);
@@ -241,12 +276,28 @@ const hydrated = ref(false);
 
 const totalHeightInches = computed(() => heightFeet.value * 12 + heightInches.value);
 
-// Daily calorie delta vs BMR and the resulting est. weekly weight change.
+// Auto-derived BMR from current biometric inputs. Displayed as a readout next
+// to TDEE so the user sees the resting baseline; not directly editable.
+const bmrComputed = computed(() => bmrMifflin({
+  sex: sex.value,
+  age: Number(age.value),
+  heightInches: totalHeightInches.value,
+  weightLbs: Number(currentWeightLbs.value),
+}));
+
+// Auto-derived TDEE from bmr × activity multiplier. Only used when the user
+// hasn't set a custom TDEE yet (or clicks "Use computed").
+const tdeeComputed = computed(() =>
+  computeTdee(bmrComputed.value, activityLevel.value),
+);
+
+// Daily calorie delta vs TDEE (daily burn) and the resulting est. weekly
+// weight change. 1 lb body weight ≈ 3500 kcal → 500 kcal/day per lb/week.
 const calorieDelta = computed(() => {
-  const b = Number(bmr.value);
+  const t = Number(tdee.value);
   const c = Number(calories.value);
-  if (!b || !c) return null;
-  return c - b;
+  if (!t || !c) return null;
+  return c - t;
 });
 const weeklyLbs = computed(() => {
   if (calorieDelta.value == null) return null;
@@ -284,78 +335,8 @@ const timeToGoal = computed(() => {
 // split between fat (9 kcal/g) and carbs (4 kcal/g) via a second slider.
 // Carbs always fills the gap so the three macros always sum to total calories.
 
-const proteinKcal = computed(() => proteinGrams.value * 4);
-const remainingAfterProtein = computed(() => Math.max(0, calories.value - proteinKcal.value));
-const fatKcal = computed(() => fatGrams.value * 9);
-const carbsKcal = computed(() => Math.max(0, remainingAfterProtein.value - fatKcal.value));
-
-// Auto-derived carbs — user never controls this directly.
-const carbsComputed = computed(() => Math.round(carbsKcal.value / 4));
-
-// Max slider values.
-const maxProteinGrams = computed(() => Math.floor(calories.value / 4));
-const maxFatGrams = computed(() => Math.floor(remainingAfterProtein.value / 9));
-
-// Percentage of total calories each macro occupies (for the visual bar).
-const pctProtein = computed(() => (calories.value ? (proteinKcal.value / calories.value) * 100 : 0));
-const pctFat = computed(() => (calories.value ? (fatKcal.value / calories.value) * 100 : 0));
-const pctCarbs = computed(() => Math.max(0, 100 - pctProtein.value - pctFat.value));
-
-// Keep carbs ref in sync (for save) and clamp protein/fat when calories shrinks.
-watch(carbsComputed, (v) => { carbsGrams.value = v; });
-watch(calories, () => {
-  if (proteinGrams.value > maxProteinGrams.value) proteinGrams.value = maxProteinGrams.value;
-  if (fatGrams.value > maxFatGrams.value) fatGrams.value = maxFatGrams.value;
-});
-watch(proteinGrams, () => {
-  if (fatGrams.value > maxFatGrams.value) fatGrams.value = maxFatGrams.value;
-});
-
-// ---- Single-bar allocation drag handling --------------------------------
-const allocBarRef = ref(null);
-let activeHandle = null;
-
-function pxToKcal(clientX) {
-  const rect = allocBarRef.value.getBoundingClientRect();
-  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-  return pct * calories.value;
-}
-
-function onAllocDown(e) {
-  const target = e.target.closest('.handle');
-  if (!target) return;
-  activeHandle = target.dataset.handle;
-  const onMove = (ev) => {
-    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
-    const kcalPos = pxToKcal(clientX);
-
-    if (activeHandle === '1') {
-      // Handle 1 controls protein|fat boundary.
-      // Can't go past handle 2 (protein + fat boundary).
-      const maxKcal = calories.value - fatKcal.value;
-      const clamped = Math.max(0, Math.min(maxKcal, kcalPos));
-      proteinGrams.value = Math.round(clamped / 4);
-    } else {
-      // Handle 2 controls fat|carbs boundary.
-      // Must stay to the right of handle 1.
-      const minKcal = proteinKcal.value;
-      const clamped = Math.max(minKcal, Math.min(calories.value, kcalPos));
-      const fatKcalNew = clamped - proteinKcal.value;
-      fatGrams.value = Math.round(fatKcalNew / 9);
-    }
-  };
-  const onUp = () => {
-    activeHandle = null;
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onUp);
-  };
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
-  document.addEventListener('touchmove', onMove, { passive: true });
-  document.addEventListener('touchend', onUp);
-}
+// Macro split is rendered + edited via MacroAllocator. Settings keeps the
+// raw protein/fat/carbs grams refs so persistSettings can save them.
 
 // ---- Compounds ----------------------------------------------------------
 
@@ -436,6 +417,18 @@ function draftFor(id) {
   return compoundDrafts[id];
 }
 
+// Brand names + generic name shown together as a dot-separated synonym list,
+// brands first. Generic is appended only if it isn't already in brandNames.
+function displayCompoundNames(c) {
+  const brands = c.brandNames || [];
+  if (!brands.length) return c.name;
+  const lower = brands.map((b) => b.toLowerCase());
+  if (c.name && !lower.includes(c.name.toLowerCase())) {
+    return [...brands, c.name].join(' · ');
+  }
+  return brands.join(' · ');
+}
+
 async function toggleCompoundEnabled(compound) {
   compoundsError.value = '';
   try {
@@ -478,6 +471,18 @@ async function handleDeleteCompound(compound) {
 async function handleAddCompound() {
   compoundsError.value = '';
   if (!newCompound.name.trim()) return;
+
+  // Pre-flight cap check. Server still enforces (auth boundary), but blocking
+  // here avoids the round-trip and gives a faster, prettier upsell. The
+  // server's 403 response auto-opens the same modal as a fallback.
+  if (compoundsAtCap.value) {
+    upgradeModal.openForGate({
+      limitKey: 'customCompounds',
+      used: customCompoundCount.value,
+    });
+    return;
+  }
+
   try {
     const created = await compoundsStore.create({
       name: newCompound.name.trim(),
@@ -510,16 +515,20 @@ onMounted(async () => {
   for (const c of compoundsStore.compounds) startCompoundDraft(c);
   if (store.settings) {
     const s = store.settings;
-    sex.value = s.sex;
-    heightFeet.value = Math.floor(s.heightInches / 12);
-    heightInches.value = s.heightInches % 12;
-    currentWeightLbs.value = s.currentWeightLbs;
+    sex.value = s.sex || 'male';
+    age.value = s.age || '';
+    heightFeet.value = s.heightInches ? Math.floor(s.heightInches / 12) : 5;
+    heightInches.value = s.heightInches ? s.heightInches % 12 : 10;
+    currentWeightLbs.value = s.currentWeightLbs ?? 180;
     goalWeightLbs.value = s.goalWeightLbs || '';
     bmr.value = s.bmr || '';
-    calories.value = s.targets.calories;
-    proteinGrams.value = s.targets.proteinGrams;
-    fatGrams.value = s.targets.fatGrams;
-    carbsGrams.value = s.targets.carbsGrams;
+    tdee.value = s.tdee || '';
+    activityLevel.value = s.activityLevel || '';
+    goalRateLbsPerWeek.value = s.goalRateLbsPerWeek != null ? s.goalRateLbsPerWeek : null;
+    calories.value = s.targets?.calories ?? 2000;
+    proteinGrams.value = s.targets?.proteinGrams ?? 150;
+    fatGrams.value = s.targets?.fatGrams ?? 65;
+    carbsGrams.value = s.targets?.carbsGrams ?? 200;
     trackReminderEnabled.value = Boolean(s.trackReminder?.enabled);
     trackReminderTime.value = s.trackReminder?.time || '20:00';
   }
@@ -544,10 +553,14 @@ async function persistSettings() {
   try {
     await store.updateSettings({
       sex: sex.value,
+      age: age.value ? Number(age.value) : null,
       heightInches: totalHeightInches.value,
       currentWeightLbs: Number(currentWeightLbs.value),
       goalWeightLbs: goalWeightLbs.value ? Number(goalWeightLbs.value) : null,
-      bmr: bmr.value ? Number(bmr.value) : null,
+      bmr: bmrComputed.value || null,
+      tdee: tdee.value ? Number(tdee.value) : null,
+      activityLevel: activityLevel.value || null,
+      goalRateLbsPerWeek: goalRateLbsPerWeek.value,
       targets: {
         calories: Number(calories.value),
         proteinGrams: Number(proteinGrams.value),
@@ -591,101 +604,6 @@ watch(
       <button type="button" class="sub-banner-dismiss" @click="subBanner = null" aria-label="Dismiss">×</button>
     </div>
 
-    <div class="card subscription-card">
-      <h3>Subscription</h3>
-
-      <div v-if="subLoading" class="sub-loading">Loading…</div>
-
-      <template v-else>
-        <div class="sub-current">
-          <div class="sub-current-row">
-            <span class="sub-current-label">Current plan</span>
-            <span class="sub-current-value">{{ currentPlan?.marketing?.title || 'Free' }}</span>
-          </div>
-          <div v-if="trialEndsAt" class="sub-current-row">
-            <span class="sub-current-label">Trial ends</span>
-            <span class="sub-current-value">{{ trialEndsAt.toLocaleDateString() }}</span>
-          </div>
-          <div v-else-if="subscription?.planExpiresAt" class="sub-current-row">
-            <span class="sub-current-label">Renews / ends</span>
-            <span class="sub-current-value">
-              {{ new Date(subscription.planExpiresAt).toLocaleDateString() }}
-            </span>
-          </div>
-        </div>
-
-        <div v-if="isPaidNow && subscription?.hasStripeCustomer" class="sub-actions">
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="portalBusy"
-            @click="handleManageBilling"
-          >
-            {{ portalBusy ? 'Opening…' : 'Manage billing' }}
-          </button>
-          <p class="sub-hint">
-            Change plan, update card, or cancel anytime in the Stripe billing portal.
-          </p>
-        </div>
-
-        <div v-else class="sub-upgrade">
-          <div class="sub-interval-toggle" role="tablist" aria-label="Billing interval">
-            <button
-              type="button"
-              class="sub-interval-btn"
-              :class="{ active: billingInterval === 'monthly' }"
-              @click="billingInterval = 'monthly'"
-            >Monthly</button>
-            <button
-              type="button"
-              class="sub-interval-btn"
-              :class="{ active: billingInterval === 'yearly' }"
-              @click="billingInterval = 'yearly'"
-            >Yearly <span class="sub-save-tag">save {{ annualSavePct }}%</span></button>
-          </div>
-
-          <div class="sub-plans">
-            <div
-              v-for="plan in paidPlans"
-              :key="plan.id"
-              class="sub-plan"
-              :class="{ featured: plan.marketing.badge === 'Most Popular' }"
-            >
-              <div v-if="plan.marketing.badge" class="sub-plan-badge">{{ plan.marketing.badge }}</div>
-              <div class="sub-plan-title">{{ plan.marketing.title }}</div>
-              <div class="sub-plan-tagline">{{ plan.marketing.tagline }}</div>
-              <div class="sub-plan-price">
-                ${{ priceFor(plan).toFixed(plan.pricing.monthlyUsd % 1 ? 2 : 0) }}
-                <span class="sub-plan-per">
-                  / {{ billingInterval === 'yearly' ? 'year' : 'month' }}
-                </span>
-              </div>
-              <div class="sub-plan-effective">{{ priceLabelFor(plan) }}</div>
-              <ul class="sub-plan-feats">
-                <li v-for="feat in plan.marketing.featureList" :key="feat">{{ feat }}</li>
-              </ul>
-              <button
-                type="button"
-                class="btn-primary wide"
-                :disabled="checkoutBusy !== null"
-                @click="handleUpgrade(plan.id)"
-              >
-                <span v-if="checkoutBusy === plan.id">Opening checkout…</span>
-                <span v-else-if="plan.pricing.trialDays > 0">
-                  Start {{ plan.pricing.trialDays }}-day free trial
-                </span>
-                <span v-else>Upgrade to {{ plan.marketing.title }}</span>
-              </button>
-            </div>
-          </div>
-
-          <p class="sub-hint">
-            Card collected upfront. Cancel anytime during the trial — you won’t be charged.
-          </p>
-        </div>
-      </template>
-    </div>
-
     <form @submit.prevent>
       <div class="card">
         <h3>Profile</h3>
@@ -706,13 +624,22 @@ watch(
             </span>
           </label>
           <label class="stat-cell">
-            <span class="stat-label">BMR</span>
+            <span class="stat-label">TDEE
+              <span v-if="tdeeComputed && !tdee" class="stat-hint">auto: {{ tdeeComputed }}</span>
+            </span>
             <span class="stat-value-wrap">
-              <input type="number" v-model.number="bmr" step="1" class="stat-input" placeholder="—" />
+              <input type="number" v-model.number="tdee" step="1" class="stat-input" :placeholder="tdeeComputed || '—'" />
               <span class="stat-unit">kcal/day</span>
             </span>
           </label>
         </div>
+
+        <p v-if="bmrComputed" class="bmr-readout">
+          BMR (resting): <strong>{{ bmrComputed }}</strong> kcal/day
+          <span class="bmr-readout-sub">
+            — auto-calculated from sex, age, height, and weight (Mifflin-St Jeor).
+          </span>
+        </p>
 
         <div class="bio-row">
           <div class="bio-group">
@@ -723,6 +650,13 @@ watch(
             </div>
           </div>
           <div class="bio-group">
+            <span class="bio-label">Age</span>
+            <div class="bio-inline">
+              <input type="number" v-model.number="age" min="13" max="120" class="bio-input" placeholder="—" />
+              <span class="bio-unit">yrs</span>
+            </div>
+          </div>
+          <div class="bio-group">
             <span class="bio-label">Height</span>
             <div class="bio-inline">
               <input type="number" v-model.number="heightFeet" min="3" max="8" class="bio-input" />
@@ -730,6 +664,25 @@ watch(
               <input type="number" v-model.number="heightInches" min="0" max="11" class="bio-input" />
               <span class="bio-unit">in</span>
             </div>
+          </div>
+        </div>
+
+        <div class="bio-row">
+          <div class="bio-group bio-group-wide">
+            <span class="bio-label">Activity level</span>
+            <select v-model="activityLevel" class="bio-select">
+              <option value="">—</option>
+              <option v-for="lvl in ACTIVITY_LEVELS" :key="lvl.value" :value="lvl.value">
+                {{ lvl.label }} (×{{ lvl.multiplier }})
+              </option>
+            </select>
+          </div>
+          <div class="bio-group bio-group-wide">
+            <span class="bio-label">Goal rate</span>
+            <select v-model="goalRateLbsPerWeek" class="bio-select">
+              <option :value="null">—</option>
+              <option v-for="r in GOAL_RATES" :key="r.value" :value="r.value">{{ r.label }}</option>
+            </select>
           </div>
         </div>
       </div>
@@ -752,7 +705,7 @@ watch(
           </label>
           <div v-if="calorieDelta != null" class="cal-hero-aside">
             <div class="cal-stat">
-              <span class="cal-stat-label">vs BMR</span>
+              <span class="cal-stat-label">vs TDEE</span>
               <span class="cal-stat-value" :class="calorieDelta < 0 ? 'neg' : 'pos'">
                 {{ signed(calorieDelta) }}
                 <span class="cal-stat-unit">kcal</span>
@@ -782,47 +735,17 @@ watch(
               </span>
             </div>
           </div>
-          <p v-else class="cal-hero-hint">Set BMR in Profile to see deficit + projected weekly change.</p>
+          <p v-else class="cal-hero-hint">Set TDEE in Profile (or fill in age + activity level) to see deficit + projected weekly change.</p>
         </div>
 
-        <!-- Single allocation bar with two drag handles:
-             handle 1 = protein|fat boundary, handle 2 = fat|carbs boundary -->
-        <div
-          class="alloc-bar"
-          ref="allocBarRef"
-          @mousedown="onAllocDown"
-          @touchstart.prevent="onAllocDown"
-        >
-          <div class="seg seg-p" :style="{ width: pctProtein + '%' }" />
-          <div class="seg seg-f" :style="{ width: pctFat + '%' }" />
-          <div class="seg seg-c" :style="{ width: pctCarbs + '%' }" />
-          <div class="handle handle-1" :style="{ left: pctProtein + '%' }" data-handle="1" />
-          <div class="handle handle-2" :style="{ left: (pctProtein + pctFat) + '%' }" data-handle="2" />
-        </div>
-
-        <div class="alloc-legend">
-          <div class="alloc-legend-item">
-            <span class="legend-dot dot-p"></span>
-            <span class="alloc-label label-p">Protein</span>
-            <span class="alloc-spacer"></span>
-            <input type="number" class="alloc-input" :value="proteinGrams" min="0" :max="maxProteinGrams" step="5" @change="proteinGrams = Math.min(Number($event.target.value), maxProteinGrams)" /><span class="alloc-unit">g</span>
-            <span class="alloc-detail">{{ proteinKcal }} kcal · {{ Math.round(pctProtein) }}%</span>
-          </div>
-          <div class="alloc-legend-item">
-            <span class="legend-dot dot-f"></span>
-            <span class="alloc-label label-f">Fat</span>
-            <span class="alloc-spacer"></span>
-            <input type="number" class="alloc-input" :value="fatGrams" min="0" :max="maxFatGrams" step="1" @change="fatGrams = Math.min(Number($event.target.value), maxFatGrams)" /><span class="alloc-unit">g</span>
-            <span class="alloc-detail">{{ fatKcal }} kcal · {{ Math.round(pctFat) }}%</span>
-          </div>
-          <div class="alloc-legend-item">
-            <span class="legend-dot dot-c"></span>
-            <span class="alloc-label label-c">Carbs</span>
-            <span class="alloc-spacer"></span>
-            <span class="alloc-computed">{{ carbsComputed }}</span><span class="alloc-unit">g</span>
-            <span class="alloc-detail">{{ carbsKcal }} kcal · {{ Math.round(pctCarbs) }}%</span>
-          </div>
-        </div>
+        <MacroAllocator
+          :calories="calories || 0"
+          :protein-grams="proteinGrams || 0"
+          :fat-grams="fatGrams || 0"
+          @update:protein-grams="proteinGrams = $event"
+          @update:fat-grams="fatGrams = $event"
+          @update:carbs-grams="carbsGrams = $event"
+        />
       </div>
 
       <p v-if="error" class="error">{{ error }}</p>
@@ -841,19 +764,19 @@ watch(
           :class="{ disabled: !c.enabled }"
           :style="c.enabled && c.color ? { borderLeftColor: c.color, borderLeftWidth: '3px' } : null"
         >
+          <label class="switch compound-toggle" :title="c.enabled ? 'Disable' : 'Enable'" @click.stop>
+            <input
+              type="checkbox"
+              :checked="c.enabled"
+              @change.stop="toggleCompoundEnabled(c)"
+            />
+            <span class="switch-track"><span class="switch-thumb" /></span>
+          </label>
+          <div class="compound-body">
           <div class="compound-lead">
-            <label class="compound-enable" :title="c.enabled ? 'Disable' : 'Enable'">
-              <input
-                type="checkbox"
-                :checked="c.enabled"
-                @change.stop="toggleCompoundEnabled(c)"
-                @click.stop
-              />
-              <span class="compound-swatch" :style="{ background: c.color || 'var(--border)' }" />
-            </label>
             <div class="compound-identity">
               <div class="compound-name-row">
-                <span class="compound-name">{{ c.name }}</span>
+                <span class="compound-name">{{ displayCompoundNames(c) }}</span>
                 <svg
                   v-if="c.isSystem"
                   class="compound-lock"
@@ -875,7 +798,6 @@ watch(
                 class="compound-next"
                 :class="`status-${nextDoseInfo(c).status}`"
               >{{ nextDoseInfo(c).label }}</span>
-              <span v-else class="compound-next muted">Disabled</span>
             </div>
             <button
               v-if="!c.isSystem"
@@ -988,11 +910,32 @@ watch(
               @change="saveCompoundReminder(c)"
             />
           </div>
+          </div>
         </li>
       </ul>
 
       <div class="compound-add">
-        <h4>Add custom compound</h4>
+        <h4>
+          Add custom compound
+          <UpgradeBadge
+            v-if="compoundsAtCap && compoundsUpgradeTier"
+            :tier="compoundsUpgradeTier"
+            limit-key="customCompounds"
+            clickable
+          />
+        </h4>
+        <p
+          v-if="compoundsAtCap"
+          class="field-hint"
+          style="margin: 0 0 0.75rem; color: var(--text-tertiary)"
+        >
+          <template v-if="customCompoundCap === 0">
+            Custom compounds aren't included on your plan.
+          </template>
+          <template v-else>
+            You've used {{ customCompoundCount }} of {{ customCompoundCap }} custom compounds on your plan.
+          </template>
+        </p>
         <div class="compound-add-grid">
           <label class="compound-field">
             <span>Name</span>
@@ -1184,6 +1127,101 @@ watch(
         </div>
       </div>
     </div>
+
+    <div class="card subscription-card">
+      <h3>Subscription</h3>
+
+      <div v-if="subLoading" class="sub-loading">Loading…</div>
+
+      <template v-else>
+        <div class="sub-current">
+          <div class="sub-current-row">
+            <span class="sub-current-label">Current plan</span>
+            <span class="sub-current-value">{{ currentPlan?.marketing?.title || 'Free' }}</span>
+          </div>
+          <div v-if="trialEndsAt" class="sub-current-row">
+            <span class="sub-current-label">Trial ends</span>
+            <span class="sub-current-value">{{ trialEndsAt.toLocaleDateString() }}</span>
+          </div>
+          <div v-else-if="subscription?.planExpiresAt" class="sub-current-row">
+            <span class="sub-current-label">Renews / ends</span>
+            <span class="sub-current-value">
+              {{ new Date(subscription.planExpiresAt).toLocaleDateString() }}
+            </span>
+          </div>
+        </div>
+
+        <div v-if="isPaidNow && subscription?.hasStripeCustomer" class="sub-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="portalBusy"
+            @click="handleManageBilling"
+          >
+            {{ portalBusy ? 'Opening…' : 'Manage billing' }}
+          </button>
+          <p class="sub-hint">
+            Change plan, update card, or cancel anytime in the Stripe billing portal.
+          </p>
+        </div>
+
+        <div v-else class="sub-upgrade">
+          <div class="sub-interval-toggle" role="tablist" aria-label="Billing interval">
+            <button
+              type="button"
+              class="sub-interval-btn"
+              :class="{ active: billingInterval === 'monthly' }"
+              @click="billingInterval = 'monthly'"
+            >Monthly</button>
+            <button
+              type="button"
+              class="sub-interval-btn"
+              :class="{ active: billingInterval === 'yearly' }"
+              @click="billingInterval = 'yearly'"
+            >Yearly <span class="sub-save-tag">save {{ annualSavePct }}%</span></button>
+          </div>
+
+          <div class="sub-plans">
+            <div
+              v-for="plan in paidPlans"
+              :key="plan.id"
+              class="sub-plan"
+              :class="{ featured: plan.marketing.badge === 'Most Popular' }"
+            >
+              <div v-if="plan.marketing.badge" class="sub-plan-badge">{{ plan.marketing.badge }}</div>
+              <div class="sub-plan-title">{{ plan.marketing.title }}</div>
+              <div class="sub-plan-tagline">{{ plan.marketing.tagline }}</div>
+              <div class="sub-plan-price">
+                ${{ priceFor(plan).toFixed(plan.pricing.monthlyUsd % 1 ? 2 : 0) }}
+                <span class="sub-plan-per">
+                  / {{ billingInterval === 'yearly' ? 'year' : 'month' }}
+                </span>
+              </div>
+              <div class="sub-plan-effective">{{ priceLabelFor(plan) }}</div>
+              <ul class="sub-plan-feats">
+                <li v-for="feat in plan.marketing.featureList" :key="feat">{{ feat }}</li>
+              </ul>
+              <button
+                type="button"
+                class="btn-primary wide"
+                :disabled="checkoutBusy !== null"
+                @click="handleUpgrade(plan.id)"
+              >
+                <span v-if="checkoutBusy === plan.id">Opening checkout…</span>
+                <span v-else-if="plan.pricing.trialDays > 0">
+                  Start {{ plan.pricing.trialDays }}-day free trial
+                </span>
+                <span v-else>Upgrade to {{ plan.marketing.title }}</span>
+              </button>
+            </div>
+          </div>
+
+          <p class="sub-hint">
+            Card collected upfront. Cancel anytime during the trial — you won’t be charged.
+          </p>
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -1272,11 +1310,43 @@ watch(
 
 .bio-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto auto 1fr;
   gap: var(--space-4);
   align-items: center;
+  margin-top: var(--space-3);
 }
+.bio-row + .bio-row { grid-template-columns: 1fr 1fr; }
 .bio-group { display: flex; align-items: center; gap: var(--space-2); }
+.bio-group-wide { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); }
+.bio-select {
+  padding: 0.4rem 0.55rem;
+  font-size: var(--font-size-s);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  width: 100%;
+}
+.bmr-readout {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+.bmr-readout strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.bmr-readout-sub { color: var(--text-tertiary); }
+.stat-hint {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: var(--font-weight-regular);
+  margin-top: 2px;
+}
 .bio-label {
   font-size: var(--font-size-xs);
   text-transform: uppercase;
@@ -1392,96 +1462,6 @@ watch(
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
 }
-/* Macro allocation bar — single bar, two draggable handles */
-.alloc-bar {
-  position: relative;
-  display: flex;
-  height: 32px;
-  border-radius: var(--radius-small);
-  overflow: visible;
-  margin-bottom: 1rem;
-  border: 1px solid var(--border);
-  cursor: default;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.seg {
-  height: 100%;
-  min-width: 0;
-  transition: width 0.05s;
-}
-.seg-p { background: var(--color-protein); }
-.seg-f { background: var(--color-fat); }
-.seg-c { background: var(--color-carbs); }
-
-.handle {
-  position: absolute;
-  top: 50%;
-  width: 6px;
-  height: 40px;
-  margin-left: -3px;
-  margin-top: -20px;
-  background: var(--surface);
-  border: 2px solid var(--border-strong);
-  border-radius: var(--radius-small);
-  cursor: ew-resize;
-  z-index: 2;
-  box-shadow: var(--shadow-s);
-  transition: border-color var(--transition-fast);
-}
-.handle:hover { border-color: var(--text-secondary); }
-
-.alloc-legend { margin-bottom: 0.5rem; }
-.alloc-legend-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  margin-bottom: 0.3rem;
-}
-.legend-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  position: relative;
-  top: -1px;
-}
-.dot-p { background: var(--color-protein); }
-.dot-f { background: var(--color-fat); }
-.dot-c { background: var(--color-carbs); }
-.alloc-label { font-size: var(--font-size-s); font-weight: var(--font-weight-bold); }
-.label-p { color: var(--color-protein); }
-.label-f { color: var(--color-fat); }
-.label-c { color: var(--color-carbs); }
-.alloc-spacer { flex: 1; }
-.alloc-input {
-  width: 52px;
-  padding: 0.2rem 0.35rem;
-  font-size: var(--font-size-s);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.alloc-unit {
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-}
-.alloc-computed {
-  display: inline-block;
-  width: 52px;
-  text-align: right;
-  font-size: var(--font-size-s);
-  font-weight: var(--font-weight-bold);
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.alloc-detail {
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
 .error { color: var(--danger); font-size: var(--font-size-s); margin-bottom: 0.5rem; }
 .success { color: var(--success); font-size: var(--font-size-s); margin-bottom: 0.5rem; }
 
@@ -1495,6 +1475,10 @@ watch(
   gap: var(--space-2);
 }
 .compound-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4);
+  align-items: start;
   border: 1px solid var(--border);
   border-left: 3px solid var(--border);
   background: var(--bg);
@@ -1502,36 +1486,31 @@ watch(
   transition: border-color var(--transition-fast);
 }
 .compound-row.disabled { opacity: 0.6; }
-.compound-row.disabled .compound-swatch { background: var(--border) !important; }
+.compound-toggle {
+  align-self: start;
+  /* Align the switch's vertical center with the name line's cap-height. */
+  margin-top: 2px;
+}
+.compound-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
 
 .compound-lead {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: var(--space-3);
   align-items: center;
 }
-.compound-enable {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  cursor: pointer;
-}
-.compound-enable input[type="checkbox"] { accent-color: var(--primary); cursor: pointer; }
-.compound-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1px solid var(--border-strong);
-  flex-shrink: 0;
-}
-
 .compound-identity {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
-.compound-name-row { display: inline-flex; align-items: center; gap: var(--space-1); }
+.compound-name-row { display: inline-flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
 .compound-name {
   font-size: var(--font-size-m);
   font-weight: var(--font-weight-bold);

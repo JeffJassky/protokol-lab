@@ -8,21 +8,27 @@ import { childLogger } from '../lib/logger.js';
 const log = childLogger('foodlog');
 const router = Router();
 
-async function resolveFoodItemId(body) {
+async function resolveFoodItemId(body, userId) {
   if (body.foodItemId) return body.foodItemId;
 
   if (body.offBarcode) {
+    // Per-user dedup. Each user keeps their own copy of an OFF product so
+    // we can attribute, count, and let users edit fields without leaking
+    // changes to other users.
     const item = await FoodItem.findOneAndUpdate(
-      { offBarcode: body.offBarcode },
+      { userId, offBarcode: body.offBarcode },
       {
-        name: body.name,
-        brand: body.brand,
-        servingSize: body.servingSize,
-        servingGrams: body.servingGrams,
-        caloriesPer: body.caloriesPer,
-        proteinPer: body.proteinPer,
-        fatPer: body.fatPer,
-        carbsPer: body.carbsPer,
+        $setOnInsert: { userId, isCustom: false },
+        $set: {
+          name: body.name,
+          brand: body.brand,
+          servingSize: body.servingSize,
+          servingGrams: body.servingGrams,
+          caloriesPer: body.caloriesPer,
+          proteinPer: body.proteinPer,
+          fatPer: body.fatPer,
+          carbsPer: body.carbsPer,
+        },
       },
       { upsert: true, returnDocument: 'after' },
     );
@@ -192,7 +198,7 @@ router.get('/summary', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const rlog = req.log || log;
-  const foodItemId = await resolveFoodItemId(req.body);
+  const foodItemId = await resolveFoodItemId(req.body, req.userId);
   if (!foodItemId) {
     rlog.warn({ body: { offBarcode: req.body?.offBarcode } }, 'foodlog: cannot resolve foodItem');
     return res.status(400).json({ error: 'Could not resolve food item' });

@@ -1,20 +1,53 @@
+import crypto from 'crypto';
 import { Router } from 'express';
 import ChatThread from '../models/ChatThread.js';
 import ChatUsage from '../models/ChatUsage.js';
+import MealProposal from '../models/MealProposal.js';
+import FoodItem from '../models/FoodItem.js';
+import FoodLog from '../models/FoodLog.js';
+import User from '../models/User.js';
 import { chatStream } from '../services/agent.js';
 import { calculateCost } from '../lib/pricing.js';
 import { requireChatQuota } from '../middleware/requireChatQuota.js';
+import { chatUpload, parseChatPayload } from '../middleware/chatUpload.js';
+import {
+  S3_CONFIGURED,
+  buildMealPhotoKey,
+  putObject,
+  presignGet,
+  deleteObject,
+} from '../services/s3.js';
 import { childLogger, errContext } from '../lib/logger.js';
 
 const log = childLogger('chat');
 const router = Router();
 
-router.post('/', requireChatQuota, async (req, res) => {
+router.post('/', chatUpload, parseChatPayload, requireChatQuota, async (req, res) => {
   const rlog = req.log || log;
   const { messages, threadId } = req.body;
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     rlog.warn('chat stream: missing messages');
     return res.status(400).json({ error: 'messages required' });
+  }
+
+  // Attach any uploaded images to the last user message so the agent sees
+  // them as inlineData parts on this turn. History-persisted image URLs on
+  // previous messages are handled separately during content build.
+  const imageFiles = Array.isArray(req.files) ? req.files : [];
+  // Stable id we'll use to correlate uploaded photo keys with the message
+  // they belong to in ChatThread.messages. The client also receives this id
+  // so it can attach the file URLs to its local message record before PATCH.
+  const messageId = crypto.randomBytes(8).toString('hex');
+  if (imageFiles.length) {
+    const last = messages[messages.length - 1];
+    if (last && last.role !== 'ai' && last.role !== 'model') {
+      last.images = imageFiles.map((f) => ({
+        data: f.buffer,
+        mimeType: f.mimetype,
+        originalName: f.originalname,
+        size: f.size,
+      }));
+    }
   }
 
   res.writeHead(200, {
@@ -32,7 +65,7 @@ router.post('/', requireChatQuota, async (req, res) => {
   let streamStatus = 'ok';
   let streamError = null;
   try {
-    for await (const event of chatStream(req.userId, messages)) {
+    for await (const event of chatStream(req.userId, messages, { threadId })) {
       if (event.type === 'usage') {
         // Captured server-side only; not forwarded to the client stream.
         usageEvent = event;
@@ -53,6 +86,46 @@ router.post('/', requireChatQuota, async (req, res) => {
     res.write(`data:${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
   }
 
+  // Persist meal photos now that we know the turn ran. If the stream errored
+  // we skip — no point holding image bytes for a failed exchange (cheapens
+  // unit economics for Free-tier teaser users retrying after a transient
+  // failure). On success we forward the signed URLs + s3 keys so the client
+  // can attach them to the persisted user message.
+  if (streamStatus === 'ok' && imageFiles.length && S3_CONFIGURED) {
+    try {
+      const persisted = await Promise.all(
+        imageFiles.map(async (file, idx) => {
+          const ext = (file.mimetype.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '');
+          const s3Key = buildMealPhotoKey(
+            String(req.userId),
+            threadId ? String(threadId) : null,
+            messageId,
+            idx,
+            ext || 'jpg',
+          );
+          await putObject(s3Key, file.buffer, file.mimetype);
+          const url = await presignGet(s3Key);
+          return {
+            s3Key,
+            url,
+            mimeType: file.mimetype,
+            bytes: file.size,
+            originalName: file.originalname,
+          };
+        }),
+      );
+      res.write(
+        `data:${JSON.stringify({ type: 'message_files', messageId, files: persisted })}\n\n`,
+      );
+      rlog.info(
+        { messageId, count: persisted.length, bytes: persisted.reduce((n, f) => n + (f.bytes || 0), 0) },
+        'chat: meal photos persisted',
+      );
+    } catch (err) {
+      rlog.error({ ...errContext(err), messageId }, 'chat: meal photo persist failed');
+    }
+  }
+
   res.end();
 
   // Persist usage record after the stream closes so the client isn't blocked
@@ -69,6 +142,21 @@ router.post('/', requireChatQuota, async (req, res) => {
     });
   } catch (err) {
     rlog.error({ ...errContext(err) }, 'chat: usage record failed');
+  }
+
+  // Bump the lifetime image-recognition counter on the user document when the
+  // stream actually completed with images attached. Done here (not in the
+  // middleware) so we only charge the user for turns that ran; if the agent
+  // errored before consuming the image, the free tier isn't penalized.
+  if (streamStatus === 'ok' && imageFiles.length) {
+    try {
+      await User.updateOne(
+        { _id: req.userId },
+        { $inc: { imageRecognitionCount: imageFiles.length } },
+      );
+    } catch (err) {
+      rlog.error({ ...errContext(err) }, 'chat: imageRecognitionCount inc failed');
+    }
   }
 });
 
@@ -114,10 +202,32 @@ async function recordChatUsage({
     iterations: usageEvent?.iterations || 0,
     toolCalls: usageEvent?.toolCalls || 0,
     searchCalls,
+    imageCount: req.imageCount || 0,
     durationMs: usageEvent?.durationMs ?? fallbackDurationMs,
     status,
     errorMessage: streamError?.message || null,
   });
+}
+
+// Presigned URLs expire after ~30min, so any file reference stored on a
+// message gets rehydrated with a fresh URL each time the thread is fetched.
+// Leaves non-file-bearing messages untouched.
+async function rehydrateFileUrls(messages) {
+  if (!Array.isArray(messages) || !S3_CONFIGURED) return messages;
+  for (const m of messages) {
+    if (!Array.isArray(m?.files) || !m.files.length) continue;
+    for (const f of m.files) {
+      if (f?.s3Key) {
+        try {
+          f.url = await presignGet(f.s3Key);
+        } catch {
+          // Leave url stale; client will show a broken image rather than
+          // the whole thread failing to load.
+        }
+      }
+    }
+  }
+  return messages;
 }
 
 router.get('/threads', async (req, res) => {
@@ -126,6 +236,10 @@ router.get('/threads', async (req, res) => {
   const threads = await ChatThread.find({ userId: req.userId }, projection)
     .sort({ updatedAt: -1 })
     .lean();
+
+  if (includeMessages) {
+    await Promise.all(threads.map((t) => rehydrateFileUrls(t.messages)));
+  }
 
   (req.log || log).debug({ count: threads.length, includeMessages }, 'chat: threads listed');
   res.json({
@@ -182,13 +296,144 @@ router.patch('/threads/:id', async (req, res) => {
 });
 
 router.delete('/threads/:id', async (req, res) => {
-  const result = await ChatThread.deleteOne({ _id: req.params.id, userId: req.userId });
-  if (result.deletedCount === 0) {
+  const thread = await ChatThread.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+  if (!thread) {
     (req.log || log).warn({ threadId: req.params.id }, 'chat: thread delete not found');
     return res.status(404).json({ error: 'Thread not found' });
   }
-  (req.log || log).info({ threadId: req.params.id }, 'chat: thread deleted');
+
+  // Fire-and-forget cleanup of any meal photos attached to this thread so
+  // they don't orphan in Spaces. Never blocks the response.
+  const keys = [];
+  for (const m of thread.messages || []) {
+    for (const f of m?.files || []) if (f?.s3Key) keys.push(f.s3Key);
+  }
+  if (keys.length && S3_CONFIGURED) {
+    Promise.all(keys.map((k) => deleteObject(k))).catch(() => {});
+  }
+
+  (req.log || log).info(
+    { threadId: req.params.id, orphanPhotoKeys: keys.length },
+    'chat: thread deleted',
+  );
   res.json({ ok: true });
+});
+
+// ── Proposal confirm / cancel ────────────────────────────────────────────────
+// A meal proposal is a set of AI-identified food items awaiting user review.
+// Confirming writes all items to FoodLog in one shot, creating catalog entries
+// for any items the agent couldn't match against an existing FoodItem.
+
+router.post('/proposals/:id/confirm', async (req, res) => {
+  const rlog = req.log || log;
+  const { id } = req.params;
+  const overrides = req.body?.items || null; // optional edited items
+  const overrideDate = req.body?.date || null;
+  const overrideMeal = req.body?.mealType || null;
+
+  const proposal = await MealProposal.findOne({ _id: id, userId: req.userId });
+  if (!proposal) {
+    rlog.warn({ proposalId: id }, 'proposal confirm: not found');
+    return res.status(404).json({ error: 'Proposal not found' });
+  }
+  if (proposal.status !== 'pending') {
+    rlog.warn({ proposalId: id, status: proposal.status }, 'proposal confirm: not pending');
+    return res.status(409).json({ error: `Proposal already ${proposal.status}` });
+  }
+
+  const itemsToLog = Array.isArray(overrides) && overrides.length ? overrides : proposal.items;
+  const date = overrideDate || proposal.date;
+  const mealType = overrideMeal || proposal.mealType;
+  const validMeals = ['breakfast', 'lunch', 'dinner', 'snack'];
+  if (!validMeals.includes(mealType)) {
+    return res.status(400).json({ error: `mealType must be one of: ${validMeals.join(', ')}` });
+  }
+
+  // Build or reuse FoodItem per proposal item, then insert one FoodLog per.
+  const logDocs = [];
+  for (const item of itemsToLog) {
+    let foodItemId = item.foodItemId;
+    if (!foodItemId) {
+      const created = await FoodItem.create({
+        userId: req.userId,
+        // AI-proposed foods come from a meal-photo or text proposal flow.
+        // They're as user-attributed as any manual entry, but we don't mark
+        // them isCustom — they shouldn't burn the customFoodItems cap since
+        // the user just confirmed the AI's suggestion rather than authoring it.
+        isCustom: false,
+        name: item.name || 'AI-identified food',
+        brand: item.brand || '',
+        emoji: item.emoji || '',
+        servingSize: item.portion || '',
+        servingGrams: item.grams != null ? Number(item.grams) : 100,
+        caloriesPer: Math.max(0, Math.round(Number(item.calories) || 0)),
+        proteinPer: Math.max(0, Math.round(Number(item.protein) || 0)),
+        fatPer: Math.max(0, Math.round(Number(item.fat) || 0)),
+        carbsPer: Math.max(0, Math.round(Number(item.carbs) || 0)),
+      });
+      foodItemId = created._id;
+    }
+    logDocs.push({
+      userId: req.userId,
+      foodItemId,
+      date: new Date(date + 'T12:00:00.000Z'),
+      mealType,
+      servingCount: 1,
+    });
+  }
+
+  const created = await FoodLog.insertMany(logDocs);
+  proposal.status = 'confirmed';
+  await proposal.save();
+
+  const totals = itemsToLog.reduce(
+    (acc, i) => {
+      acc.calories += Number(i.calories) || 0;
+      acc.protein += Number(i.protein) || 0;
+      acc.fat += Number(i.fat) || 0;
+      acc.carbs += Number(i.carbs) || 0;
+      return acc;
+    },
+    { calories: 0, protein: 0, fat: 0, carbs: 0 },
+  );
+
+  rlog.info(
+    { proposalId: id, itemCount: itemsToLog.length, mealType, date, entries: created.length },
+    'proposal: confirmed',
+  );
+  res.json({
+    ok: true,
+    proposalId: id,
+    entryCount: created.length,
+    items: itemsToLog,
+    totals: {
+      calories: Math.round(totals.calories),
+      protein: Math.round(totals.protein),
+      fat: Math.round(totals.fat),
+      carbs: Math.round(totals.carbs),
+    },
+    date,
+    mealType,
+  });
+});
+
+router.post('/proposals/:id/cancel', async (req, res) => {
+  const rlog = req.log || log;
+  const proposal = await MealProposal.findOne({ _id: req.params.id, userId: req.userId });
+  if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+  if (proposal.status !== 'pending') {
+    return res.status(409).json({ error: `Proposal already ${proposal.status}` });
+  }
+  proposal.status = 'cancelled';
+  await proposal.save();
+  rlog.info({ proposalId: req.params.id }, 'proposal: cancelled');
+  res.json({
+    ok: true,
+    proposalId: req.params.id,
+    items: proposal.items,
+    date: proposal.date,
+    mealType: proposal.mealType,
+  });
 });
 
 router.post('/title', async (req, res) => {

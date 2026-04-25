@@ -136,7 +136,7 @@ router.get('/search', async (req, res) => {
   });
 
   const localResults = await FoodItem.find(
-    { $text: { $search: q } },
+    { userId: req.userId, $text: { $search: q } },
     { score: { $meta: 'textScore' } },
   )
     .sort({ score: { $meta: 'textScore' } })
@@ -260,7 +260,7 @@ router.get('/barcode/:code', async (req, res) => {
     return res.status(400).json({ error: 'code required' });
   }
 
-  const localItem = await FoodItem.findOne({ offBarcode: code });
+  const localItem = await FoodItem.findOne({ userId: req.userId, offBarcode: code });
   if (localItem) {
     rlog.debug({ code, itemId: String(localItem._id) }, 'barcode: local hit');
     return res.json({
@@ -323,7 +323,11 @@ router.put('/:id', async (req, res) => {
   if (fatPer != null) update.fatPer = Number(fatPer);
   if (carbsPer != null) update.carbsPer = Number(carbsPer);
 
-  const item = await FoodItem.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
+  const item = await FoodItem.findOneAndUpdate(
+    { _id: req.params.id, userId: req.userId },
+    update,
+    { returnDocument: 'after' },
+  );
   if (!item) {
     (req.log || log).warn({ itemId: req.params.id }, 'food item update: not found');
     return res.status(404).json({ error: 'Not found' });

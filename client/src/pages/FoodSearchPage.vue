@@ -7,11 +7,28 @@ import { api } from '../api/index.js';
 import FoodItemRow from '../components/FoodItemRow.vue';
 import EmojiPickerButton from '../components/EmojiPickerButton.vue';
 import BarcodeScannerModal from '../components/BarcodeScannerModal.vue';
+import UpgradeBadge from '../components/UpgradeBadge.vue';
+import { usePlanLimits } from '../composables/usePlanLimits.js';
+import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 
 const route = useRoute();
 const router = useRouter();
 const foodStore = useFoodStore();
 const mealsStore = useMealsStore();
+const planLimits = usePlanLimits();
+const upgradeModal = useUpgradeModalStore();
+
+// Saved meals are plan-capped (Free=5, paid=∞). The store always has the
+// authoritative count so we can pre-flight gate the create surfaces.
+const savedMealCount = computed(() => mealsStore.meals.length);
+const savedMealCap = computed(() => planLimits.storageCap('savedMeals'));
+const mealsAtCap = computed(
+  () => !planLimits.canAddStorage('savedMeals', savedMealCount.value),
+);
+const mealsUpgradeTier = computed(() => {
+  const target = planLimits.planRequiredFor({ storageKey: 'savedMeals' });
+  return target?.id || null;
+});
 
 // "addToMeal" mode: the user is appending a food to a specific meal template
 // instead of logging it to the diary. Triggered from the Meals tab on this
@@ -218,11 +235,33 @@ function toggleExpandMeal(id) {
 
 async function handleCreateMeal() {
   if (!newMealName.value.trim()) return;
+
+  // Pre-flight cap check. Server still enforces; this trims the round-trip
+  // and gives a snappier upsell. Server 403 also surfaces the same modal.
+  if (mealsAtCap.value) {
+    upgradeModal.openForGate({
+      limitKey: 'savedMeals',
+      used: savedMealCount.value,
+    });
+    return;
+  }
+
   const created = await mealsStore.createMeal(newMealName.value.trim(), [], newMealEmoji.value);
   newMealName.value = '';
   newMealEmoji.value = '';
   creatingMeal.value = false;
   expandedMealId.value = created._id;
+}
+
+function startCreateMeal() {
+  if (mealsAtCap.value) {
+    upgradeModal.openForGate({
+      limitKey: 'savedMeals',
+      used: savedMealCount.value,
+    });
+    return;
+  }
+  creatingMeal.value = true;
 }
 
 async function updateMealEmoji(m, emoji) {
@@ -419,7 +458,13 @@ async function logMealToToday(m) {
 
       <div v-if="tab === 'meals'">
         <div class="meals-toolbar">
-          <button v-if="!creatingMeal" class="btn-secondary" @click="creatingMeal = true">+ New Meal</button>
+          <button v-if="!creatingMeal" class="btn-secondary" @click="startCreateMeal">
+            + New Meal
+            <UpgradeBadge
+              v-if="mealsAtCap && mealsUpgradeTier"
+              :tier="mealsUpgradeTier"
+            />
+          </button>
           <form v-else class="create-meal-form" @submit.prevent="handleCreateMeal">
             <EmojiPickerButton v-model="newMealEmoji" size="sm" />
             <input

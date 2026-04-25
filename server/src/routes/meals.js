@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Meal from '../models/Meal.js';
 import FoodLog from '../models/FoodLog.js';
 import { childLogger } from '../lib/logger.js';
+import { evaluateStorageCap } from '../lib/planLimits.js';
 
 const log = childLogger('meals');
 const router = Router();
@@ -25,10 +26,28 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
+  const rlog = req.log || log;
   const { name, emoji, items } = req.body;
   if (!name || !name.trim()) {
-    (req.log || log).warn('meals create: missing name');
+    rlog.warn('meals create: missing name');
     return res.status(400).json({ error: 'name required' });
+  }
+
+  // Plan cap: every Meal doc belongs to one user; no system/built-in meals
+  // exist (verified against Meal.js schema), so a raw count is the cap baseline.
+  const used = await Meal.countDocuments({ userId: req.userId });
+  const denial = evaluateStorageCap(req.user, 'savedMeals', used);
+  if (denial) {
+    rlog.warn(
+      { userId: String(req.userId), used: denial.used, limit: denial.limit, plan: denial.currentPlan },
+      'meals create: plan cap reached',
+    );
+    return res.status(403).json({
+      ...denial,
+      message: denial.upgradePlanId
+        ? `Your ${denial.currentPlan} plan allows ${denial.limit} saved meal${denial.limit === 1 ? '' : 's'}. Upgrade to save more.`
+        : `You've reached the ${denial.limit}-meal limit for your plan.`,
+    });
   }
 
   const meal = await Meal.create({
