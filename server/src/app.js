@@ -43,6 +43,13 @@ export function createApp({ serveClient = true } = {}) {
   // is needed — keep it that way to avoid hash-maintenance churn.
   app.use(
     helmet({
+      // Helmet's default 'no-referrer' strips the Referer header on cross-origin
+      // requests, so Google's GIS iframe (accounts.google.com/gsi/button) can't
+      // see which site embedded it — Google then rejects with "origin not allowed
+      // for the given client ID" even when the origin IS in the OAuth client's
+      // authorized list. 'strict-origin-when-cross-origin' is the modern browser
+      // default: sends only the origin (not full URL) cross-origin over HTTPS.
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
