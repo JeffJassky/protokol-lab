@@ -1,0 +1,1069 @@
+<!doctype html>
+<html
+  data-src-ver="9e9a3483"
+  lang="en"
+  data-om-id="9e9a3483:0"
+  data-src-loc="16:32:40158"
+>
+  <head data-om-id="9e9a3483:1" data-src-loc="33:39:5684">
+    <style data-omelette-injected>
+      html,body{background:transparent}
+    </style>
+    <script data-omelette-injected>
+      (()=>{var A=["https://claude.ai","https://preview.claude.ai","https://eap-omelette.claude.ai"];var L=30000;var u=3000;document.addEventListener("DOMContentLoaded",()=>{const V=window.Babel;const $="om-src-id";if(V&&V.registerPlugin&&!(V.availablePlugins&&V.availablePlugins[$])){V.registerPlugin($,({types:Q})=>({visitor:{JSXOpeningElement(W,X){const K=W.node;if(K.name&&K.name.type==="JSXMemberExpression")return;for(let J=0;J<K.attributes.length;J++){const w=K.attributes[J];if(w.type==="JSXAttribute"&&w.name&&w.name.name==="data-om-id")return}const z=X.file&&X.file.opts&&X.file.opts.filename||"?";const k=K.loc&&K.loc.start;const C=`jsx:${z}:${K.start??0}:${k?k.line:0}:${k?k.column+1:0}`;K.attributes.push(Q.jsxAttribute(Q.jsxIdentifier("data-om-id"),Q.stringLiteral(C)))}}}))}const Z=["transform-react-jsx-source",$];document.querySelectorAll('script[type="text/babel"],script[type="text/jsx"]').forEach((Q,W)=>{const X=Q.getAttribute("data-plugins")||"";const K=Z.filter((z)=>X.indexOf(z)<0);if(K.length){Q.setAttribute("data-plugins",X?`${X},${K.join(",")}`:K.join(","))}if(!Q.hasAttribute("data-filename")){Q.setAttribute("data-filename",Q.getAttribute("src")||`inline-${W}`)}})});var b=window.parent;if(b&&b!==window){const V=(z,k)=>{try{b.postMessage({__omelette_log:true,type:z,data:k},"*")}catch{}};["log","warn","error"].forEach((z)=>{const k=console[z];console[z]=(...C)=>{const J=C.map((w)=>{try{return typeof w==="object"?JSON.stringify(w):String(w)}catch{try{return String(w)}catch{return"[unstringifiable]"}}}).join(" ");V(z,J);k.apply(console,C)}});window.addEventListener("error",(z)=>{const k=z.target;if(k&&k!==window&&k.tagName){const C=k.src||k.href||"";V("resource_error",`${k.tagName} failed to load: ${C}`)}else{V("error",`${z.message||"Unknown error"} at ${z.filename||"?"}:${z.lineno||0}:${z.colno||0}`)}},true);window.addEventListener("unhandledrejection",(z)=>{const k=z.reason;const C=k instanceof Error?`${k.message} ${k.stack}`:String(k);V("error",`Unhandled rejection: ${C}`)});const $=()=>{try{b.postMessage({type:"omelette:height",height:document.documentElement.scrollHeight},"*")}catch{}};if(document.readyState==="complete")$();else window.addEventListener("load",$);if(window.ResizeObserver)new ResizeObserver($).observe(document.documentElement);const Z={};let Q=0;window.claude={complete(z){return new Promise((k,C)=>{if(!A.length){C(new Error("claude.complete: no parent origin"));return}const J=`c${++Q}`;const w=()=>setTimeout(()=>{delete Z[J];C(new Error(`claude.complete: no data for ${L/1000}s`))},L);const Y=w();Z[J]={resolve:k,reject:C,text:"",t:Y,arm:w};try{for(const F of A){b.postMessage({__om_api:true,id:J,body:z},F)}}catch(F){clearTimeout(Y);delete Z[J];C(F)}})}};const W={};let X=0;window.omelette={writeFile:(z,k)=>new Promise((C,J)=>{if(!A.length){C();return}const w=`f${++X}`;const Y=setTimeout(()=>{delete W[w];C()},u);W[w]={resolve:C,reject:J,t:Y};try{for(const F of A){b.postMessage({__om_file:true,id:w,op:"write",path:z,content:k},F)}}catch{clearTimeout(Y);delete W[w];C()}})};const K=(z)=>{try{return JSON.stringify(z)}catch{return JSON.stringify(String(z))}};window.addEventListener("message",(z)=>{if(A.indexOf(z.origin)<0)return;if(z.source!==b)return;const k=z.data;if(!k)return;if(k.__om_file_r){const w=W[k.id];if(!w)return;clearTimeout(w.t);delete W[k.id];if(k.ok)w.resolve();else w.reject(new Error(k.error||"write failed"));return}if(k.__om_api_r){const w=Z[k.id];if(!w)return;if(k.error!=null){clearTimeout(w.t);delete Z[k.id];w.reject(new Error(k.error));return}if(k.chunk!=null){clearTimeout(w.t);w.t=w.arm();w.text+=k.chunk;return}if(k.done){clearTimeout(w.t);delete Z[k.id];w.resolve(k.text!=null?k.text:w.text);return}return}if(!k.__om_eval)return;const C=k;const J=(w)=>{z.source.postMessage({...w,__om_eval_r:1,id:C.id},z.origin)};try{const w=(0,eval)(C.code);if(w&&typeof w.then==="function"){w.then((Y)=>J({ok:1,v:K(Y)}),(Y)=>J({ok:0,e:String(Y)}))}else{J({ok:1,v:K(w)})}}catch(w){J({ok:0,e:String(w)})}})}})();
+    </script>
+
+    <meta charset="UTF-8" data-om-id="9e9a3483:2" data-src-loc="40:64:64" />
+    <title data-src-loc="65:72:109">Protokol — Logo Exploration</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+      data-om-id="9e9a3483:3"
+      data-src-loc="110:180:180"
+    />
+
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+      data-om-id="9e9a3483:4"
+      data-src-loc="182:241:241"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+      data-om-id="9e9a3483:5"
+      data-src-loc="242:310:310"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+      data-om-id="9e9a3483:6"
+      data-src-loc="311:435:435"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+      data-om-id="9e9a3483:7"
+      data-src-loc="436:555:555"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+      data-om-id="9e9a3483:8"
+      data-src-loc="556:664:664"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+      data-om-id="9e9a3483:9"
+      data-src-loc="665:784:784"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+      data-om-id="9e9a3483:10"
+      data-src-loc="785:904:904"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap"
+      rel="stylesheet"
+      data-om-id="9e9a3483:11"
+      data-src-loc="905:1003:1003"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap"
+      rel="stylesheet"
+      data-om-id="9e9a3483:12"
+      data-src-loc="1004:1099:1099"
+    />
+
+    <style data-src-loc="1101:1108:1335">
+      /* Preload trick: instantiate every font/weight we use so document.fonts knows about them */
+      .__font-preload {
+        position: absolute; left: -9999px; top: -9999px;
+        visibility: hidden; pointer-events: none;
+      }
+    </style>
+
+    <script
+      src="https://unpkg.com/react@18.3.1/umd/react.development.js"
+      integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L"
+      crossorigin="anonymous"
+      data-src-loc="1337:1515:1524"
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"
+      integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm"
+      crossorigin="anonymous"
+      data-src-loc="1525:1711:1720"
+    ></script>
+    <script
+      src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"
+      integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y"
+      crossorigin="anonymous"
+      data-src-loc="1721:1899:1908"
+    ></script>
+
+    <style data-src-loc="1910:1917:5676">
+      /* Neutral, color-free surface so we evaluate shape only */
+      :root {
+        --bg:        #1a1a1a;
+        --surface:   #232323;
+        --border:    #2e2e2e;
+        --border-2:  #3a3a3a;
+        --ink:       #f5f5f5;
+        --ink-2:     #b8b8b8;
+        --ink-dim:   #6a6a6a;
+        --mono: 'JetBrains Mono', ui-monospace, monospace;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+        font-family: var(--mono); font-size: 13px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap { max-width: 1480px; margin: 0 auto; padding: 56px 32px 96px; }
+
+      /* Page header */
+      .page-head {
+        margin-bottom: 56px; padding-bottom: 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      .page-head h1 {
+        margin: 0 0 8px; font-size: 28px; font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .page-head .sub {
+        color: var(--ink-dim); font-size: 12px;
+        text-transform: uppercase; letter-spacing: 0.14em;
+      }
+
+      /* Section */
+      .sec { margin-bottom: 72px; }
+      .sec-head {
+        display: flex; align-items: baseline; gap: 16px;
+        margin-bottom: 24px; padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .sec-num {
+        font-size: 11px; color: var(--ink-2); font-weight: 700;
+        letter-spacing: 0.14em;
+      }
+      .sec-title {
+        font-size: 18px; font-weight: 700; letter-spacing: -0.005em;
+      }
+      .sec-desc {
+        color: var(--ink-dim); font-size: 12px; margin-left: auto;
+      }
+
+      /* Logo grid */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1px; background: var(--border);
+        border: 1px solid var(--border);
+      }
+      .cell {
+        background: var(--surface);
+        aspect-ratio: 1 / 1;
+        display: flex; flex-direction: column;
+        position: relative; overflow: hidden;
+      }
+      .cell-stage {
+        flex: 1;
+        display: flex; align-items: center; justify-content: center;
+        position: relative;
+      }
+      .cell-foot {
+        padding: 8px 12px; border-top: 1px solid var(--border);
+        display: flex; align-items: center; gap: 8px;
+        font-size: 9.5px; color: var(--ink-dim);
+        text-transform: uppercase; letter-spacing: 0.1em;
+        background: rgba(0,0,0,0.18);
+      }
+      .cell-id {
+        color: var(--ink-2); font-weight: 700;
+        margin-right: auto;
+      }
+      .cell-mini {
+        width: 22px; height: 22px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid var(--border-2);
+        background: var(--bg);
+      }
+      .grid-tight { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+      .grid-wide  { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+      /* Wordmark grid */
+      .word-grid {
+        display: grid; grid-template-columns: 1fr; gap: 1px;
+        background: var(--border); border: 1px solid var(--border);
+      }
+      .word-cell {
+        background: var(--surface);
+        padding: 32px 36px;
+        display: flex; align-items: center; gap: 28px;
+      }
+      .word-cell .wm-mark {
+        width: 64px; height: 64px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .word-cell .wm-text { flex: 1; min-width: 0; }
+      .word-cell .wm-foot {
+        font-size: 10px; color: var(--ink-dim);
+        text-transform: uppercase; letter-spacing: 0.14em;
+        text-align: right; min-width: 140px;
+      }
+
+      /* Scale-test row */
+      .scale-row {
+        display: flex; align-items: center; gap: 0;
+        background: var(--surface); border: 1px solid var(--border);
+        padding: 32px;
+      }
+      .scale-step {
+        display: flex; flex-direction: column; align-items: center; gap: 12px;
+        padding: 0 28px; border-right: 1px solid var(--border);
+      }
+      .scale-step:last-child { border-right: none; }
+      .scale-step .label {
+        font-size: 9.5px; color: var(--ink-dim); text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+    </style>
+  </head>
+  <body data-om-id="9e9a3483:13" data-src-loc="5685:5691:40150">
+    <!-- Force the browser to actually fetch every font/weight we reference. SVG <text> webfont rendering otherwise misses unused glyphs. -->
+    <div
+      class="__font-preload"
+      aria-hidden="true"
+      data-om-id="9e9a3483:14"
+      data-src-loc="5830:5877:7122"
+    >
+      <span style="{{}}" data-src-loc="5880:5897:5904"></span>
+      <span
+        style="font-family: 'JetBrains Mono'; font-weight: 400"
+        data-om-id="9e9a3483:15"
+        data-src-loc="5907:5969:5980"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'JetBrains Mono'; font-weight: 500"
+        data-om-id="9e9a3483:16"
+        data-src-loc="5983:6045:6056"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'JetBrains Mono'; font-weight: 600"
+        data-om-id="9e9a3483:17"
+        data-src-loc="6059:6121:6132"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'JetBrains Mono'; font-weight: 700"
+        data-om-id="9e9a3483:18"
+        data-src-loc="6135:6197:6208"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'JetBrains Mono'; font-weight: 800"
+        data-om-id="9e9a3483:19"
+        data-src-loc="6211:6273:6284"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'IBM Plex Mono'; font-weight: 500"
+        data-om-id="9e9a3483:20"
+        data-src-loc="6287:6348:6359"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'IBM Plex Mono'; font-weight: 600"
+        data-om-id="9e9a3483:21"
+        data-src-loc="6362:6423:6434"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'IBM Plex Mono'; font-weight: 700"
+        data-om-id="9e9a3483:22"
+        data-src-loc="6437:6498:6509"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Space Mono'; font-weight: 400"
+        data-om-id="9e9a3483:23"
+        data-src-loc="6512:6570:6581"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Space Mono'; font-weight: 700"
+        data-om-id="9e9a3483:24"
+        data-src-loc="6584:6642:6653"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Space Grotesk'; font-weight: 500"
+        data-om-id="9e9a3483:25"
+        data-src-loc="6656:6717:6728"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Space Grotesk'; font-weight: 700"
+        data-om-id="9e9a3483:26"
+        data-src-loc="6731:6792:6803"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Inter'; font-weight: 700"
+        data-om-id="9e9a3483:27"
+        data-src-loc="6806:6859:6870"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Inter'; font-weight: 800"
+        data-om-id="9e9a3483:28"
+        data-src-loc="6873:6926:6937"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Inter'; font-weight: 900"
+        data-om-id="9e9a3483:29"
+        data-src-loc="6940:6993:7004"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Archivo Black'"
+        data-om-id="9e9a3483:30"
+        data-src-loc="7007:7050:7061"
+        >PpKk</span
+      >
+      <span
+        style="font-family: 'Bebas Neue'"
+        data-om-id="9e9a3483:31"
+        data-src-loc="7064:7104:7115"
+        >PpKk</span
+      >
+    </div>
+
+    <div id="root" data-om-id="9e9a3483:32" data-src-loc="7124:7139:7145"></div>
+
+    <script
+      type="text/babel"
+      data-presets="env,react"
+      data-src-loc="7147:7198:40142"
+    >
+
+      // ============================================================================
+      // ABSORPTION-CURVE GENERATORS — same as before, drawn in a 100×100 viewBox
+      // ============================================================================
+      function curvePath(profile, samples = 60) {
+        const fns = {
+          bolus: (t) => {
+            if (t < 0.005) return Math.pow(t / 0.005, 0.5);
+            return Math.exp(-3 * t);
+          },
+          subq: (t) => (1 / 0.78) * (Math.exp(-1.4 * t) - Math.exp(-6 * t)),
+          oral: (t) => {
+            const lag = 0.06;
+            if (t < lag) return 0;
+            const tt = t - lag;
+            return (0.72 / 0.62) * (Math.exp(-1.0 * tt) - Math.exp(-3.5 * tt));
+          },
+        };
+        const f = fns[profile];
+        const pts = [];
+        for (let i = 0; i <= samples; i++) {
+          const t = i / samples;
+          const y = f(t);
+          pts.push([t * 100, 100 - y * 90]);
+        }
+        return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ');
+      }
+
+      // ============================================================================
+      // CELL — wraps a mark + footer with mini preview
+      // ============================================================================
+      // Quote a font-family name properly so SVG <text> picks it up.
+      // React inlines style fontFamily without quotes which breaks multi-word names.
+      function ff(name) { return `"${name}"`; }
+      function Cell({ id, label, scale = 0.62, children }) {
+        return (
+          <div className="cell">
+            <div className="cell-stage" style={{ padding: '20px' }}>
+              <div style={{ width: `${scale * 100}%`, aspectRatio: '1/1' }}>
+                {children}
+              </div>
+            </div>
+            <div className="cell-foot">
+              <span className="cell-id">{id}</span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+              <span className="cell-mini">
+                <div style={{ width: 14, height: 14 }}>{children}</div>
+              </span>
+            </div>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      // === SECTION 1 — TYPE STUDIES (fonts, weights, casings) ====================
+      // ============================================================================
+
+      // Helpers ---------------------------------------------------------------
+      function TypeMark({ text, font, weight, tracking = '-0.04em', size = 56, dy = 62, x = 50 }) {
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={x} y={dy} textAnchor="middle"
+              fontFamily={ff(font)} fontWeight={weight} fontSize={size}
+              style={{ fill: 'var(--ink)', letterSpacing: tracking }}>
+              {text}
+            </text>
+          </svg>
+        );
+      }
+
+      // Custom geometric "PK" — built letterforms (no font dependence).
+      // Both letters constructed from solid rectangles + diagonals in a 100×100 vbox.
+      function GeoPK({ thickness = 12, oblique = 0 }) {
+        const t = thickness;
+        const top = 22, bot = 78, h = bot - top;       // letter height = 56
+
+        // Layout: P at left, K at right, gap between.
+        const pX = 16;        const pW = 28;            // P bbox: x∈[16,44]
+        const kX = 56;        const kW = 28;            // K bbox: x∈[56,84]
+        const bowlH = h * 0.55;                         // bowl height (top portion of P)
+
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%"
+            style={{ transform: oblique ? `skewX(${oblique}deg)` : 'none', transformOrigin: '50px 50px' }}>
+            {/* ── P ── */}
+            {/* vertical stem (full height) */}
+            <rect x={pX} y={top} width={t} height={h} fill="var(--ink)" />
+            {/* top horizontal of bowl */}
+            <rect x={pX} y={top} width={pW} height={t} fill="var(--ink)" />
+            {/* right vertical of bowl */}
+            <rect x={pX + pW - t} y={top} width={t} height={bowlH} fill="var(--ink)" />
+            {/* bottom horizontal of bowl */}
+            <rect x={pX} y={top + bowlH - t} width={pW} height={t} fill="var(--ink)" />
+
+            {/* ── K ── */}
+            {/* vertical stem */}
+            <rect x={kX} y={top} width={t} height={h} fill="var(--ink)" />
+            {/* upper diagonal arm: from stem-right at midline → top-right corner */}
+            <polygon
+              points={`
+                ${kX + t},${top + h/2 - t/3}
+                ${kX + kW - t * 0.6},${top}
+                ${kX + kW},${top}
+                ${kX + t},${top + h/2 + t/3}
+              `}
+              fill="var(--ink)" />
+            {/* lower diagonal arm: from stem-right at midline → bottom-right corner */}
+            <polygon
+              points={`
+                ${kX + t},${top + h/2 - t/3}
+                ${kX + kW},${bot}
+                ${kX + kW - t * 0.6},${bot}
+                ${kX + t},${top + h/2 + t/3}
+              `}
+              fill="var(--ink)" />
+          </svg>
+        );
+      }
+
+      // Lockup of curve overlay variants for type+curve experiments
+      function CurveOver({ profile, alignY = 36, scale = 0.96, scaleY = 0.55, weight = 5, opacity = 0.9 }) {
+        const path = curvePath(profile);
+        return (
+          <g transform={`translate(${(100 - scale * 100) / 2}, ${alignY}) scale(${scale}, ${scaleY})`}>
+            <path d={path} fill="none" stroke="var(--ink)" strokeWidth={weight}
+              strokeLinejoin="round" strokeLinecap="round" opacity={opacity} />
+          </g>
+        );
+      }
+
+      // ============================================================================
+      // === MARKS — TYPE-ONLY studies (no curve) ==================================
+      // ============================================================================
+      const TypeStudies = [
+        { id: 'T01', label: 'JetBrains Mono · 700',     mark: <TypeMark text="PK" font="JetBrains Mono" weight={700} /> },
+        { id: 'T02', label: 'JetBrains Mono · 800',     mark: <TypeMark text="PK" font="JetBrains Mono" weight={800} size={60} tracking="-0.06em" /> },
+        { id: 'T03', label: 'JetBrains Mono · 500',     mark: <TypeMark text="PK" font="JetBrains Mono" weight={500} tracking="-0.02em" /> },
+        { id: 'T04', label: 'JetBrains Mono · tracked', mark: <TypeMark text="PK" font="JetBrains Mono" weight={700} tracking="0.04em" size={48} /> },
+
+        { id: 'T05', label: 'IBM Plex Mono · 600',      mark: <TypeMark text="PK" font="IBM Plex Mono" weight={600} tracking="-0.02em" /> },
+        { id: 'T06', label: 'IBM Plex Mono · 700',      mark: <TypeMark text="PK" font="IBM Plex Mono" weight={700} tracking="-0.04em" /> },
+        { id: 'T07', label: 'Space Mono · 700',         mark: <TypeMark text="PK" font="Space Mono" weight={700} tracking="-0.03em" size={52} /> },
+        { id: 'T08', label: 'Space Grotesk · 700',      mark: <TypeMark text="PK" font="Space Grotesk" weight={700} tracking="-0.05em" size={62} /> },
+
+        { id: 'T09', label: 'Inter · 800',              mark: <TypeMark text="PK" font="Inter" weight={800} tracking="-0.06em" size={62} /> },
+        { id: 'T10', label: 'Inter · 900',              mark: <TypeMark text="PK" font="Inter" weight={900} tracking="-0.07em" size={64} /> },
+        { id: 'T11', label: 'Archivo Black',            mark: <TypeMark text="PK" font="Archivo Black" weight={400} tracking="-0.05em" size={62} /> },
+        { id: 'T12', label: 'Bebas Neue · condensed',   mark: <TypeMark text="PK" font="Bebas Neue" weight={400} tracking="0.02em" size={78} dy={68} /> },
+
+        { id: 'T13', label: 'Pk · title case (Plex)',   mark: <TypeMark text="Pk" font="IBM Plex Mono" weight={700} /> },
+        { id: 'T14', label: 'pK · pKa convention',      mark: <TypeMark text="pK" font="JetBrains Mono" weight={600} dy={64} /> },
+        { id: 'T15', label: 'pk · all lower',           mark: <TypeMark text="pk" font="JetBrains Mono" weight={700} dy={68} /> },
+        { id: 'T16', label: 'PK · oblique 8°',          mark: (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={50} y={62} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 56, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em',
+                transform: 'skewX(-8deg)', transformOrigin: '50px 50px' }}>
+              PK
+            </text>
+          </svg>
+        )},
+      ];
+
+      // ============================================================================
+      // === MARKS — GEOMETRIC CONSTRUCTIONS (built letterforms) ==================
+      // ============================================================================
+      const GeoStudies = [
+        { id: 'G01', label: 'Built · square 12u', mark: <GeoPK thickness={12} /> },
+        { id: 'G02', label: 'Built · heavy 16u',  mark: <GeoPK thickness={16} /> },
+        { id: 'G03', label: 'Built · light 8u',   mark: <GeoPK thickness={8} /> },
+        { id: 'G04', label: 'Built · oblique 8°', mark: <GeoPK thickness={12} oblique={-8} /> },
+      ];
+
+      // ============================================================================
+      // === MARKS — CURVE-ONLY (silhouette studies) ===============================
+      // ============================================================================
+      function CurveMark({ profile, weight = 3, filled = true, baseline = true, framed = false, padding = 8 }) {
+        const path = curvePath(profile);
+        const area = `${path} L100,100 L0,100 Z`;
+        const vb = `${-padding} ${-padding} ${100 + padding * 2} ${100 + padding * 2}`;
+        return (
+          <svg viewBox={vb} width="100%" height="100%">
+            {framed && <rect x={-padding + 4} y={-padding + 4} width={100 + padding * 2 - 8} height={100 + padding * 2 - 8} fill="none" stroke="var(--ink)" strokeWidth={1.5} />}
+            {baseline && <line x1={0} x2={100} y1={100} y2={100} stroke="var(--ink)" strokeWidth={1.5} opacity={0.55} />}
+            {filled && <path d={area} fill="var(--ink)" fillOpacity={0.18} />}
+            <path d={path} fill="none" stroke="var(--ink)" strokeWidth={weight}
+              strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+        );
+      }
+
+      const CurveStudies = [
+        // Bolus
+        { id: 'C01', label: 'Bolus · stroke 3',  mark: <CurveMark profile="bolus" weight={3} filled={false} /> },
+        { id: 'C02', label: 'Bolus · stroke 5',  mark: <CurveMark profile="bolus" weight={5} filled={false} /> },
+        { id: 'C03', label: 'Bolus · filled',    mark: <CurveMark profile="bolus" weight={3} filled={true} /> },
+        { id: 'C04', label: 'Bolus · framed',    mark: <CurveMark profile="bolus" weight={3} filled={true} framed={true} /> },
+
+        // Sub-Q
+        { id: 'C05', label: 'Sub-Q · stroke 3',  mark: <CurveMark profile="subq" weight={3} filled={false} /> },
+        { id: 'C06', label: 'Sub-Q · stroke 5',  mark: <CurveMark profile="subq" weight={5} filled={false} /> },
+        { id: 'C07', label: 'Sub-Q · filled',    mark: <CurveMark profile="subq" weight={3} filled={true} /> },
+        { id: 'C08', label: 'Sub-Q · framed',    mark: <CurveMark profile="subq" weight={3} filled={true} framed={true} /> },
+
+        // Oral
+        { id: 'C09', label: 'Oral · stroke 3',   mark: <CurveMark profile="oral" weight={3} filled={false} /> },
+        { id: 'C10', label: 'Oral · stroke 5',   mark: <CurveMark profile="oral" weight={5} filled={false} /> },
+        { id: 'C11', label: 'Oral · filled',     mark: <CurveMark profile="oral" weight={3} filled={true} /> },
+        { id: 'C12', label: 'Oral · framed',     mark: <CurveMark profile="oral" weight={3} filled={true} framed={true} /> },
+
+        // No baseline
+        { id: 'C13', label: 'Sub-Q · no baseline',  mark: <CurveMark profile="subq" weight={4} filled={false} baseline={false} /> },
+        { id: 'C14', label: 'Bolus · no baseline',  mark: <CurveMark profile="bolus" weight={4} filled={false} baseline={false} /> },
+        { id: 'C15', label: 'Oral · no baseline',   mark: <CurveMark profile="oral" weight={4} filled={false} baseline={false} /> },
+
+        // Stacked all three
+        { id: 'C16', label: 'All three · stroke', mark: (
+          <svg viewBox="-8 -8 116 116" width="100%" height="100%">
+            <line x1={0} x2={100} y1={100} y2={100} stroke="var(--ink)" strokeWidth={1.5} opacity={0.55} />
+            <path d={curvePath('bolus')} fill="none" stroke="var(--ink)" strokeWidth={2} opacity={0.8} />
+            <path d={curvePath('subq')}  fill="none" stroke="var(--ink)" strokeWidth={2} opacity={0.8} />
+            <path d={curvePath('oral')}  fill="none" stroke="var(--ink)" strokeWidth={2} opacity={0.8} />
+          </svg>
+        )},
+      ];
+
+      // ============================================================================
+      // === MARKS — TYPE + CURVE COMPOSITIONS =====================================
+      // ============================================================================
+
+      // Underline curve: PK above, curve below. Three shapes × type variations.
+      function UnderlineMark({ profile, font = 'JetBrains Mono', weight = 700, size = 44, curveScale = 0.78, curveYScale = 0.28, gap = 0 }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={50} y={48 - gap} textAnchor="middle"
+              style={{ fontFamily: ff(font), fontSize: size, fontWeight: weight,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+            <g transform={`translate(${(100 - curveScale * 100) / 2}, ${56 + gap}) scale(${curveScale}, ${curveYScale})`}>
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={5 / curveYScale * 0.4}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+          </svg>
+        );
+      }
+
+      // Curve-on-top: curve above PK
+      function OverlineMark({ profile, font = 'JetBrains Mono', weight = 700, size = 44 }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <g transform="translate(15, 12) scale(0.7, 0.28)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={6}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+            <text x={50} y={72} textAnchor="middle"
+              style={{ fontFamily: ff(font), fontSize: size, fontWeight: weight,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+          </svg>
+        );
+      }
+
+      // Stacked architecture: PK, rule, curve underneath
+      function StackedMark({ profile, font = 'JetBrains Mono', weight = 700, size = 38 }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={50} y={42} textAnchor="middle"
+              style={{ fontFamily: ff(font), fontSize: size, fontWeight: weight,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+            <line x1={14} x2={86} y1={50} y2={50} stroke="var(--ink)" strokeWidth={1.5} opacity={0.7} />
+            <g transform="translate(14, 56) scale(0.72, 0.36)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={4}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+          </svg>
+        );
+      }
+
+      // Curve bracketed by stems: vertical stem | curve | vertical stem then PK overlay
+      function FramedMark({ profile, font = 'JetBrains Mono', weight = 700, size = 38 }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            {/* Frame (open top) */}
+            <path d="M 10 18 L 10 82 L 90 82 L 90 18" fill="none" stroke="var(--ink)" strokeWidth={2} />
+            <text x={50} y={50} textAnchor="middle"
+              style={{ fontFamily: ff(font), fontSize: size, fontWeight: weight,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+            <g transform="translate(14, 56) scale(0.72, 0.26)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={5}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+          </svg>
+        );
+      }
+
+      // Curve as a "crown" — replaces top horizontal of P and arms of K
+      function CrownMark({ profile }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            {/* Curve as overhead arch, stretched wide and shallow */}
+            <g transform="translate(8, 14) scale(0.84, 0.18)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={7}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+            <text x={50} y={70} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 50, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+          </svg>
+        );
+      }
+
+      // Behind: curve fills background, PK overlays
+      function BehindMark({ profile, opacity = 0.22 }) {
+        const path = curvePath(profile);
+        const area = `${path} L100,100 L0,100 Z`;
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <path d={area} fill="var(--ink)" fillOpacity={opacity} />
+            <path d={path} fill="none" stroke="var(--ink)" strokeWidth={1.5} opacity={0.6} />
+            <text x={50} y={62} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 52, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+          </svg>
+        );
+      }
+
+      // Curve + PK side-by-side (horizontal lockup inside the square)
+      function SideMark({ profile }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <g transform="translate(4, 28) scale(0.4, 0.44)">
+              <line x1={0} x2={100} y1={100} y2={100} stroke="var(--ink)" strokeWidth={2.5} opacity={0.6} />
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={6}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+            <text x={62} y={62} textAnchor="start"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 36, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+          </svg>
+        );
+      }
+
+      // Curve with peak dose marker + PK
+      function PeakMark({ profile }) {
+        const peakT = { bolus: 0.005, subq: 0.32, oral: 0.43 }[profile];
+        const fns = {
+          bolus: (t) => Math.exp(-3 * t),
+          subq:  (t) => (1/0.78) * (Math.exp(-1.4*t) - Math.exp(-6*t)),
+          oral:  (t) => { const lag=0.06; if (t<lag) return 0; const tt=t-lag; return (0.72/0.62)*(Math.exp(-1.0*tt) - Math.exp(-3.5*tt)); },
+        };
+        const peakY = 100 - 90 * fns[profile](peakT);
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={50} y={42} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 36, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+            <g transform="translate(8, 52) scale(0.84, 0.42)">
+              <line x1={0} x2={100} y1={100} y2={100} stroke="var(--ink)" strokeWidth={1.5} opacity={0.55} />
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={3.5}
+                strokeLinejoin="round" strokeLinecap="round" />
+              <circle cx={peakT * 100} cy={peakY} r={5} fill="var(--ink)" />
+            </g>
+          </svg>
+        );
+      }
+
+      // Replace K's diagonals with mini curves
+      function CurveKMark({ profile, baseline = false }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={28} y={62} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 56, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              P
+            </text>
+            <rect x={50} y={26} width={6} height={42} fill="var(--ink)" />
+            <g transform="translate(56, 26) scale(0.34, 0.42)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={5}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+            <g transform="translate(56, 68) scale(0.34, -0.42)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={5}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+          </svg>
+        );
+      }
+
+      // Two-line tittle: lowercase pk, the dot of "p" replaced by a tiny curve
+      function DotCurveMark({ profile }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={50} y={72} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 50, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              pk
+            </text>
+            <g transform="translate(22, 14) scale(0.56, 0.16)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={9}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+          </svg>
+        );
+      }
+
+      // Bracket lockup with curve inside [PK]
+      function BracketMark({ profile }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <path d="M 14 20 L 6 20 L 6 80 L 14 80" fill="none" stroke="var(--ink)" strokeWidth={3} strokeLinejoin="miter" />
+            <path d="M 86 20 L 94 20 L 94 80 L 86 80" fill="none" stroke="var(--ink)" strokeWidth={3} strokeLinejoin="miter" />
+            <text x={50} y={48} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 28, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.03em' }}>
+              PK
+            </text>
+            <g transform="translate(18, 56) scale(0.64, 0.22)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={5}
+                strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+          </svg>
+        );
+      }
+
+      // Negative space — knockout PK from a filled curve area
+      function NegativeMark({ profile }) {
+        const path = curvePath(profile);
+        const area = `${path} L100,100 L0,100 Z`;
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <defs>
+              <mask id={`m-${profile}`}>
+                <rect width={100} height={100} fill="white" />
+                <text x={50} y={70} textAnchor="middle"
+                  style={{ fontFamily: '"JetBrains Mono"', fontSize: 56, fontWeight: 800,
+                    letterSpacing: '-0.05em', fill: 'black' }}>
+                  PK
+                </text>
+              </mask>
+            </defs>
+            <path d={area} fill="var(--ink)" mask={`url(#m-${profile})`} />
+          </svg>
+        );
+      }
+
+      // Tick marks beneath: PK with small dose ticks where doses would land
+      function TickedMark({ profile }) {
+        const path = curvePath(profile);
+        return (
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            <text x={50} y={48} textAnchor="middle"
+              style={{ fontFamily: '"JetBrains Mono"', fontSize: 38, fontWeight: 700,
+                fill: 'var(--ink)', letterSpacing: '-0.04em' }}>
+              PK
+            </text>
+            <g transform="translate(8, 56) scale(0.84, 0.32)">
+              <path d={path} fill="none" stroke="var(--ink)" strokeWidth={4}
+                strokeLinejoin="round" strokeLinecap="round" />
+              <line x1={0} x2={100} y1={100} y2={100} stroke="var(--ink)" strokeWidth={2} opacity={0.55} />
+              {[0, 25, 50, 75, 100].map((x) => (
+                <line key={x} x1={x} x2={x} y1={100} y2={108} stroke="var(--ink)" strokeWidth={2} />
+              ))}
+            </g>
+          </svg>
+        );
+      }
+
+      const ComposeStudies = [
+        // Underlines (the strongest baseline lockup)
+        { id: 'L01', label: 'Underline · sub-Q · JBM',     mark: <UnderlineMark profile="subq"  font="JetBrains Mono" weight={700} /> },
+        { id: 'L02', label: 'Underline · bolus · JBM',     mark: <UnderlineMark profile="bolus" font="JetBrains Mono" weight={700} /> },
+        { id: 'L03', label: 'Underline · oral · JBM',      mark: <UnderlineMark profile="oral"  font="JetBrains Mono" weight={700} /> },
+        { id: 'L04', label: 'Underline · sub-Q · Plex',    mark: <UnderlineMark profile="subq"  font="IBM Plex Mono"  weight={700} /> },
+        { id: 'L05', label: 'Underline · sub-Q · Inter 800', mark: <UnderlineMark profile="subq" font="Inter" weight={800} size={50} /> },
+        { id: 'L06', label: 'Underline · sub-Q · Archivo Black', mark: <UnderlineMark profile="subq" font="Archivo Black" weight={400} size={48} /> },
+        { id: 'L07', label: 'Underline · sub-Q · Bebas',   mark: <UnderlineMark profile="subq" font="Bebas Neue" weight={400} size={68} curveScale={0.7} /> },
+        { id: 'L08', label: 'Underline · sub-Q · Space Grotesk', mark: <UnderlineMark profile="subq" font="Space Grotesk" weight={700} size={50} /> },
+
+        // Stacked (rule between)
+        { id: 'L09', label: 'Stacked · sub-Q',  mark: <StackedMark profile="subq" /> },
+        { id: 'L10', label: 'Stacked · bolus',  mark: <StackedMark profile="bolus" /> },
+        { id: 'L11', label: 'Stacked · oral',   mark: <StackedMark profile="oral" /> },
+
+        // Frame
+        { id: 'L12', label: 'Open frame · sub-Q', mark: <FramedMark profile="subq" /> },
+        { id: 'L13', label: 'Open frame · bolus', mark: <FramedMark profile="bolus" /> },
+
+        // Crown
+        { id: 'L14', label: 'Crown · sub-Q',  mark: <CrownMark profile="subq" /> },
+        { id: 'L15', label: 'Crown · bolus',  mark: <CrownMark profile="bolus" /> },
+
+        // Behind / overlay
+        { id: 'L16', label: 'Behind · sub-Q (subtle)', mark: <BehindMark profile="subq" opacity={0.16} /> },
+        { id: 'L17', label: 'Behind · sub-Q (strong)', mark: <BehindMark profile="subq" opacity={0.32} /> },
+
+        // Side by side
+        { id: 'L18', label: 'Side · sub-Q', mark: <SideMark profile="subq" /> },
+        { id: 'L19', label: 'Side · bolus', mark: <SideMark profile="bolus" /> },
+
+        // Peak marker
+        { id: 'L20', label: 'Peak marked · sub-Q', mark: <PeakMark profile="subq" /> },
+
+        // K-arms as curves (custom letterform)
+        { id: 'L21', label: 'K-arms as curves · sub-Q', mark: <CurveKMark profile="subq" /> },
+
+        // Dot curve (lowercase pk)
+        { id: 'L22', label: 'pk · curve as tittle', mark: <DotCurveMark profile="subq" /> },
+
+        // Brackets
+        { id: 'L23', label: '[PK] · sub-Q inside',  mark: <BracketMark profile="subq" /> },
+
+        // Negative space
+        { id: 'L24', label: 'Knockout · sub-Q',     mark: <NegativeMark profile="subq" /> },
+        { id: 'L25', label: 'Knockout · bolus',     mark: <NegativeMark profile="bolus" /> },
+        { id: 'L26', label: 'Knockout · oral',      mark: <NegativeMark profile="oral" /> },
+
+        // Ticked
+        { id: 'L27', label: 'Ticked baseline · sub-Q', mark: <TickedMark profile="subq" /> },
+
+        // Overline
+        { id: 'L28', label: 'Overline · sub-Q', mark: <OverlineMark profile="subq" /> },
+        { id: 'L29', label: 'Overline · bolus', mark: <OverlineMark profile="bolus" /> },
+      ];
+
+      // ============================================================================
+      // === SCALE TEST — same mark at 96/64/40/24/16 px ===========================
+      // ============================================================================
+      function ScaleRow({ render, label }) {
+        const sizes = [96, 64, 40, 24, 16];
+        return (
+          <div className="scale-row">
+            {sizes.map((s) => (
+              <div key={s} className="scale-step">
+                <div style={{ width: s, height: s, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {render()}
+                </div>
+                <div className="label">{s}px</div>
+              </div>
+            ))}
+            <div style={{ marginLeft: 'auto', paddingLeft: 28, fontSize: 11, color: 'var(--ink-2)',
+              textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+              {label}
+            </div>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      // === WORDMARK LOCKUPS ======================================================
+      // ============================================================================
+      function Wordmark({ markProfile = 'subq', name = 'Protokol', sub = null, markEl, font = 'JetBrains Mono', weight = 700, size = 36 }) {
+        return (
+          <div className="word-cell">
+            <div className="wm-mark">
+              {markEl || <UnderlineMark profile={markProfile} />}
+            </div>
+            <div className="wm-text">
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: ff(font), fontSize: size, fontWeight: weight,
+                  letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  {name}
+                </span>
+                {sub && (
+                  <span style={{ fontFamily: '"JetBrains Mono"', fontSize: 11, fontWeight: 600,
+                    color: 'var(--ink-2)', letterSpacing: '0.2em',
+                    padding: '3px 8px', border: '1px solid var(--ink-2)' }}>
+                    {sub}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontFamily: '"JetBrains Mono"', fontSize: 11, color: 'var(--ink-dim)',
+                marginTop: 6, letterSpacing: '0.04em' }}>
+                Track the protocol.
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      // APP
+      // ============================================================================
+      function App() {
+        return (
+          <div className="wrap">
+            <div className="page-head">
+              <h1>Protokol — logo / mark exploration</h1>
+              <div className="sub">
+                PK monogram studies · Built letterforms · Three absorption curves · Type + curve compositions · Scale & wordmark
+              </div>
+            </div>
+
+            {/* 01 · Type-only studies */}
+            <section className="sec">
+              <div className="sec-head">
+                <span className="sec-num">01</span>
+                <span className="sec-title">Type alone — does the monogram hold?</span>
+                <span className="sec-desc">{TypeStudies.length} variations across font / weight / case</span>
+              </div>
+              <div className="grid grid-tight">
+                {TypeStudies.map((s) => <Cell key={s.id} id={s.id} label={s.label}>{s.mark}</Cell>)}
+              </div>
+            </section>
+
+            {/* 02 · Built letterforms */}
+            <section className="sec">
+              <div className="sec-head">
+                <span className="sec-num">02</span>
+                <span className="sec-title">Built letterforms (non-typographic)</span>
+                <span className="sec-desc">Custom geometric construction — full control of stroke & proportion</span>
+              </div>
+              <div className="grid grid-tight">
+                {GeoStudies.map((s) => <Cell key={s.id} id={s.id} label={s.label}>{s.mark}</Cell>)}
+              </div>
+            </section>
+
+            {/* 03 · Curve-only studies */}
+            <section className="sec">
+              <div className="sec-head">
+                <span className="sec-num">03</span>
+                <span className="sec-title">Curve alone — silhouette studies</span>
+                <span className="sec-desc">Three absorption profiles, multiple weights and treatments</span>
+              </div>
+              <div className="grid grid-tight">
+                {CurveStudies.map((s) => <Cell key={s.id} id={s.id} label={s.label}>{s.mark}</Cell>)}
+              </div>
+            </section>
+
+            {/* 04 · Compositions */}
+            <section className="sec">
+              <div className="sec-head">
+                <span className="sec-num">04</span>
+                <span className="sec-title">Type + curve compositions</span>
+                <span className="sec-desc">{ComposeStudies.length} layout/architecture experiments</span>
+              </div>
+              <div className="grid grid-tight">
+                {ComposeStudies.map((s) => <Cell key={s.id} id={s.id} label={s.label}>{s.mark}</Cell>)}
+              </div>
+            </section>
+
+            {/* 05 · Scale tests */}
+            <section className="sec">
+              <div className="sec-head">
+                <span className="sec-num">05</span>
+                <span className="sec-title">Scale tests — does it survive at 16px?</span>
+                <span className="sec-desc">Four candidates rendered 96 → 16 px</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <ScaleRow label="Underline · Sub-Q" render={() => <UnderlineMark profile="subq" />} />
+                <ScaleRow label="Underline · Bolus" render={() => <UnderlineMark profile="bolus" />} />
+                <ScaleRow label="Stacked · Sub-Q" render={() => <StackedMark profile="subq" />} />
+                <ScaleRow label="Type only · JBM 700" render={() => <TypeMark text="PK" font="JetBrains Mono" weight={700} />} />
+                <ScaleRow label="Built · 12u" render={() => <GeoPK thickness={12} />} />
+                <ScaleRow label="Knockout · Sub-Q" render={() => <NegativeMark profile="subq" />} />
+              </div>
+            </section>
+
+            {/* 06 · Wordmark lockups */}
+            <section className="sec">
+              <div className="sec-head">
+                <span className="sec-num">06</span>
+                <span className="sec-title">Wordmark lockups</span>
+                <span className="sec-desc">"Protokol" and "Protokol Lab" alongside top mark candidates</span>
+              </div>
+              <div className="word-grid">
+                <Wordmark markEl={<UnderlineMark profile="subq" />} name="Protokol" />
+                <Wordmark markEl={<UnderlineMark profile="subq" />} name="Protokol" sub="LAB" />
+                <Wordmark markEl={<UnderlineMark profile="bolus" />} name="Protokol" sub="LAB" />
+                <Wordmark markEl={<UnderlineMark profile="oral" />} name="Protokol" sub="LAB" />
+                <Wordmark markEl={<StackedMark profile="subq" />} name="Protokol" sub="LAB" />
+                <Wordmark markEl={<NegativeMark profile="subq" />} name="Protokol" sub="LAB" />
+                <Wordmark markEl={<GeoPK thickness={12} />} name="Protokol" sub="LAB" />
+                <Wordmark markEl={<TypeMark text="PK" font="JetBrains Mono" weight={700} />} name="Protokol" sub="LAB" />
+                <Wordmark markEl={<UnderlineMark profile="subq" />} name="Protokol" sub="LAB" font="Inter" weight={800} size={38} />
+                <Wordmark markEl={<UnderlineMark profile="subq" />} name="Protokol" sub="LAB" font="Space Grotesk" weight={700} size={36} />
+              </div>
+            </section>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+  </body>
+</html>
+<script type="application/json" id="__om_srcmap">
+  {"gen":"9e9a3483","entries":[{"id":"9e9a3483:0","tag":"html","openStart":16,"attrEnd":31,"openEnd":32,"closeEnd":40158,"textRuns":[[32,33],[5684,5685],[40150,40151]],"parentId":null,"childIds":["9e9a3483:1","9e9a3483:13"]},{"id":"9e9a3483:1","tag":"head","openStart":33,"attrEnd":38,"openEnd":39,"closeEnd":5684,"textRuns":[[39,40],[64,65],[109,110],[180,182],[241,242],[310,311],[435,436],[555,556],[664,665],[784,785],[904,905],[1003,1004],[1099,1101],[1335,1337],[1524,1525],[1720,1721],[1908,1910],[5676,5677]],"parentId":"9e9a3483:0","childIds":["9e9a3483:2","9e9a3483:3","9e9a3483:4","9e9a3483:5","9e9a3483:6","9e9a3483:7","9e9a3483:8","9e9a3483:9","9e9a3483:10","9e9a3483:11","9e9a3483:12"]},{"id":"9e9a3483:2","tag":"meta","openStart":40,"attrEnd":61,"openEnd":64,"closeEnd":64,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:3","tag":"meta","openStart":110,"attrEnd":177,"openEnd":180,"closeEnd":180,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:4","tag":"link","openStart":182,"attrEnd":240,"openEnd":241,"closeEnd":241,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:5","tag":"link","openStart":242,"attrEnd":309,"openEnd":310,"closeEnd":310,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:6","tag":"link","openStart":311,"attrEnd":434,"openEnd":435,"closeEnd":435,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:7","tag":"link","openStart":436,"attrEnd":554,"openEnd":555,"closeEnd":555,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:8","tag":"link","openStart":556,"attrEnd":663,"openEnd":664,"closeEnd":664,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:9","tag":"link","openStart":665,"attrEnd":783,"openEnd":784,"closeEnd":784,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:10","tag":"link","openStart":785,"attrEnd":903,"openEnd":904,"closeEnd":904,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:11","tag":"link","openStart":905,"attrEnd":1002,"openEnd":1003,"closeEnd":1003,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:12","tag":"link","openStart":1004,"attrEnd":1098,"openEnd":1099,"closeEnd":1099,"textRuns":[],"parentId":"9e9a3483:1","childIds":[]},{"id":"9e9a3483:13","tag":"body","openStart":5685,"attrEnd":5690,"openEnd":5691,"closeEnd":40150,"textRuns":[[5691,5692],[5829,5830],[7122,7124],[7145,7147],[40142,40143]],"parentId":"9e9a3483:0","childIds":["9e9a3483:14","9e9a3483:32"]},{"id":"9e9a3483:14","tag":"div","openStart":5830,"attrEnd":5876,"openEnd":5877,"closeEnd":7122,"textRuns":[[5877,5880],[5904,5907],[5980,5983],[6056,6059],[6132,6135],[6208,6211],[6284,6287],[6359,6362],[6434,6437],[6509,6512],[6581,6584],[6653,6656],[6728,6731],[6803,6806],[6870,6873],[6937,6940],[7004,7007],[7061,7064],[7115,7116]],"parentId":"9e9a3483:13","childIds":["9e9a3483:15","9e9a3483:16","9e9a3483:17","9e9a3483:18","9e9a3483:19","9e9a3483:20","9e9a3483:21","9e9a3483:22","9e9a3483:23","9e9a3483:24","9e9a3483:25","9e9a3483:26","9e9a3483:27","9e9a3483:28","9e9a3483:29","9e9a3483:30","9e9a3483:31"]},{"id":"9e9a3483:15","tag":"span","openStart":5907,"attrEnd":5968,"openEnd":5969,"closeEnd":5980,"styleAttr":[5920,5967],"textRuns":[[5969,5973]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:16","tag":"span","openStart":5983,"attrEnd":6044,"openEnd":6045,"closeEnd":6056,"styleAttr":[5996,6043],"textRuns":[[6045,6049]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:17","tag":"span","openStart":6059,"attrEnd":6120,"openEnd":6121,"closeEnd":6132,"styleAttr":[6072,6119],"textRuns":[[6121,6125]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:18","tag":"span","openStart":6135,"attrEnd":6196,"openEnd":6197,"closeEnd":6208,"styleAttr":[6148,6195],"textRuns":[[6197,6201]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:19","tag":"span","openStart":6211,"attrEnd":6272,"openEnd":6273,"closeEnd":6284,"styleAttr":[6224,6271],"textRuns":[[6273,6277]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:20","tag":"span","openStart":6287,"attrEnd":6347,"openEnd":6348,"closeEnd":6359,"styleAttr":[6300,6346],"textRuns":[[6348,6352]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:21","tag":"span","openStart":6362,"attrEnd":6422,"openEnd":6423,"closeEnd":6434,"styleAttr":[6375,6421],"textRuns":[[6423,6427]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:22","tag":"span","openStart":6437,"attrEnd":6497,"openEnd":6498,"closeEnd":6509,"styleAttr":[6450,6496],"textRuns":[[6498,6502]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:23","tag":"span","openStart":6512,"attrEnd":6569,"openEnd":6570,"closeEnd":6581,"styleAttr":[6525,6568],"textRuns":[[6570,6574]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:24","tag":"span","openStart":6584,"attrEnd":6641,"openEnd":6642,"closeEnd":6653,"styleAttr":[6597,6640],"textRuns":[[6642,6646]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:25","tag":"span","openStart":6656,"attrEnd":6716,"openEnd":6717,"closeEnd":6728,"styleAttr":[6669,6715],"textRuns":[[6717,6721]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:26","tag":"span","openStart":6731,"attrEnd":6791,"openEnd":6792,"closeEnd":6803,"styleAttr":[6744,6790],"textRuns":[[6792,6796]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:27","tag":"span","openStart":6806,"attrEnd":6858,"openEnd":6859,"closeEnd":6870,"styleAttr":[6819,6857],"textRuns":[[6859,6863]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:28","tag":"span","openStart":6873,"attrEnd":6925,"openEnd":6926,"closeEnd":6937,"styleAttr":[6886,6924],"textRuns":[[6926,6930]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:29","tag":"span","openStart":6940,"attrEnd":6992,"openEnd":6993,"closeEnd":7004,"styleAttr":[6953,6991],"textRuns":[[6993,6997]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:30","tag":"span","openStart":7007,"attrEnd":7049,"openEnd":7050,"closeEnd":7061,"styleAttr":[7020,7048],"textRuns":[[7050,7054]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:31","tag":"span","openStart":7064,"attrEnd":7103,"openEnd":7104,"closeEnd":7115,"styleAttr":[7077,7102],"textRuns":[[7104,7108]],"parentId":"9e9a3483:14","childIds":[]},{"id":"9e9a3483:32","tag":"div","openStart":7124,"attrEnd":7138,"openEnd":7139,"closeEnd":7145,"textRuns":[],"parentId":"9e9a3483:13","childIds":[]}]}
+</script>

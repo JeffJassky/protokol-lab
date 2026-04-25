@@ -183,7 +183,7 @@ router.get('/search', async (req, res) => {
     const t0 = Date.now();
     const resp = await fetch(url, {
       headers: {
-        'User-Agent': 'VitalityTracker/0.1 (github.com/JeffJassky/vitality-tracker)',
+        'User-Agent': 'ProtokolLab/0.1 (github.com/JeffJassky/protokol-lab)',
         Accept: 'application/json',
       },
     });
@@ -286,7 +286,7 @@ router.get('/barcode/:code', async (req, res) => {
     const t0 = Date.now();
     const resp = await fetch(url, {
       headers: {
-        'User-Agent': 'VitalityTracker/0.1 (github.com/JeffJassky/vitality-tracker)',
+        'User-Agent': 'ProtokolLab/0.1 (github.com/JeffJassky/protokol-lab)',
         Accept: 'application/json',
       },
     });

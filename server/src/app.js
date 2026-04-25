@@ -38,7 +38,24 @@ export function createApp({ serveClient = true } = {}) {
 
   app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 
-  app.use(helmet());
+  // CSP: allow Google Identity Services (GIS) for Sign in with Google.
+  // Theme bootstrap lives in /theme-init.js (external) so no inline-script hash
+  // is needed — keep it that way to avoid hash-maintenance churn.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'script-src': ["'self'", 'https://accounts.google.com/gsi/client'],
+          'script-src-elem': ["'self'", 'https://accounts.google.com/gsi/client'],
+          'frame-src': ["'self'", 'https://accounts.google.com/gsi/'],
+          'connect-src': ["'self'", 'https://accounts.google.com/gsi/'],
+          'style-src': ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style'],
+          'img-src': ["'self'", 'data:', 'https://*.googleusercontent.com'],
+        },
+      },
+    })
+  );
 
   const corsOrigin = isProd
     ? (process.env.APP_URL || false)
