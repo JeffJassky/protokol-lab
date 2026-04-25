@@ -48,7 +48,7 @@ async function handleLogout() {
     <OnboardingBanner />
     <nav class="top-nav">
       <router-link to="/" class="brand" aria-label="Protokol Lab — home">
-        <BrandLockup class="brand-desktop" :size="16" />
+        <BrandLockup class="brand-desktop" :size="16" :show-icon="false" />
         <BrandLockup class="brand-mobile" :size="16" :show-wordmark="false" />
       </router-link>
       <div class="nav-links">
@@ -56,7 +56,9 @@ async function handleLogout() {
         <router-link to="/dashboard">Dashboard</router-link>
         <router-link to="/settings">Settings</router-link>
         <router-link to="/support">Support</router-link>
-        <router-link v-if="auth.user?.isAdmin" to="/admin" class="admin-link">Admin</router-link>
+        <router-link v-if="auth.user?.isAdmin" to="/admin" class="admin-link"
+          >Admin</router-link
+        >
         <button
           class="theme-toggle"
           type="button"
