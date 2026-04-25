@@ -53,8 +53,15 @@ export function createApp({ serveClient = true } = {}) {
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
-          'script-src': ["'self'", 'https://accounts.google.com/gsi/client'],
-          'script-src-elem': ["'self'", 'https://accounts.google.com/gsi/client'],
+          // 'unsafe-inline' is required because Google's GIS library injects a
+          // bootstrap inline script (tagged //# sourceURL=prepare.js). Their
+          // recommended hash drifts whenever Google updates the library, so
+          // pinning it would break sign-in on every Google deploy. Tradeoff:
+          // weakens CSP's inline-script XSS guard. Acceptable here — Vue's
+          // template binding doesn't introduce HTML-injection vectors and we
+          // don't render user-supplied HTML.
+          'script-src': ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/client'],
+          'script-src-elem': ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/client'],
           'frame-src': ["'self'", 'https://accounts.google.com/gsi/'],
           'connect-src': ["'self'", 'https://accounts.google.com/gsi/'],
           'style-src': [
