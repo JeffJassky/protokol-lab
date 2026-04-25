@@ -194,3 +194,23 @@ button:focus-visible {
   font-size: var(--font-size-s);
   margin: 0;
 }
+
+/* ---- Mobile section containers ----------------------------------- *
+ * Section cards (.card, .meal-card, etc) are defined per-page with
+ * their own padding/border. On mobile we want them edge-to-edge with
+ * tighter vertical gaps. !important is used here because Vue's scoped
+ * styles add an attribute selector that out-specifies the global rule
+ * — this is a layout invariant we want to enforce regardless of page.
+ */
+@media (max-width: 768px) {
+  .card,
+  .meal-card,
+  .price-card {
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: var(--space-2) !important;
+  }
+}

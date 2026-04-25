@@ -245,4 +245,99 @@ async function handleLogout() {
   background: var(--primary-hover);
   transform: scale(1.05);
 }
+
+/* ───────────────────────────────────────────────────────────────────────
+   Mobile (≤ 768px)
+   - Top nav becomes a bottom-fixed nav bar.
+   - Brand + logout are hidden (logout moves to /settings).
+   - Content goes edge-to-edge with no horizontal padding.
+   - Chat takes over the full viewport when open.
+   - Bottom-safe-area inset keeps iOS home indicator clear.
+   ─────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .app-layout {
+    height: 100dvh; /* dvh handles iOS URL-bar height changes */
+  }
+
+  /* Hide brand, theme toggle, and logout on mobile — bar is for nav links
+     only. Theme picker + sign out live on /settings. */
+  .top-nav .brand,
+  .top-nav .logout-btn,
+  .top-nav .theme-toggle {
+    display: none;
+  }
+
+  .top-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    z-index: 80;
+    height: auto;
+    padding: 0;
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .nav-links {
+    width: 100%;
+    justify-content: space-around;
+    gap: 0;
+  }
+  .nav-links a {
+    flex: 1;
+    text-align: center;
+    padding: 12px 4px;
+    border-radius: 0;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .nav-links a.router-link-exact-active {
+    background: transparent;
+    color: var(--primary);
+    box-shadow: inset 0 2px 0 var(--primary);
+  }
+  .nav-links a.admin-link {
+    border: none;
+    margin-left: 0;
+  }
+  .theme-toggle {
+    flex: 0 0 auto;
+    margin-left: 0;
+    padding: 12px 14px;
+    width: auto;
+    height: auto;
+  }
+
+  /* Reserve space for the bottom nav so content isn't covered. */
+  .main-area {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
+  }
+
+  /* Edge-to-edge content; per-page cards keep their own padding. */
+  .content {
+    padding: 0;
+  }
+  .content > :deep(*) {
+    max-width: none;
+  }
+
+  /* Chat full-screen overlay on mobile. */
+  .chat-panel {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    border-left: none;
+    z-index: 90;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* Hide the FAB while chat is open, and lift it above the bottom nav. */
+  .chat-fab {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0) + var(--space-3));
+    right: var(--space-3);
+  }
+}
 </style>

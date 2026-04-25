@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useSettingsStore } from '../stores/settings.js';
+import { useAuthStore } from '../stores/auth.js';
 import { useCompoundsStore } from '../stores/compounds.js';
 import { useDosesStore } from '../stores/doses.js';
 import { usePushStore } from '../stores/push.js';
@@ -49,6 +50,12 @@ const compoundsUpgradeTier = computed(() => {
 });
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
+
+async function handleLogout() {
+  await auth.logout();
+  router.push('/login');
+}
 
 // ---- Subscription -------------------------------------------------------
 const subscription = ref(null);
@@ -1221,6 +1228,13 @@ watch(
           </p>
         </div>
       </template>
+
+      <!-- Account / Sign out -->
+      <div class="card account-actions">
+        <button type="button" class="btn-secondary signout-btn" @click="handleLogout">
+          Sign out
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -2173,5 +2187,13 @@ watch(
   left: 0;
   color: var(--success);
   font-weight: var(--font-weight-bold);
+}
+
+.account-actions {
+  display: flex;
+  justify-content: center;
+}
+.signout-btn {
+  min-width: 200px;
 }
 </style>

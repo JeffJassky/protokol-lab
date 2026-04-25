@@ -87,6 +87,25 @@ async function handleLogin() {
   border-radius: var(--radius-medium);
   padding: var(--space-10) var(--space-8);
 }
+
+@media (max-width: 768px) {
+  .login-page {
+    padding: 0;
+    align-items: stretch;
+    min-height: 100dvh;
+  }
+  .login-card {
+    max-width: none;
+    border: none;
+    border-radius: 0;
+    padding: var(--space-8) var(--space-4);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+  }
+}
 .login-card h1 {
   font-size: var(--font-size-xl);
   text-align: center;
