@@ -26,6 +26,9 @@ import { contrastText } from '../utils/contrast.js';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import OnboardingChecklist from '../components/OnboardingChecklist.vue';
 import PhotoTimelineCard from '../components/PhotoTimelineCard.vue';
+import UpgradeBadge from '../components/UpgradeBadge.vue';
+import { usePlanLimits } from '../composables/usePlanLimits.js';
+import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 
 ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Filler, Legend);
 
@@ -38,8 +41,13 @@ const notesStore = useNotesStore();
 const compoundsStore = useCompoundsStore();
 const dosesStore = useDosesStore();
 const photosStore = usePhotosStore();
+const planLimits = usePlanLimits();
+const upgradeModal = useUpgradeModalStore();
 
-const bmr = computed(() => settingsStore.settings?.bmr || null);
+// Used to scale the calorie-axis range so the user's daily-burn baseline is
+// always visible on the chart. `bmr` here is a misnomer kept from a prior
+// schema — the value compared against calorie intake is total daily burn.
+const tdee = computed(() => settingsStore.settings?.tdee || null);
 
 // ---- Theme-aware color resolution --------------------------------------
 // Chart.js can't consume `var(--x)` directly, so we read the computed value
@@ -153,9 +161,33 @@ function saveActive(s) {
 
 const activeSeries = reactive(loadActive());
 
+// Cap for simultaneously-selected chart series. Free=2, paid=∞. The cap
+// only applies to ADDING — removing is always allowed even past cap (so a
+// user who somehow holds more than the cap can prune back down).
+const seriesCap = computed(() => planLimits.storageCap('maxCorrelationMetrics'));
+const seriesUpgradeTier = computed(() => {
+  const target = planLimits.planRequiredFor({ storageKey: 'maxCorrelationMetrics' });
+  return target?.id || null;
+});
+const atSeriesCap = computed(
+  () => Number.isFinite(seriesCap.value) && activeSeries.size >= seriesCap.value,
+);
+
 function toggleSeries(id) {
-  if (activeSeries.has(id)) activeSeries.delete(id);
-  else activeSeries.add(id);
+  if (activeSeries.has(id)) {
+    activeSeries.delete(id);
+    saveActive(activeSeries);
+    return;
+  }
+  // Adding a new series — gate against the cap.
+  if (atSeriesCap.value) {
+    upgradeModal.openForGate({
+      limitKey: 'maxCorrelationMetrics',
+      used: activeSeries.size,
+    });
+    return;
+  }
+  activeSeries.add(id);
   saveActive(activeSeries);
 }
 
@@ -639,10 +671,10 @@ const chartOptions = computed(() => {
       grid: { drawOnChartArea: false },
       min: 0,
     };
-    if (bmr.value && activeSeries.has('calories')) {
+    if (tdee.value && activeSeries.has('calories')) {
       const cals = filteredNutrition.value.map((d) => d.calories);
       const maxCal = cals.length ? Math.max(...cals) : 0;
-      opts.scales.yCal.max = Math.max(bmr.value + 100, maxCal + 100);
+      opts.scales.yCal.max = Math.max(tdee.value + 100, maxCal + 100);
     }
   }
 
@@ -843,12 +875,26 @@ const etaToGoal = computed(() => {
           <button class="chip chip-add">+ Add</button>
           <template #popper>
             <div class="popover">
+              <div
+                v-if="Number.isFinite(seriesCap)"
+                class="pop-cap-note"
+                :class="{ 'at-cap': atSeriesCap }"
+              >
+                {{ activeSeries.size }} / {{ seriesCap }} series
+                <UpgradeBadge
+                  v-if="seriesUpgradeTier"
+                  :tier="seriesUpgradeTier"
+                  limit-key="maxCorrelationMetrics"
+                  clickable
+                />
+              </div>
               <div v-for="[cat, items] in seriesByCategory" :key="cat" class="pop-group">
                 <div class="pop-cat">{{ cat }}</div>
                 <label
                   v-for="s in items"
                   :key="s.id"
                   class="pop-item"
+                  :class="{ disabled: atSeriesCap && !activeSeries.has(s.id) }"
                 >
                   <input
                     type="checkbox"
@@ -1116,6 +1162,22 @@ const etaToGoal = computed(() => {
 .chip-add:hover { color: var(--text); border-color: var(--text-secondary); }
 
 /* Popover */
+.pop-cap-note {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  column-span: all;
+}
+.pop-cap-note.at-cap { color: var(--primary); }
+.pop-item.disabled {
+  opacity: 0.45;
+}
+.pop-item.disabled:hover { background: transparent; }
 .popover {
   background: var(--surface);
   border: 1px solid var(--border);

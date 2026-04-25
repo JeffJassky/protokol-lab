@@ -31,6 +31,17 @@ const rolling7DayUpgradeTier = computed(() => {
   const target = planLimits.planRequiredFor({ feature: 'rolling7DayTargets' });
   return target?.id || null;
 });
+
+// Advanced symptom analytics: paid tiers get the full 0-10 severity scale.
+// Free tier sees a binary present/absent toggle (0 + 1). Existing data with
+// severity >2 still displays under binary view as "active" via isDotActive.
+const hasAdvancedSymptoms = computed(() =>
+  planLimits.hasFeature('advancedSymptomAnalytics'),
+);
+const symptomsUpgradeTier = computed(() => {
+  const target = planLimits.planRequiredFor({ feature: 'advancedSymptomAnalytics' });
+  return target?.id || null;
+});
 const symptomsStore = useSymptomsStore();
 const notesStore = useNotesStore();
 const weightStore = useWeightStore();
@@ -964,11 +975,23 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <div class="meal-card">
       <div class="meal-header">
-        <h3>Symptoms</h3>
+        <h3>
+          Symptoms
+          <UpgradeBadge
+            v-if="!hasAdvancedSymptoms && symptomsUpgradeTier"
+            :tier="symptomsUpgradeTier"
+            feature-key="advancedSymptomAnalytics"
+            clickable
+          />
+        </h3>
       </div>
       <p class="hint">
-        Tap a dot to log severity (0 = none, 1-10 = mild → severe). Tap again to
-        clear.
+        <template v-if="hasAdvancedSymptoms">
+          Tap a dot to log severity (0 = none, 1-10 = mild → severe). Tap again to clear.
+        </template>
+        <template v-else>
+          Tap to log present (1) or absent (0). Tap again to clear.
+        </template>
       </p>
 
       <div class="symptoms-list">
@@ -1004,7 +1027,7 @@ function onNoteBlur() {
               0
             </button>
             <button
-              v-for="i in 10"
+              v-for="i in (hasAdvancedSymptoms ? 10 : 1)"
               :key="i"
               type="button"
               class="dot"
@@ -1013,7 +1036,7 @@ function onNoteBlur() {
                 copyable: isDotCopyable(symptomsStore.getSeverity(symptom._id), i),
               }"
               :style="isDotActive(symptomsStore.getSeverity(symptom._id), i) ? { background: dotColors[i - 1], borderColor: dotColors[i - 1] } : {}"
-              :title="`${i}/10`"
+              :title="hasAdvancedSymptoms ? `${i}/10` : 'Present'"
               @click="setSeverity(symptom._id, i)"
             >
               {{ i }}

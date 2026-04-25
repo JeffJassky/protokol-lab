@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Symptom from '../models/Symptom.js';
 import SymptomLog from '../models/SymptomLog.js';
 import { childLogger, errContext } from '../lib/logger.js';
+import { getEffectivePlanFeatures } from '../lib/planLimits.js';
 
 const log = childLogger('symptoms');
 const router = Router();
@@ -169,11 +170,16 @@ router.put('/logs', async (req, res) => {
     return res.json({ removed: true });
   }
 
-  const sev = Number(severity);
+  let sev = Number(severity);
   if (!Number.isInteger(sev) || sev < 0 || sev > 10) {
     rlog.warn({ symptomId, severity }, 'symptom log upsert: severity out of range');
     return res.status(400).json({ error: 'severity must be 0-10' });
   }
+
+  // Plan gate: free tier only stores binary present/absent. Anything > 0
+  // collapses to 1 so paid-only granularity can't sneak through the API.
+  const features = getEffectivePlanFeatures(req.user);
+  if (!features.advancedSymptomAnalytics && sev > 1) sev = 1;
 
   const entry = await SymptomLog.findOneAndUpdate(
     { userId: req.userId, symptomId, date: day },
