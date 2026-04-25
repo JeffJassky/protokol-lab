@@ -13,7 +13,8 @@ import Meal from "../models/Meal.js";
 import MealProposal from "../models/MealProposal.js";
 import User from "../models/User.js";
 import { childLogger, errContext } from "../lib/logger.js";
-import { evaluateStorageCap } from "../lib/planLimits.js";
+import { evaluateStorageCap, getEffectiveChatLimits } from "../lib/planLimits.js";
+import { getPlanForUser } from "../../../shared/plans.js";
 
 const log = childLogger('agent');
 
@@ -803,6 +804,15 @@ export async function* chatStream(userId, history, opts = {}) {
     return;
   }
 
+  // Plan-gate: tools (Google Search + agent function calls) are paid-tier
+  // only. Free users get conversational replies grounded on the loaded
+  // snapshot, no follow-up reads, no writes, no web search.
+  const planUser = await User.findById(userId).select('plan limitsOverride').lean();
+  const toolsEnabled =
+    (planUser?.limitsOverride?.features?.aiToolsEnabled ??
+      getPlanForUser(planUser).features.aiToolsEnabled) === true;
+  const chatLimits = getEffectiveChatLimits(planUser);
+
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
@@ -875,15 +885,24 @@ RULES:
 
 TODAY'S DATE: ${today}`;
 
-  // Build contents from chat history
-  const contents = history
+  // Build contents from chat history. Trim to the user's plan context
+  // window — older turns are dropped so the model sees only the most
+  // recent N exchanges. The last message (current user turn) is appended
+  // separately below; we always send it regardless of cap.
+  const ctxCap = Number.isFinite(chatLimits.maxContextMessages)
+    ? chatLimits.maxContextMessages
+    : Infinity;
+  const priorTurns = history
     .slice(0, -1)
     .filter((m) => m.role === "user" || m.role === "model" || m.role === "ai")
-    .filter((m) => m.text || m.html)
-    .map((m) => ({
-      role: m.role === "ai" ? "model" : m.role,
-      parts: [{ text: m.text || stripTrailHtml(m.html || "") || "(empty)" }],
-    }));
+    .filter((m) => m.text || m.html);
+  const trimmedTurns = Number.isFinite(ctxCap)
+    ? priorTurns.slice(-ctxCap)
+    : priorTurns;
+  const contents = trimmedTurns.map((m) => ({
+    role: m.role === "ai" ? "model" : m.role,
+    parts: [{ text: m.text || stripTrailHtml(m.html || "") || "(empty)" }],
+  }));
 
   const lastMsg = history[history.length - 1];
   const userMessage =
@@ -923,10 +942,12 @@ TODAY'S DATE: ${today}`;
 
   const config = {
     systemInstruction,
-    tools: [{ googleSearch: {} }, { functionDeclarations }],
-    toolConfig: {
-      includeServerSideToolInvocations: true,
-    },
+    ...(toolsEnabled
+      ? {
+          tools: [{ googleSearch: {} }, { functionDeclarations }],
+          toolConfig: { includeServerSideToolInvocations: true },
+        }
+      : {}),
   };
 
   yield { type: "status", text: "Thinking..." };

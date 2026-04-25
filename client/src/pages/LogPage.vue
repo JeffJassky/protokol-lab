@@ -18,6 +18,7 @@ import DatePickerModal from '../components/DatePickerModal.vue';
 import FoodItemEditModal from '../components/FoodItemEditModal.vue';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import PhotoCaptureCard from '../components/PhotoCaptureCard.vue';
+import UpgradeBadge from '../components/UpgradeBadge.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -25,6 +26,11 @@ const foodlogStore = useFoodLogStore();
 const mealsStore = useMealsStore();
 const upgradeModal = useUpgradeModalStore();
 const planLimits = usePlanLimits();
+
+const rolling7DayUpgradeTier = computed(() => {
+  const target = planLimits.planRequiredFor({ feature: 'rolling7DayTargets' });
+  return target?.id || null;
+});
 const symptomsStore = useSymptomsStore();
 const notesStore = useNotesStore();
 const weightStore = useWeightStore();
@@ -642,7 +648,21 @@ function onNoteBlur() {
     <!-- ROLLING 7-DAY BUDGET                                         -->
     <!-- =========================================================== -->
     <div class="weekly-wrap">
-      <WeeklyBudgetStrip />
+      <WeeklyBudgetStrip v-if="planLimits.hasFeature('rolling7DayTargets')" />
+      <button
+        v-else-if="rolling7DayUpgradeTier"
+        type="button"
+        class="weekly-upsell"
+        @click="upgradeModal.openForGate({ featureKey: 'rolling7DayTargets' })"
+      >
+        <span class="weekly-upsell-label">
+          Rolling 7-day macro targets
+          <UpgradeBadge :tier="rolling7DayUpgradeTier" />
+        </span>
+        <span class="weekly-upsell-sub">
+          Smooth out weekly variance — over today, under tomorrow, still on plan.
+        </span>
+      </button>
     </div>
 
     <!-- =========================================================== -->
@@ -1146,6 +1166,29 @@ function onNoteBlur() {
 }
 
 .weekly-wrap { margin-bottom: var(--space-3); }
+.weekly-upsell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  padding: 14px 18px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: border-color 0.15s ease;
+}
+.weekly-upsell:hover { border-color: var(--primary); }
+.weekly-upsell-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.weekly-upsell-sub { font-size: 12px; }
 
 .meal-card {
   background: var(--surface);

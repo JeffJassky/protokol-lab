@@ -1,13 +1,29 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { usePhotosStore } from '../stores/photos.js';
+import { useUpgradeModalStore } from '../stores/upgradeModal.js';
+import { usePlanLimits } from '../composables/usePlanLimits.js';
 import PhotoViewerModal from './PhotoViewerModal.vue';
+import UpgradeBadge from './UpgradeBadge.vue';
 
 const props = defineProps({
   date: { type: String, required: true },
 });
 
 const photosStore = usePhotosStore();
+const upgradeModal = useUpgradeModalStore();
+const planLimits = usePlanLimits();
+
+// Photos are capped per calendar month. Pre-flight check before any
+// upload so we don't sign URLs / push bytes / hit S3 unnecessarily.
+const photoCap = computed(() => planLimits.storageCap('photosPerMonth'));
+const photosAtCap = computed(
+  () => !planLimits.canAddStorage('photosPerMonth', photosStore.currentMonthCount),
+);
+const photoUpgradeTier = computed(() => {
+  const target = planLimits.planRequiredFor({ storageKey: 'photosPerMonth' });
+  return target?.id || null;
+});
 
 const ANGLES = [
   { key: 'front', label: 'Front' },
@@ -39,6 +55,13 @@ const dayPhotos = computed(() => {
 });
 
 function triggerPick(angle) {
+  if (photosAtCap.value) {
+    upgradeModal.openForGate({
+      limitKey: 'photosPerMonth',
+      used: photosStore.currentMonthCount,
+    });
+    return;
+  }
   const el = fileInputs.value[angle];
   if (el) el.click();
 }
@@ -75,11 +98,27 @@ async function handleDelete(entry, event) {
 <template>
   <div class="photo-card">
     <div class="photo-header">
-      <h3>Photos</h3>
+      <h3>
+        Photos
+        <UpgradeBadge
+          v-if="photosAtCap && photoUpgradeTier"
+          :tier="photoUpgradeTier"
+          limit-key="photosPerMonth"
+          clickable
+        />
+      </h3>
       <span v-if="photosStore.uploading" class="card-sub">uploading…</span>
     </div>
     <p class="hint">
       Snap a front, side, and back shot whenever you can. Consistency beats frequency.
+    </p>
+    <p v-if="photosAtCap" class="hint" style="color: var(--text-tertiary)">
+      <template v-if="photoCap === 1">
+        You've used your photo for this month. Resets at the start of next month.
+      </template>
+      <template v-else>
+        You've used {{ photosStore.currentMonthCount }} of {{ photoCap }} photos this month.
+      </template>
     </p>
 
     <div class="photo-slots">

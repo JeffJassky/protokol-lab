@@ -7,11 +7,32 @@ import {
   deleteObject,
 } from '../services/s3.js';
 import { childLogger, errContext } from '../lib/logger.js';
+import { evaluateStorageCap, getQuotaWindows } from '../lib/planLimits.js';
 
 const log = childLogger('photos');
 const router = Router();
 
 const ANGLES = ['front', 'side', 'back', 'other'];
+
+// Photo cap is calendar-month rolling. Counts uploads whose server-side
+// `createdAt` falls in the current UTC month; resets at startOfNextMonth.
+async function denyIfPhotoCapReached(req) {
+  const windows = getQuotaWindows();
+  const used = await Photo.countDocuments({
+    userId: req.userId,
+    createdAt: { $gte: windows.startOfMonth, $lt: windows.startOfNextMonth },
+  });
+  const denial = evaluateStorageCap(req.user, 'photosPerMonth', used);
+  if (!denial) return null;
+  return {
+    ...denial,
+    // Lets the upgrade modal optionally render a "resets in N days" line.
+    resetAt: windows.startOfNextMonth.toISOString(),
+    message: denial.upgradePlanId
+      ? `Your ${denial.currentPlan} plan allows ${denial.limit} progress photo${denial.limit === 1 ? '' : 's'} per month. Upgrade for more, or wait until next month.`
+      : `You've used your ${denial.limit} photo${denial.limit === 1 ? '' : 's'} for this month.`,
+  };
+}
 
 router.post('/upload-url', async (req, res) => {
   const rlog = req.log || log;
@@ -24,6 +45,18 @@ router.post('/upload-url', async (req, res) => {
     rlog.warn({ angle }, 'photos upload-url: invalid angle');
     return res.status(400).json({ error: `angle must be one of ${ANGLES.join(', ')}` });
   }
+
+  // Fail-fast cap check: refusing to sign URLs prevents the wasted S3 PUT
+  // and aligns the upsell trigger with the user's intent (tap to capture).
+  const denial = await denyIfPhotoCapReached(req);
+  if (denial) {
+    rlog.warn(
+      { userId: String(req.userId), used: denial.used, limit: denial.limit, plan: denial.currentPlan },
+      'photos upload-url: plan cap reached',
+    );
+    return res.status(403).json(denial);
+  }
+
   const safeExt = String(ext).replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg';
   const s3Key = buildPhotoKey(req.userId, date, safeExt, 'full');
   const thumbKey = buildPhotoKey(req.userId, date, 'webp', 'thumb');
@@ -59,6 +92,19 @@ router.post('/', async (req, res) => {
     rlog.warn({ s3Key, thumbKey, prefix }, 'photos create: key does not belong to user');
     return res.status(400).json({ error: 'key does not belong to user' });
   }
+
+  // Backstop cap check. /upload-url already gates, but a client that
+  // signed a URL and then sat on it past month rollover (or got the URL
+  // before someone bumped their plan down) would otherwise sneak through.
+  const denial = await denyIfPhotoCapReached(req);
+  if (denial) {
+    rlog.warn(
+      { userId: String(req.userId), used: denial.used, limit: denial.limit },
+      'photos create: plan cap reached',
+    );
+    return res.status(403).json(denial);
+  }
+
   const entry = await Photo.create({
     userId: req.userId,
     date, angle, s3Key, thumbKey, contentType,

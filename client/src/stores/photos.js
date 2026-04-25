@@ -40,6 +40,19 @@ export const usePhotosStore = defineStore('photos', () => {
     await fetchRange();
   }
 
+  // Count of photos uploaded this calendar month (UTC). Used for pre-flight
+  // plan-cap checks; server still enforces. Accurate only when entries
+  // covering the current month are loaded into the store.
+  const currentMonthCount = computed(() => {
+    const now = new Date();
+    const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+    const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+    return entries.value.reduce((n, p) => {
+      const t = p.createdAt ? new Date(p.createdAt).getTime() : NaN;
+      return Number.isFinite(t) && t >= start && t < end ? n + 1 : n;
+    }, 0);
+  });
+
   async function uploadPhoto(file, { date, angle = 'other' }) {
     uploading.value = true;
     try {
@@ -93,6 +106,7 @@ export const usePhotosStore = defineStore('photos', () => {
     entries,
     uploading,
     byDate,
+    currentMonthCount,
     forDate,
     forDateAngle,
     fetchRange,
