@@ -24,7 +24,7 @@ const router = Router();
 
 router.post('/', chatUpload, parseChatPayload, requireChatQuota, async (req, res) => {
   const rlog = req.log || log;
-  const { messages, threadId } = req.body;
+  const { messages, threadId, timezone } = req.body;
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     rlog.warn('chat stream: missing messages');
     return res.status(400).json({ error: 'messages required' });
@@ -65,7 +65,7 @@ router.post('/', chatUpload, parseChatPayload, requireChatQuota, async (req, res
   let streamStatus = 'ok';
   let streamError = null;
   try {
-    for await (const event of chatStream(req.userId, messages, { threadId })) {
+    for await (const event of chatStream(req.authUserId, messages, { threadId, timezone })) {
       if (event.type === 'usage') {
         // Captured server-side only; not forwarded to the client stream.
         usageEvent = event;
@@ -97,7 +97,7 @@ router.post('/', chatUpload, parseChatPayload, requireChatQuota, async (req, res
         imageFiles.map(async (file, idx) => {
           const ext = (file.mimetype.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '');
           const s3Key = buildMealPhotoKey(
-            String(req.userId),
+            String(req.authUserId),
             threadId ? String(threadId) : null,
             messageId,
             idx,
@@ -151,7 +151,7 @@ router.post('/', chatUpload, parseChatPayload, requireChatQuota, async (req, res
   if (streamStatus === 'ok' && imageFiles.length) {
     try {
       await User.updateOne(
-        { _id: req.userId },
+        { _id: req.authUserId },
         { $inc: { imageRecognitionCount: imageFiles.length } },
       );
     } catch (err) {
@@ -185,7 +185,7 @@ async function recordChatUsage({
   const status = usageEvent?.status || streamStatus;
 
   await ChatUsage.create({
-    userId: req.userId,
+    userId: req.authUserId,
     threadId: threadId || null,
     model,
     planAtTime: req.user?.plan || null,
@@ -233,7 +233,7 @@ async function rehydrateFileUrls(messages) {
 router.get('/threads', async (req, res) => {
   const includeMessages = req.query.includeMessages === '1';
   const projection = includeMessages ? {} : { messages: 0 };
-  const threads = await ChatThread.find({ userId: req.userId }, projection)
+  const threads = await ChatThread.find({ userId: req.authUserId }, projection)
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -256,7 +256,7 @@ router.get('/threads', async (req, res) => {
 router.post('/threads', async (req, res) => {
   const { title } = req.body;
   const thread = await ChatThread.create({
-    userId: req.userId,
+    userId: req.authUserId,
     title: title || 'New conversation',
   });
 
@@ -279,7 +279,7 @@ router.patch('/threads/:id', async (req, res) => {
   if (messages !== undefined) update.messages = messages;
 
   const thread = await ChatThread.findOneAndUpdate(
-    { _id: req.params.id, userId: req.userId },
+    { _id: req.params.id, userId: req.authUserId },
     { $set: update },
     { new: true },
   );
@@ -296,7 +296,7 @@ router.patch('/threads/:id', async (req, res) => {
 });
 
 router.delete('/threads/:id', async (req, res) => {
-  const thread = await ChatThread.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+  const thread = await ChatThread.findOneAndDelete({ _id: req.params.id, userId: req.authUserId });
   if (!thread) {
     (req.log || log).warn({ threadId: req.params.id }, 'chat: thread delete not found');
     return res.status(404).json({ error: 'Thread not found' });
@@ -331,7 +331,7 @@ router.post('/proposals/:id/confirm', async (req, res) => {
   const overrideDate = req.body?.date || null;
   const overrideMeal = req.body?.mealType || null;
 
-  const proposal = await MealProposal.findOne({ _id: id, userId: req.userId });
+  const proposal = await MealProposal.findOne({ _id: id, userId: req.authUserId });
   if (!proposal) {
     rlog.warn({ proposalId: id }, 'proposal confirm: not found');
     return res.status(404).json({ error: 'Proposal not found' });
@@ -355,7 +355,7 @@ router.post('/proposals/:id/confirm', async (req, res) => {
     let foodItemId = item.foodItemId;
     if (!foodItemId) {
       const created = await FoodItem.create({
-        userId: req.userId,
+        userId: req.authUserId,
         // AI-proposed foods come from a meal-photo or text proposal flow.
         // They're as user-attributed as any manual entry, but we don't mark
         // them isCustom — they shouldn't burn the customFoodItems cap since
@@ -374,7 +374,7 @@ router.post('/proposals/:id/confirm', async (req, res) => {
       foodItemId = created._id;
     }
     logDocs.push({
-      userId: req.userId,
+      userId: req.authUserId,
       foodItemId,
       date: new Date(date + 'T12:00:00.000Z'),
       mealType,
@@ -419,7 +419,7 @@ router.post('/proposals/:id/confirm', async (req, res) => {
 
 router.post('/proposals/:id/cancel', async (req, res) => {
   const rlog = req.log || log;
-  const proposal = await MealProposal.findOne({ _id: req.params.id, userId: req.userId });
+  const proposal = await MealProposal.findOne({ _id: req.params.id, userId: req.authUserId });
   if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
   if (proposal.status !== 'pending') {
     return res.status(409).json({ error: `Proposal already ${proposal.status}` });

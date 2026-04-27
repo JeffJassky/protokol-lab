@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import MarketingLayout from '../components/MarketingLayout.vue';
 import { useRouteSeo } from '../composables/useSeo.js';
+import { useTryDemo } from '../composables/useTryDemo.js';
 
 useRouteSeo();
 
@@ -10,6 +11,8 @@ const router = useRouter();
 const goRegister = () => router.push('/register');
 const goLogin = () => router.push('/login');
 const goHome = () => router.push('/');
+
+const { tryDemo, demoStarting } = useTryDemo();
 
 // ---- Multi-series dashboard chart mini ---------------------------------
 // Matches DashboardPage.vue: selectable series (weight / calories / compound
@@ -1194,8 +1197,10 @@ const platformRows = [
         <h2>That's the tour.<br /><span class="accent">Start tracking.</span></h2>
         <p>Free to start. Premium unlocks the AI and correlation charts from $6.58/mo (billed annually).</p>
         <div class="cta-buttons">
-          <button class="btn-primary big" @click="goRegister">Create account →</button>
-          <button class="btn-secondary big" @click="goHome">Back to home</button>
+          <button class="btn-primary big" :disabled="demoStarting" @click="tryDemo">
+            {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
+          </button>
+          <button class="btn-secondary big" @click="goRegister">Sign up free</button>
         </div>
       </div>
     </section>

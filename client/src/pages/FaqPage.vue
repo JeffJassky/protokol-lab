@@ -1,5 +1,6 @@
 <script setup>
 import MarketingLayout from '../components/MarketingLayout.vue';
+import MarketingEndCta from '../components/MarketingEndCta.vue';
 import { useRouteSeo } from '../composables/useSeo.js';
 import '../styles/marketing.css';
 
@@ -100,11 +101,12 @@ useRouteSeo({
           <p class="faq-body">{{ f.a }}</p>
         </div>
 
-        <div class="mkt-cta-row">
-          <a href="/register" class="mkt-btn-primary">Start tracking free →</a>
-          <a href="/pricing" class="mkt-btn-secondary">See pricing</a>
-        </div>
       </div>
     </section>
+    <MarketingEndCta
+      heading="Got more questions?"
+      lead="See it in action — no signup required."
+      variant="pricing"
+    />
   </MarketingLayout>
 </template>

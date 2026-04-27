@@ -4,6 +4,7 @@
 
 import { computed } from 'vue';
 import { useAuthStore } from '../stores/auth.js';
+import { useDemoStore } from '../stores/demo.js';
 import {
   PLANS,
   getPlanForUser,
@@ -12,8 +13,18 @@ import {
 
 export function usePlanLimits() {
   const auth = useAuthStore();
+  const demo = useDemoStore();
 
-  const plan = computed(() => getPlanForUser(auth.user));
+  // In demo mode, the active profile is the sandbox (not the auth user) so
+  // plan-gated UI must read the sandbox's plan. Sandboxes are provisioned
+  // on 'unlimited' so visitors see every paid feature without hitting an
+  // upsell. Falls back to the auth user's plan otherwise.
+  const plan = computed(() => {
+    if (demo.inDemo && demo.activePlanId && PLANS[demo.activePlanId]) {
+      return PLANS[demo.activePlanId];
+    }
+    return getPlanForUser(auth.user);
+  });
   const features = computed(() => plan.value.features);
   const storage = computed(() => plan.value.storage);
   const chat = computed(() => plan.value.chat);

@@ -23,7 +23,9 @@ import stripeRoutes, { publicStripeRouter } from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
 import supportRoutes from './routes/support.js';
 import adminSupportRoutes from './routes/adminSupport.js';
-import { requireAuth } from './middleware/requireAuth.js';
+import demoRoutes from './routes/demo.js';
+import testHelperRoutes from './routes/testHelpers.js';
+import { requireAuth, requireAuthUser, requireRealProfile } from './middleware/requireAuth.js';
 import { requireAdmin } from './middleware/requireAdmin.js';
 import { logger, httpLogger, childLogger, errContext } from './lib/logger.js';
 
@@ -110,9 +112,22 @@ export function createApp({ serveClient = true } = {}) {
   });
 
   app.use('/api/auth', authRoutes);
-  app.use('/api/push', publicPushRouter);
-  app.use('/api/push', requireAuth, pushRoutes);
+  // Demo routes have a mix of public (anon start, status) and authed
+  // endpoints; auth is applied per-route inside the file.
+  app.use('/api/demo', demoRoutes);
 
+  // Test-only helpers (seed template, reset DB) — mounted ONLY in e2e env.
+  // The handlers double-check NODE_ENV at runtime as defense in depth.
+  if (process.env.NODE_ENV === 'e2e') {
+    app.use('/api/__test', testHelperRoutes);
+  }
+  app.use('/api/push', publicPushRouter);
+  // Push subs are tied to the real account (real user gets reminders even
+  // while toggled into demo) — block anonymous demo sessions outright.
+  app.use('/api/push', requireAuth, requireAuthUser, pushRoutes);
+
+  // Data routes: use requireAuth alone so demo (anon or authed-with-toggle)
+  // can read+write against the active profile (req.userId = sandbox id).
   app.use('/api/settings', requireAuth, settingsRoutes);
   app.use('/api/weight', requireAuth, weightRoutes);
   app.use('/api/food', requireAuth, foodRoutes);
@@ -122,13 +137,17 @@ export function createApp({ serveClient = true } = {}) {
   app.use('/api/waist', requireAuth, waistRoutes);
   app.use('/api/doses', requireAuth, doseRoutes);
   app.use('/api/compounds', requireAuth, compoundsRoutes);
-  app.use('/api/chat', requireAuth, chatRoutes);
+  // Chat is disabled in demo entirely — anon sessions have no quota account
+  // and authed-demo users would chat against sandbox-scoped threads.
+  app.use('/api/chat', requireAuth, requireRealProfile, chatRoutes);
   app.use('/api/notes', requireAuth, notesRoutes);
   app.use('/api/photos', requireAuth, photosRoutes);
-  app.use('/api/stripe', requireAuth, stripeRoutes);
-  app.use('/api/support', requireAuth, supportRoutes);
-  app.use('/api/admin/support', requireAuth, requireAdmin, adminSupportRoutes);
-  app.use('/api/admin', requireAuth, requireAdmin, adminRoutes);
+  // Billing is the real account's, even when the user is toggled into demo.
+  app.use('/api/stripe', requireAuth, requireAuthUser, stripeRoutes);
+  // Support tickets are tied to the real account.
+  app.use('/api/support', requireAuth, requireAuthUser, supportRoutes);
+  app.use('/api/admin/support', requireAuth, requireAuthUser, requireAdmin, adminSupportRoutes);
+  app.use('/api/admin', requireAuth, requireAuthUser, requireAdmin, adminRoutes);
 
   if (serveClient) {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));

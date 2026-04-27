@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "restore": "node src/scripts/restore.js",
     "cleanup:test-users": "node src/scripts/cleanup-test-users.js",
+    "seed:demo-template": "node src/scripts/seed-demo-template.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

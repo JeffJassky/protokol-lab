@@ -5,8 +5,10 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { OAuth2Client } from 'google-auth-library';
 import User from '../models/User.js';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { requireAuth, requireAuthUser } from '../middleware/requireAuth.js';
 import { sendPasswordResetEmail, sendWelcomeEmail } from '../services/email.js';
+import { readDemoCookie, verifyDemoToken, clearDemoCookie } from '../lib/demoSession.js';
+import { emitDemoEvent } from '../lib/demoEvents.js';
 import { childLogger, errContext } from '../lib/logger.js';
 
 const log = childLogger('auth');
@@ -152,6 +154,17 @@ router.post('/register', registerLimiter, async (req, res) => {
   const token = signToken(user._id);
   res.cookie('token', token, COOKIE_OPTS);
 
+  // If this signup completed an anonymous demo session, emit a convert
+  // event and drop the demo cookie so the new account starts on real data.
+  const demoSandboxId = verifyDemoToken(readDemoCookie(req));
+  if (demoSandboxId) {
+    clearDemoCookie(res);
+    emitDemoEvent(req, 'demo_signup_convert', {
+      sandboxId: demoSandboxId,
+      newUserId: String(user._id),
+    });
+  }
+
   sendWelcomeEmail(user.email).catch((err) => {
     rlog.error({ ...errContext(err), userId: String(user._id) }, 'register: welcome email failed');
   });
@@ -263,11 +276,11 @@ router.post('/google', loginLimiter, async (req, res) => {
   res.status(created ? 201 : 200).json({ user: serializeUser(user) });
 });
 
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, requireAuthUser, (req, res) => {
   res.json({ user: serializeUser(req.user) });
 });
 
-router.patch('/me', requireAuth, async (req, res) => {
+router.patch('/me', requireAuth, requireAuthUser, async (req, res) => {
   const rlog = req.log || log;
   const update = {};
   if (req.body?.displayName !== undefined) {
@@ -280,20 +293,20 @@ router.patch('/me', requireAuth, async (req, res) => {
   if (!Object.keys(update).length) {
     return res.status(400).json({ error: 'nothing_to_update' });
   }
-  const user = await User.findByIdAndUpdate(req.userId, { $set: update }, { new: true })
+  const user = await User.findByIdAndUpdate(req.authUserId, { $set: update }, { new: true })
     .select('-passwordHash');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   rlog.info({ userId: String(user._id), fields: Object.keys(update) }, 'auth: profile updated');
   res.json({ user: serializeUser(user) });
 });
 
-router.post('/onboarding/step', requireAuth, async (req, res) => {
+router.post('/onboarding/step', requireAuth, requireAuthUser, async (req, res) => {
   const step = req.body?.step;
   if (!ONBOARDING_STEPS.includes(step)) {
     return res.status(400).json({ error: 'invalid step' });
   }
   const user = await User.findByIdAndUpdate(
-    req.userId,
+    req.authUserId,
     { $set: { onboardingStep: step } },
     { new: true },
   ).select('-passwordHash');
@@ -301,9 +314,9 @@ router.post('/onboarding/step', requireAuth, async (req, res) => {
   res.json({ user: serializeUser(user) });
 });
 
-router.post('/onboarding/complete', requireAuth, async (req, res) => {
+router.post('/onboarding/complete', requireAuth, requireAuthUser, async (req, res) => {
   const user = await User.findByIdAndUpdate(
-    req.userId,
+    req.authUserId,
     { $set: { onboardingComplete: true, onboardingStep: 'done' } },
     { new: true },
   ).select('-passwordHash');

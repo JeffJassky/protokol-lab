@@ -10,6 +10,8 @@ import BarcodeScannerModal from '../components/BarcodeScannerModal.vue';
 import UpgradeBadge from '../components/UpgradeBadge.vue';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
+import { useSettingsStore } from '../stores/settings.js';
+import { useProfileFieldsGate } from '../composables/useProfileFieldsGate.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -17,6 +19,8 @@ const foodStore = useFoodStore();
 const mealsStore = useMealsStore();
 const planLimits = usePlanLimits();
 const upgradeModal = useUpgradeModalStore();
+const settingsStore = useSettingsStore();
+const profileGate = useProfileFieldsGate();
 
 // Saved meals are plan-capped (Free=5, paid=∞). The store always has the
 // authoritative count so we can pre-flight gate the create surfaces.
@@ -203,6 +207,17 @@ async function confirmAdd() {
       body.fatPer = food.fatPer;
       body.carbsPer = food.carbsPer;
     }
+
+    // Just-in-time profile gate (PRD §9): TDEE math needs body composition.
+    // Skipped if the user already filled these in (returns immediately) or
+    // hits Skip on the modal — the entry still logs either way.
+    if (!settingsStore.loaded) {
+      try { await settingsStore.fetchSettings(); } catch (_) { /* not fatal */ }
+    }
+    await profileGate.ensure(
+      ['sex', 'age', 'heightInches', 'currentWeightLbs'],
+      settingsStore.settings,
+    );
 
     await api.post('/api/foodlog', body);
     router.push(`/log?date=${date.value}`);

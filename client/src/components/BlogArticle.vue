@@ -1,5 +1,6 @@
 <script setup>
 import MarketingLayout from './MarketingLayout.vue';
+import MarketingEndCta from './MarketingEndCta.vue';
 import '../styles/marketing.css';
 
 defineProps({
@@ -31,16 +32,12 @@ defineProps({
           <slot />
         </div>
 
-        <div class="cta-row">
-          <a href="/register" class="primary">Start tracking free →</a>
-          <slot name="cta" />
-        </div>
-
         <div class="disclaimer">
           <slot name="disclaimer" />
         </div>
       </div>
     </article>
+    <MarketingEndCta variant="pricing" />
   </MarketingLayout>
 </template>
 

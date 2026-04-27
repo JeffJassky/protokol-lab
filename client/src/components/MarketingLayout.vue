@@ -1,13 +1,36 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { MARKETING_NAV } from '../marketing-nav.js';
+import { useAuthStore } from '../stores/auth.js';
+import { useDemoStore } from '../stores/demo.js';
 import BrandWordmark from './BrandWordmark.vue';
 
 const router = useRouter();
 const route = useRoute();
+const auth = useAuthStore();
+const demo = useDemoStore();
+
 const goLogin = () => router.push('/login');
+const goRegister = () => router.push('/register');
 const goHome = () => router.push('/');
+const goApp = () => router.push('/dashboard');
+
+const demoStarting = ref(false);
+async function tryDemo() {
+  demoStarting.value = true;
+  try {
+    if (!demo.checked) await demo.fetchStatus();
+    if (!demo.inDemo) await demo.startAnon();
+    router.push('/dashboard');
+  } finally {
+    demoStarting.value = false;
+  }
+}
+
+// Visible CTAs depend on session state — see docs/customer-journey.md §3.
+const inApp = computed(() => Boolean(auth.user) || demo.inDemo);
+const showAcquisitionCtas = computed(() => !inApp.value);
 
 const menuOpen = ref(false);
 const toggleMenu = () => { menuOpen.value = !menuOpen.value; };
@@ -28,7 +51,18 @@ watch(() => route.fullPath, closeMenu);
         <nav class="nav-links" aria-label="Primary">
           <a v-for="l in MARKETING_NAV" :key="l.href" :href="l.href" class="nav-link">{{ l.label }}</a>
         </nav>
-        <button class="nav-cta nav-cta-desktop" @click="goLogin">Sign in</button>
+        <div class="nav-cta-group nav-cta-desktop">
+          <template v-if="showAcquisitionCtas">
+            <button class="nav-cta primary" :disabled="demoStarting" @click="tryDemo">
+              {{ demoStarting ? 'Loading…' : 'Try the demo' }}
+            </button>
+            <button class="nav-cta secondary" @click="goRegister">Sign up</button>
+            <button class="nav-cta tertiary" @click="goLogin">Sign in</button>
+          </template>
+          <template v-else>
+            <button class="nav-cta primary" @click="goApp">Open app</button>
+          </template>
+        </div>
         <button
           class="nav-burger"
           :aria-expanded="menuOpen"
@@ -55,7 +89,18 @@ watch(() => route.fullPath, closeMenu);
             class="mobile-link"
             @click="closeMenu"
           >{{ l.label }}</a>
-          <button class="nav-cta mobile-cta" @click="goLogin">Sign in</button>
+          <div class="mobile-cta-stack">
+            <template v-if="showAcquisitionCtas">
+              <button class="nav-cta primary mobile-cta" :disabled="demoStarting" @click="tryDemo">
+                {{ demoStarting ? 'Loading…' : 'Try the demo' }}
+              </button>
+              <button class="nav-cta secondary mobile-cta" @click="goRegister">Sign up</button>
+              <button class="nav-cta tertiary mobile-cta" @click="goLogin">Sign in</button>
+            </template>
+            <template v-else>
+              <button class="nav-cta primary mobile-cta" @click="goApp">Open app</button>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -169,15 +214,33 @@ watch(() => route.fullPath, closeMenu);
   text-decoration: none;
 }
 .nav-link:hover { color: var(--text); }
+.nav-cta-group { display: flex; gap: 8px; align-items: center; }
 .nav-cta {
   font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
-  padding: 8px 16px; border: 1px solid var(--primary);
-  color: var(--primary); font-weight: 600;
-  background: transparent; cursor: pointer;
-  transition: background .15s, color .15s;
-  font-family: inherit;
+  padding: 8px 16px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, color .15s, border-color .15s;
 }
-.nav-cta:hover { background: var(--primary); color: var(--bg); }
+.nav-cta[disabled] { opacity: 0.55; cursor: not-allowed; }
+.nav-cta.primary {
+  background: var(--primary);
+  color: var(--bg);
+  border: 1px solid var(--primary);
+}
+.nav-cta.primary:hover:not([disabled]) { background: var(--primary-hover, var(--primary)); }
+.nav-cta.secondary {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+.nav-cta.secondary:hover:not([disabled]) { background: var(--primary); color: var(--bg); }
+.nav-cta.tertiary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  padding: 8px 12px;
+}
+.nav-cta.tertiary:hover:not([disabled]) { color: var(--text); }
 
 .nav-burger {
   display: none;
@@ -232,10 +295,13 @@ watch(() => route.fullPath, closeMenu);
   border-bottom: 1px solid var(--border);
 }
 .mobile-link:hover { color: var(--primary); }
-.mobile-cta {
+.mobile-cta-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 16px;
-  align-self: flex-start;
 }
+.mobile-cta { width: 100%; text-align: center; }
 
 .mkt-footer {
   padding: 64px 0 48px;

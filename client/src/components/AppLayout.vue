@@ -1,18 +1,31 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import { useDemoStore } from '../stores/demo.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { usePushStore } from '../stores/push.js';
 import { useTheme } from '../composables/useTheme.js';
+import { api } from '../api/index.js';
 import ChatDrawer from './ChatDrawer.vue';
 import OnboardingBanner from './OnboardingBanner.vue';
+import DemoBanner from './DemoBanner.vue';
+import ProfileFieldsModal from './ProfileFieldsModal.vue';
 import BrandLockup from './BrandLockup.vue';
 
 const auth = useAuthStore();
+const demo = useDemoStore();
 const onboarding = useOnboardingStore();
 const pushStore = usePushStore();
 const router = useRouter();
+
+// Anon demo visitors aren't logged in — there's no JWT to clear, just a
+// demo cookie. The right primary action for them is "Exit demo" which
+// drops the cookie and returns them to marketing.
+const isAnonDemo = computed(() => !auth.user && demo.mode === 'anon');
+const sessionAction = computed(() =>
+  isAnonDemo.value ? { label: 'Exit demo', handler: handleExitDemo } : { label: 'Logout', handler: handleLogout },
+);
 const showChat = ref(false);
 
 const theme = useTheme();
@@ -41,10 +54,22 @@ async function handleLogout() {
   await auth.logout();
   router.push('/login');
 }
+
+async function handleExitDemo() {
+  // Server clears the cookie via the public endpoint; demo store flips back
+  // to 'none' after the status refresh, then we navigate home so the
+  // visitor lands on marketing instead of a demo dashboard with no banner.
+  try {
+    await api.post('/api/demo/clear-cookie');
+  } catch (_) { /* not fatal */ }
+  await demo.fetchStatus();
+  router.push('/');
+}
 </script>
 
 <template>
   <div class="app-layout">
+    <DemoBanner />
     <OnboardingBanner />
     <nav class="top-nav">
       <router-link to="/" class="brand" aria-label="Protokol Lab — home">
@@ -52,10 +77,13 @@ async function handleLogout() {
         <BrandLockup class="brand-mobile" :size="16" :show-wordmark="false" />
       </router-link>
       <div class="nav-links">
-        <router-link to="/">Log</router-link>
+        <router-link to="/log">Log</router-link>
         <router-link to="/dashboard">Dashboard</router-link>
-        <router-link to="/settings">Settings</router-link>
-        <router-link to="/support">Support</router-link>
+        <!-- Settings + Support are tied to a real account (subscription,
+             tickets) — hide in anon demo where they'd 403 on first fetch.
+             Authed-in-toggle still sees them; the underlying account is real. -->
+        <router-link v-if="auth.user" to="/settings">Settings</router-link>
+        <router-link v-if="auth.user" to="/support">Support</router-link>
         <router-link v-if="auth.user?.isAdmin" to="/admin" class="admin-link"
           >Admin</router-link
         >
@@ -103,7 +131,7 @@ async function handleLogout() {
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
           </svg>
         </button>
-        <button class="logout-btn" @click="handleLogout">Logout</button>
+        <button class="logout-btn" @click="sessionAction.handler">{{ sessionAction.label }}</button>
       </div>
     </nav>
     <div class="main-area" :class="{ 'chat-open': showChat }">
@@ -118,6 +146,10 @@ async function handleLogout() {
     <button v-if="!showChat" class="chat-fab" @click="showChat = true">
       💬
     </button>
+
+    <!-- Just-in-time profile field gate (PRD §9). Listens to a global queue;
+         appears only when a feature awaits ensure([...]) and a field is missing. -->
+    <ProfileFieldsModal />
   </div>
 </template>
 

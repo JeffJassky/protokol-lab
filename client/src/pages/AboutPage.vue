@@ -1,5 +1,6 @@
 <script setup>
 import MarketingLayout from '../components/MarketingLayout.vue';
+import MarketingEndCta from '../components/MarketingEndCta.vue';
 import { useRouteSeo } from '../composables/useSeo.js';
 import '../styles/marketing.css';
 
@@ -84,5 +85,6 @@ useRouteSeo();
         </p>
       </div>
     </section>
+    <MarketingEndCta />
   </MarketingLayout>
 </template>

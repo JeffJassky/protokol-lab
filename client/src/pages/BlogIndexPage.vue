@@ -37,6 +37,12 @@ const posts = [
     excerpt: 'An educational overview of nausea, reflux, sulfur burps, constipation, diarrhea, and fatigue on Ozempic, Wegovy, Mounjaro, and Zepbound — what causes them, what users commonly try, and when to call a prescriber.',
     date: '2026-04-24',
   },
+  {
+    slug: 'adhd-nutrition-tracker',
+    title: 'The Atomic Habits Lie: Why ADHD Brains Need a Different Kind of Tracker',
+    excerpt: 'A founder essay on why MyFitnessPal-style daily logging structurally fails ADHD users — and the principles that an ADHD-friendly nutrition tracker actually has to satisfy.',
+    date: '2026-04-27',
+  },
 ];
 
 // Blog schema is built from the visible `posts` array above so the two

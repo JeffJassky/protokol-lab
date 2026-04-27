@@ -1,9 +1,12 @@
 <script setup>
 import MarketingLayout from '../components/MarketingLayout.vue';
 import { useRouteSeo } from '../composables/useSeo.js';
+import { useTryDemo } from '../composables/useTryDemo.js';
 import '../styles/marketing.css';
 
 useRouteSeo();
+
+const { tryDemo, demoStarting } = useTryDemo();
 </script>
 
 <template>
@@ -101,8 +104,10 @@ useRouteSeo();
         </div>
 
         <div class="mkt-cta-row">
-          <a href="/register" class="mkt-btn-primary">Start tracking free →</a>
-          <a href="/features" class="mkt-btn-secondary">See features</a>
+          <button class="mkt-btn-primary" :disabled="demoStarting" @click="tryDemo">
+            {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
+          </button>
+          <a href="/register" class="mkt-btn-secondary">Sign up free</a>
         </div>
       </div>
     </section>

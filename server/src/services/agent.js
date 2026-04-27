@@ -299,7 +299,37 @@ function dateRange(startDate, endDate) {
   return { $gte: start, $lte: end };
 }
 
-async function executeTool(name, args, userId, ctx = {}) {
+// Compute calendar date + clock info in a user's IANA timezone. Without a
+// user TZ, the agent would use the server clock (UTC in prod) and could
+// answer/log with the wrong day around midnight boundaries.
+export function getLocalDateInfo(timeZone = 'UTC') {
+  const now = new Date();
+  let tz = timeZone || 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now);
+  } catch {
+    tz = 'UTC';
+  }
+  const dateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  const timeParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit',
+  }).formatToParts(now);
+  let hour = 0, minute = 0;
+  for (const p of timeParts) {
+    if (p.type === 'hour') hour = p.value === '24' ? 0 : Number(p.value);
+    if (p.type === 'minute') minute = Number(p.value);
+  }
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, weekday: 'long',
+  }).format(now);
+  const hh = String(hour).padStart(2, '0');
+  const mm = String(minute).padStart(2, '0');
+  return { today: dateStr, hour, weekday, localTime: `${hh}:${mm}`, timeZone: tz };
+}
+
+export async function executeTool(name, args, userId, ctx = {}) {
   const t0 = Date.now();
   const tLog = log.child({ userId: String(userId), tool: name });
   tLog.debug({ args }, 'tool: exec begin');
@@ -617,7 +647,7 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
       if (!Array.isArray(args.items) || args.items.length === 0) {
         return { error: "items array required" };
       }
-      const today = new Date().toISOString().slice(0, 10);
+      const { today } = getLocalDateInfo(ctx.timeZone);
       const date = args.date && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? args.date : today;
 
       const items = args.items.map((i) => ({
@@ -672,13 +702,13 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
   }
 }
 
-async function buildDataSnapshot(userId) {
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-  const weekAgo = new Date(now);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const startDate = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth() + 1).padStart(2, "0")}-${String(weekAgo.getDate()).padStart(2, "0")}`;
+async function buildDataSnapshot(userId, timeZone = 'UTC') {
+  const { today } = getLocalDateInfo(timeZone);
+  const [ty, tm, td] = today.split('-').map(Number);
+  // 7 days ago in the user's local calendar
+  const weekAgo = new Date(Date.UTC(ty, tm - 1, td));
+  weekAgo.setUTCDate(weekAgo.getUTCDate() - 7);
+  const startDate = `${weekAgo.getUTCFullYear()}-${String(weekAgo.getUTCMonth() + 1).padStart(2, "0")}-${String(weekAgo.getUTCDate()).padStart(2, "0")}`;
 
   const [settings, nutrition, weight, waist, doses, symptoms, compounds] =
     await Promise.all([
@@ -795,7 +825,6 @@ function renderSources(groundingMetadata) {
 export async function* chatStream(userId, history, opts = {}) {
   const sLog = log.child({ userId: String(userId) });
   const streamStart = Date.now();
-  const toolCtx = { threadId: opts.threadId || null };
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -813,12 +842,28 @@ export async function* chatStream(userId, history, opts = {}) {
       getPlanForUser(planUser).features.aiToolsEnabled) === true;
   const chatLimits = getEffectiveChatLimits(planUser);
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  // User's IANA tz drives "today" and the local clock fields exposed to the
+  // model. Without it the server clock (UTC in prod) is used and "today"
+  // can be the wrong day around midnight for the user. Prefer the per-request
+  // tz hint from the client (always current); fall back to stored settings.
+  let timeZone = 'UTC';
+  if (opts.timezone) {
+    try {
+      new Intl.DateTimeFormat('en-CA', { timeZone: opts.timezone }).format(new Date());
+      timeZone = opts.timezone;
+    } catch { /* invalid hint — fall through to stored */ }
+  }
+  if (timeZone === 'UTC') {
+    const userSettings = await UserSettings.findOne({ userId }).select('timezone').lean();
+    if (userSettings?.timezone) timeZone = userSettings.timezone;
+  }
+  const localInfo = getLocalDateInfo(timeZone);
+  const { today } = localInfo;
+  const toolCtx = { threadId: opts.threadId || null, timeZone };
 
   yield { type: "status", text: "Loading your data..." };
   const snapshotT0 = Date.now();
-  const snapshot = await buildDataSnapshot(userId);
+  const snapshot = await buildDataSnapshot(userId, timeZone);
   sLog.debug(
     { bytes: snapshot.length, durationMs: Date.now() - snapshotT0 },
     'agent: snapshot built',
@@ -848,7 +893,8 @@ You already have the last 7 days of user data above. Tool usage:
   - Always prefer propose_food_entries over log_food_entry. Even when the user says "log this", they still want to confirm portions and macros — silently writing to the diary is an anti-pattern.
   - You MAY use search_food_items first to look up existing catalog entries (pass the matching foodItemId in the proposal so we don't create duplicates). You MAY use Google Search for branded products you can identify. But the final logging step is ALWAYS propose_food_entries — never log_food_entry, except in the narrow exception below.
   - After calling propose_food_entries, STOP. Briefly narrate what you identified and tell the user to review the card. Do not repeat the macro table in prose. Do not call log_food_entry afterward.
-  - For "today" use today's date from the TODAY'S DATE line below. Default mealType from time of day: before 11 → breakfast, 11–15 → lunch, 15–20 → dinner, else snack.
+  - NEVER claim food has been logged, added, recorded, or saved unless you actually invoked propose_food_entries (or the rare log_food_entry exception) IN THIS TURN. The proposal card itself shows the user "Proposed", "✓ Added to your food log", or "Cancelled" — those phrases belong to the card UI, not your prose. Do NOT write "Logged to <meal>", "✓ Added to your food log", or any imitation of the card layout in your text reply. If you forgot to call the tool, tell the user honestly and call it now.
+  - For "today" use today's date from the LOCAL DATE/TIME block below — that already accounts for the user's timezone. Default mealType from local hour (block below): before 11 → breakfast, 11–15 → lunch, 15–20 → dinner, else snack.
 - Direct-log tool (log_food_entry) — RARE EXCEPTION ONLY:
   - Only use when the user EXPLICITLY says they want to skip confirmation (e.g. "just log it, don't ask", "no need to confirm"). If you are uncertain, use propose_food_entries instead.
   - Requires a real foodItemId from search_food_items or create_food_item.
@@ -883,7 +929,9 @@ RULES:
 7. The user manages their own list of compounds (peptides, medications) in settings. Use the ENABLED COMPOUNDS line in the snapshot to know which ones are active. Be knowledgeable about common classes the user might enable — GLP-1 receptor agonists, GLP-1/GIP co-agonists, amylin analogues, and other peptides — including typical half-lives, effects, and common side effects.
 8. When citing external information from web search, include links inline or the system will append a Sources block automatically.
 
-TODAY'S DATE: ${today}`;
+LOCAL DATE/TIME (in the user's timezone — use this, NOT UTC, for any "today" / "now" reasoning):
+- Today: ${localInfo.today} (${localInfo.weekday})
+- Local time: ${localInfo.localTime} (${localInfo.timeZone})`;
 
   // Build contents from chat history. Trim to the user's plan context
   // window — older turns are dropped so the model sees only the most

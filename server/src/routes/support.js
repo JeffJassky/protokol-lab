@@ -67,7 +67,7 @@ router.post('/tickets', async (req, res) => {
   }
 
   const ticket = await SupportTicket.create({
-    userId: req.userId,
+    userId: req.authUserId,
     userEmail: req.user.email,
     subject,
     description,
@@ -86,7 +86,7 @@ router.post('/tickets', async (req, res) => {
 });
 
 router.get('/tickets', async (req, res) => {
-  const tickets = await SupportTicket.find({ userId: req.userId })
+  const tickets = await SupportTicket.find({ userId: req.authUserId })
     .sort({ updatedAt: -1 })
     .lean();
   res.json({
@@ -107,7 +107,7 @@ router.get('/tickets/:id', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return res.status(400).json({ error: 'invalid_id' });
   }
-  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.userId });
+  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.authUserId });
   if (!ticket) return res.status(404).json({ error: 'not_found' });
   res.json({ ticket: await withSignedAttachments(ticket) });
 });
@@ -126,14 +126,14 @@ router.post('/tickets/:id/messages', async (req, res) => {
     return res.status(400).json({ error: `Too many attachments (max ${MAX_ATTACHMENTS})` });
   }
 
-  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.userId });
+  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.authUserId });
   if (!ticket) return res.status(404).json({ error: 'not_found' });
   if (ticket.status === 'closed') {
     return res.status(400).json({ error: 'ticket_closed' });
   }
 
   ticket.messages.push({
-    authorId: req.userId,
+    authorId: req.authUserId,
     authorRole: 'user',
     authorEmail: req.user.email,
     authorDisplayName: displayNameFor(req.user),
@@ -173,7 +173,7 @@ router.post('/tickets/:id/attachments/presign', async (req, res) => {
     return res.status(400).json({ error: `bytes must be 1..${MAX_ATTACHMENT_BYTES}` });
   }
 
-  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.userId })
+  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.authUserId })
     .select('_id');
   if (!ticket) return res.status(404).json({ error: 'not_found' });
 
@@ -194,7 +194,7 @@ router.post('/tickets/:id/attachments', async (req, res) => {
   if (!s3Key || !String(s3Key).startsWith(prefix)) {
     return res.status(400).json({ error: 'invalid key' });
   }
-  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.userId });
+  const ticket = await SupportTicket.findOne({ _id: req.params.id, userId: req.authUserId });
   if (!ticket) return res.status(404).json({ error: 'not_found' });
   if (ticket.attachments.length >= MAX_ATTACHMENTS) {
     return res.status(400).json({ error: `Too many attachments (max ${MAX_ATTACHMENTS})` });
@@ -242,7 +242,7 @@ router.get('/features', async (req, res) => {
     : { upvoteCount: -1, createdAt: -1 };
 
   const features = await FeatureRequest.find(filter).sort(sortSpec).limit(200).lean();
-  res.json({ features: features.map((f) => serializeFeature(f, req.userId)) });
+  res.json({ features: features.map((f) => serializeFeature(f, req.authUserId)) });
 });
 
 router.post('/features', async (req, res) => {
@@ -254,17 +254,17 @@ router.post('/features', async (req, res) => {
     return res.status(400).json({ error: 'Description required (max 6000)' });
   }
   const feature = await FeatureRequest.create({
-    userId: req.userId,
+    userId: req.authUserId,
     authorEmail: req.user.email,
     authorDisplayName: displayNameFor(req.user),
     title,
     description,
     // Author's own upvote is implicit.
-    upvotedBy: [req.userId],
+    upvotedBy: [req.authUserId],
     upvoteCount: 1,
   });
   rlog.info({ featureId: String(feature._id) }, 'support: feature request created');
-  res.status(201).json({ feature: serializeFeature(feature, req.userId) });
+  res.status(201).json({ feature: serializeFeature(feature, req.authUserId) });
 });
 
 router.get('/features/:id', async (req, res) => {
@@ -275,7 +275,7 @@ router.get('/features/:id', async (req, res) => {
   if (!feature) return res.status(404).json({ error: 'not_found' });
   res.json({
     feature: {
-      ...serializeFeature(feature, req.userId),
+      ...serializeFeature(feature, req.authUserId),
       comments: (feature.comments || []).map((c) => ({
         id: String(c._id),
         authorEmail: c.authorEmail,
@@ -292,7 +292,7 @@ router.post('/features/:id/upvote', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return res.status(400).json({ error: 'invalid_id' });
   }
-  const uid = req.userId;
+  const uid = req.authUserId;
   // $addToSet makes the vote idempotent. Only recompute count when we
   // actually modified the array.
   const result = await FeatureRequest.findByIdAndUpdate(
@@ -313,7 +313,7 @@ router.delete('/features/:id/upvote', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return res.status(400).json({ error: 'invalid_id' });
   }
-  const uid = req.userId;
+  const uid = req.authUserId;
   const result = await FeatureRequest.findByIdAndUpdate(
     req.params.id,
     { $pull: { upvotedBy: uid } },
@@ -340,7 +340,7 @@ router.post('/features/:id/comments', async (req, res) => {
   if (!feature) return res.status(404).json({ error: 'not_found' });
 
   feature.comments.push({
-    authorId: req.userId,
+    authorId: req.authUserId,
     authorEmail: req.user.email,
     authorDisplayName: displayNameFor(req.user),
     authorIsAdmin: Boolean(req.user.isAdmin),
@@ -352,7 +352,7 @@ router.post('/features/:id/comments', async (req, res) => {
   const doc = feature.toObject();
   res.status(201).json({
     feature: {
-      ...serializeFeature(doc, req.userId),
+      ...serializeFeature(doc, req.authUserId),
       comments: doc.comments.map((c) => ({
         id: String(c._id),
         authorEmail: c.authorEmail,

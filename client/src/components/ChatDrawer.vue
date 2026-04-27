@@ -33,6 +33,11 @@ const cameraConfig = {
   files: { maxNumberOfFiles: 1 },
   button: { position: 'dropup-menu' },
 };
+const speechToTextConfig = {
+  webSpeech: true,
+  displayInterimResults: true,
+  submitAfterSilence: 2000,
+};
 const introMessage = {
   text:
     "Hi! I can help you understand your nutrition, weight, symptoms, and health data. Snap a photo of your food and I'll calculate macros.",
@@ -1051,6 +1056,7 @@ const streamChat = (body, signals) => {
   const payload = {
     messages: outgoingMessages,
     threadId: tid && !String(tid).startsWith('temp-') ? tid : null,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
   const controller = new AbortController();
   signals.stopClicked.listener = () => controller.abort();
@@ -1683,6 +1689,7 @@ onMounted(() => {
           :introMessage="introMessage"
           :images="imagesConfig"
           :camera="cameraConfig"
+          :speechToText="speechToTextConfig"
           style="height: 100%; width: 100%; border: none; display: block;"
           :chatStyle="chatStyles"
           :inputAreaStyle="inputAreaStyle"

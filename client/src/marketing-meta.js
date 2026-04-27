@@ -423,6 +423,19 @@ export const MARKETING_META = {
     },
     sitemap: { priority: 0.8, changefreq: 'monthly' },
   },
+  '/blog/adhd-nutrition-tracker': {
+    title: 'The Atomic Habits Lie: Why ADHD Brains Need a Different Kind of Tracker | Protokol Lab',
+    description: 'Atomic-habits advice fails ADHD brains by design. A founder essay on why MyFitnessPal-style daily logging structurally fails neurodivergent users, and what an ADHD-friendly nutrition tracker actually has to do.',
+    og: {
+      variant: 'blog-adhd-tracker',
+      eyebrow: 'Blog · ADHD',
+      titleLines: ['The atomic', 'habits lie.'],
+      accent: 'habits lie.',
+      subtitle: 'Daily macro tracking is the exact shape of habit ADHD cannot sustain. Why frictionless logging is an accessibility feature, not a luxury.',
+      chartVariant: 'pk',
+    },
+    sitemap: { priority: 0.7, changefreq: 'monthly' },
+  },
 };
 
 // ----- Per-competitor /compare/<slug> entries ----------------------------

@@ -144,7 +144,7 @@ router.post('/tickets/:id/messages', async (req, res) => {
   if (!ticket) return res.status(404).json({ error: 'not_found' });
 
   const msg = {
-    authorId: req.userId,
+    authorId: req.authUserId,
     authorRole: 'admin',
     authorEmail: req.user.email,
     authorDisplayName: displayNameFor(req.user),

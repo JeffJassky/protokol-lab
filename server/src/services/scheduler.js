@@ -2,12 +2,14 @@ import { Agenda } from 'agenda';
 import { MongoBackend } from '@agendajs/mongo-backend';
 import mongoose from 'mongoose';
 import Compound from '../models/Compound.js';
+import User from '../models/User.js';
 import UserSettings from '../models/UserSettings.js';
 import WeightLog from '../models/WeightLog.js';
 import FoodLog from '../models/FoodLog.js';
 import SymptomLog from '../models/SymptomLog.js';
 import DoseLog from '../models/DoseLog.js';
 import { sendToUser } from './push.js';
+import { deleteSandbox, refillPool } from './demo.js';
 import { childLogger, errContext } from '../lib/logger.js';
 
 const log = childLogger('scheduler');
@@ -210,6 +212,59 @@ async function runTick() {
   );
 }
 
+// PRD §7.4: anon sandboxes idle 24h get nuked, authed sandboxes idle 30d.
+// Template (`isDemoTemplate=true`) is never touched.
+const ANON_SANDBOX_TTL_MS = 24 * 60 * 60 * 1000;
+const AUTHED_SANDBOX_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function runDemoCleanup() {
+  const now = Date.now();
+  const anonCutoff = new Date(now - ANON_SANDBOX_TTL_MS);
+  const authedCutoff = new Date(now - AUTHED_SANDBOX_TTL_MS);
+
+  const candidates = await User.find({
+    isDemoSandbox: true,
+    // Pooled sandboxes are managed by the refill job, not the cleanup job.
+    isPooled: { $ne: true },
+    $or: [
+      { parentUserId: null, lastActiveAt: { $lt: anonCutoff } },
+      { parentUserId: { $ne: null }, lastActiveAt: { $lt: authedCutoff } },
+      // Sandboxes never seen at all (createdAt-only, lastActiveAt null) older
+      // than the anon TTL — treat them as anon and reap. Constrain to anon
+      // (parentUserId null) so an authed sandbox with a missing stamp can't
+      // be reaped at the wrong TTL.
+      { parentUserId: null, lastActiveAt: null, createdAt: { $lt: anonCutoff } },
+    ],
+  })
+    .select('_id parentUserId lastActiveAt')
+    .lean();
+
+  let anonDeleted = 0;
+  let authedDeleted = 0;
+  for (const sb of candidates) {
+    try {
+      // Clear the parent's pointer FIRST. If deletion ran before the
+      // updateOne and we crashed in between, the user would wake up with a
+      // dangling activeProfileId pointing at a tombstone — requireAuth
+      // would scope their requests to it and every data route would
+      // silently return empty.
+      if (sb.parentUserId) {
+        await User.updateOne(
+          { _id: sb.parentUserId, activeProfileId: sb._id },
+          { $set: { activeProfileId: null } },
+        );
+      }
+      await deleteSandbox(sb._id);
+      if (sb.parentUserId) authedDeleted++;
+      else anonDeleted++;
+    } catch (err) {
+      log.error({ ...errContext(err), sandboxId: String(sb._id) }, 'demo-cleanup: delete failed');
+    }
+  }
+  log.info({ anonDeleted, authedDeleted, total: candidates.length }, 'demo-cleanup: complete');
+  return { anonDeleted, authedDeleted };
+}
+
 export async function startScheduler() {
   if (agenda) {
     log.debug('scheduler: already started');
@@ -238,13 +293,44 @@ export async function startScheduler() {
     { lockLifetime: 60 * 1000 },
   );
 
+  agenda.define(
+    'demo-cleanup',
+    async () => {
+      try {
+        await runDemoCleanup();
+      } catch (err) {
+        log.error(errContext(err), 'demo-cleanup: failed');
+      }
+    },
+    { lockLifetime: 5 * 60 * 1000 },
+  );
+
+  // Warm-pool refill — keeps a few pre-cloned anon sandboxes ready so cold
+  // visitors get the demo instantly instead of paying the clone latency.
+  // Runs every minute; each tick builds at most (target - current) sandboxes.
+  agenda.define(
+    'demo-pool-refill',
+    async () => {
+      try {
+        await refillPool();
+      } catch (err) {
+        log.error(errContext(err), 'demo-pool-refill: failed');
+      }
+    },
+    { lockLifetime: 5 * 60 * 1000 },
+  );
+
   agenda.on('fail', (err, job) => {
     log.error({ ...errContext(err), jobName: job?.attrs?.name }, 'scheduler: agenda job fail');
   });
 
   await agenda.start();
   await agenda.every('1 minute', 'reminder-tick');
-  log.info({ processEveryMs: 30000, interval: '1 minute' }, 'scheduler: started');
+  await agenda.every('1 minute', 'demo-pool-refill');
+  // Nightly at 03:17 UTC — off the top of the hour to avoid colliding with
+  // any cron stampedes elsewhere in infra.
+  await agenda.every('17 3 * * *', 'demo-cleanup');
+  log.info({ processEveryMs: 30000 }, 'scheduler: started');
   return agenda;
 }
 

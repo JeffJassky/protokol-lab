@@ -11,6 +11,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { PLANS, getPublicPlans } from '../../../shared/plans.js';
 import { useAuthStore } from './auth.js';
+import { useDemoStore } from './demo.js';
 
 export const useUpgradeModalStore = defineStore('upgradeModal', () => {
   const isOpen = ref(false);
@@ -50,7 +51,12 @@ export const useUpgradeModalStore = defineStore('upgradeModal', () => {
    */
   function openForGate(opts) {
     const auth = useAuthStore();
-    const currentPlanId = auth.user?.plan || null;
+    const demo = useDemoStore();
+    // In demo, the active profile is the sandbox — read its plan, not the
+    // null auth user (which would make every plan a candidate and pick
+    // Free as the "upgrade target").
+    const currentPlanId =
+      (demo.inDemo && demo.activePlanId) || auth.user?.plan || null;
     const currentPlan = currentPlanId ? PLANS[currentPlanId] : null;
     const candidates = currentPlan
       ? getPublicPlans().filter((p) => p.sortOrder > currentPlan.sortOrder)

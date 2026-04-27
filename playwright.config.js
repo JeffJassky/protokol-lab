@@ -25,6 +25,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Test-only helpers (/api/__test/*) require this header in addition to
+    // NODE_ENV=e2e on the server. Keeps a stray NODE_ENV=e2e in CI/staging
+    // from exposing the reset-everything endpoint.
+    extraHTTPHeaders: {
+      'x-internal-test-token': 'e2e-internal-token-not-for-prod',
+    },
   },
 
   projects: [
@@ -46,6 +52,7 @@ export default defineConfig({
         USE_MEM_MONGO: '1',
         PORT: '3002',
         JWT_SECRET: 'e2e-secret-not-for-prod',
+        INTERNAL_TEST_TOKEN: 'e2e-internal-token-not-for-prod',
         APP_URL: 'http://localhost:5174',
         LOG_LEVEL: 'warn',
         COOKIE_SAMESITE: 'lax',

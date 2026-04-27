@@ -4,16 +4,21 @@ import { useRouter } from 'vue-router';
 import { usePwa } from '../composables/usePwa.js';
 import { usePushStore } from '../stores/push.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
+import { useDemoStore } from '../stores/demo.js';
 
 const pwa = usePwa();
 const pushStore = usePushStore();
 const onboarding = useOnboardingStore();
+const demo = useDemoStore();
 const router = useRouter();
 
 // The banner shows the single highest-priority incomplete onboarding action
 // so users don't scroll past it. More detailed guidance lives in the
 // dashboard checklist + settings page.
 const step = computed(() => {
+  // Demo sessions never see install/notification nudges — sandboxes can't
+  // receive push and the demo's whole purpose is "feel the product first."
+  if (demo.inDemo) return null;
   if (onboarding.bannerDismissed) return null;
   if (!pwa.installed.value) {
     return {

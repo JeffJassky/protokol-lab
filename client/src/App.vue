@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from './stores/auth.js';
+import { useDemoStore } from './stores/demo.js';
 import { useUpgradeModalStore } from './stores/upgradeModal.js';
 import { registerPlanLimitHandler } from './api/index.js';
 import { useTheme } from './composables/useTheme.js';
@@ -9,6 +10,7 @@ import AppLayout from './components/AppLayout.vue';
 import UpgradeModal from './components/UpgradeModal.vue';
 
 const auth = useAuthStore();
+const demo = useDemoStore();
 const route = useRoute();
 const upgradeModal = useUpgradeModalStore();
 
@@ -22,8 +24,10 @@ onMounted(() => {
 
 // Public routes (landing, login, register, etc.) render raw — no app chrome.
 // Also hide chrome on routes that explicitly opt out (e.g. /welcome wizard).
+// Anon demo sessions still get the full chrome so the demo banner renders
+// and the visitor sees the same nav a real user would.
 const showAppLayout = computed(
-  () => auth.user && !route.meta.public && !route.meta.hideAppChrome,
+  () => (auth.user || demo.inDemo) && !route.meta.public && !route.meta.hideAppChrome,
 );
 </script>
 

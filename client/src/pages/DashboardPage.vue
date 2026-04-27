@@ -25,6 +25,7 @@ import { computeNutritionScore } from '../utils/nutritionScore.js';
 import { contrastText } from '../utils/contrast.js';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import OnboardingChecklist from '../components/OnboardingChecklist.vue';
+import { useDemoStore } from '../stores/demo.js';
 import PhotoTimelineCard from '../components/PhotoTimelineCard.vue';
 import UpgradeBadge from '../components/UpgradeBadge.vue';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
@@ -33,6 +34,7 @@ import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Filler, Legend);
 
 const router = useRouter();
+const demo = useDemoStore();
 const weightStore = useWeightStore();
 const foodLogStore = useFoodLogStore();
 const settingsStore = useSettingsStore();
@@ -797,7 +799,10 @@ const etaToGoal = computed(() => {
   <div class="dashboard">
     <h2 class="page-title">Dashboard</h2>
 
-    <OnboardingChecklist />
+    <!-- Hide install/notification setup in demo mode — sandboxes can't
+         receive push and there's nothing to "install" until the visitor
+         creates a real account. -->
+    <OnboardingChecklist v-if="!demo.inDemo" />
 
     <!-- Weight stats grid -->
     <div v-if="weightStore.stats" class="stats-grid">

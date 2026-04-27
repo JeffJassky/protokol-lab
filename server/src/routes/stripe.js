@@ -87,7 +87,7 @@ router.post('/create-checkout-session', async (req, res) => {
   }
 
   const { planId, interval } = req.body || {};
-  const rlog = (req.log || log).child({ userId: String(req.userId), planId, interval });
+  const rlog = (req.log || log).child({ userId: String(req.authUserId), planId, interval });
 
   // Validate plan. Must be public + paid + not the user's current plan.
   const plan = PLANS[planId];
@@ -104,7 +104,7 @@ router.post('/create-checkout-session', async (req, res) => {
     return res.status(500).json({ error: 'stripe_price_not_configured' });
   }
 
-  const user = await User.findById(req.userId);
+  const user = await User.findById(req.authUserId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
   try {
@@ -166,8 +166,8 @@ router.post('/create-portal-session', async (req, res) => {
     return res.status(503).json({ error: 'stripe_not_configured' });
   }
 
-  const rlog = (req.log || log).child({ userId: String(req.userId) });
-  const user = await User.findById(req.userId);
+  const rlog = (req.log || log).child({ userId: String(req.authUserId) });
+  const user = await User.findById(req.authUserId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   if (!user.stripeCustomerId) {
     return res.status(400).json({ error: 'no_stripe_customer' });
@@ -189,7 +189,7 @@ router.post('/create-portal-session', async (req, res) => {
 // GET /api/stripe/subscription
 // Current user's subscription snapshot. Cheap — no Stripe call, reads from DB.
 router.get('/subscription', async (req, res) => {
-  const user = await User.findById(req.userId).lean();
+  const user = await User.findById(req.authUserId).lean();
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const plan = getPlan(user.plan);
   res.json({

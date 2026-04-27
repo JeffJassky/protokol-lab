@@ -29,9 +29,9 @@ router.post("/subscribe", async (req, res) => {
     return res.status(400).json({ error: "Invalid subscription" });
   }
 
-  const filter = { userId: req.userId, endpoint: subscription.endpoint };
+  const filter = { userId: req.authUserId, endpoint: subscription.endpoint };
   const update = {
-    userId: req.userId,
+    userId: req.authUserId,
     endpoint: subscription.endpoint,
     keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
     userAgent: req.headers["user-agent"] || "",
@@ -64,7 +64,7 @@ router.post("/unsubscribe", async (req, res) => {
     rlog.warn('push unsubscribe: missing endpoint');
     return res.status(400).json({ error: "endpoint required" });
   }
-  const { deletedCount } = await PushSubscription.deleteOne({ userId: req.userId, endpoint });
+  const { deletedCount } = await PushSubscription.deleteOne({ userId: req.authUserId, endpoint });
   rlog.info({ deletedCount }, 'push: unsubscribed');
   res.status(204).send();
 });
@@ -79,14 +79,14 @@ router.post("/refresh", async (req, res) => {
 
   if (oldEndpoint) {
     await PushSubscription.deleteOne({
-      userId: req.userId,
+      userId: req.authUserId,
       endpoint: oldEndpoint,
     });
   }
   const sub = await PushSubscription.findOneAndUpdate(
-    { userId: req.userId, endpoint: subscription.endpoint },
+    { userId: req.authUserId, endpoint: subscription.endpoint },
     {
-      userId: req.userId,
+      userId: req.authUserId,
       endpoint: subscription.endpoint,
       keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
       userAgent: req.headers["user-agent"] || "",
@@ -117,7 +117,7 @@ router.patch("/categories", async (req, res) => {
     update["categories.test"] = Boolean(categories.test);
 
   const sub = await PushSubscription.findOneAndUpdate(
-    { userId: req.userId, endpoint },
+    { userId: req.authUserId, endpoint },
     { $set: update },
     { returnDocument: "after" },
   );
@@ -130,7 +130,7 @@ router.patch("/categories", async (req, res) => {
 });
 
 router.get("/subscriptions", async (req, res) => {
-  const subs = await PushSubscription.find({ userId: req.userId }).select("-__v");
+  const subs = await PushSubscription.find({ userId: req.authUserId }).select("-__v");
   (req.log || log).debug({ count: subs.length }, 'push: subscriptions listed');
   res.json({ subscriptions: subs });
 });
@@ -138,7 +138,7 @@ router.get("/subscriptions", async (req, res) => {
 router.post("/test", async (req, res) => {
   const rlog = req.log || log;
   const { endpoint } = req.body || {};
-  const query = { userId: req.userId };
+  const query = { userId: req.authUserId };
   if (endpoint) query.endpoint = endpoint;
   const subs = await PushSubscription.find(query);
   rlog.info({ matched: subs.length, scoped: Boolean(endpoint) }, 'push test: sending');

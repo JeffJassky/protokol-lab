@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import { useDemoStore } from '../stores/demo.js';
 import LandingPage from '../pages/LandingPage.vue';
 import FeaturesPage from '../pages/FeaturesPage.vue';
 import PricingPage from '../pages/PricingPage.vue';
@@ -16,10 +17,12 @@ import WeeklyCalorieBudgetPage from '../pages/blog/WeeklyCalorieBudgetPage.vue';
 import Glp1NauseaTimelinePage from '../pages/blog/Glp1NauseaTimelinePage.vue';
 import OzempicVsWegovyPage from '../pages/blog/OzempicVsWegovyPage.vue';
 import ManagingSideEffectsPage from '../pages/blog/ManagingSideEffectsPage.vue';
+import AdhdNutritionTrackerPage from '../pages/blog/AdhdNutritionTrackerPage.vue';
 import CompareIndexPage from '../pages/CompareIndexPage.vue';
 import ComparisonPage from '../pages/ComparisonPage.vue';
 import LoginPage from '../pages/LoginPage.vue';
 import RegisterPage from '../pages/RegisterPage.vue';
+import StartPage from '../pages/StartPage.vue';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage.vue';
 import ResetPasswordPage from '../pages/ResetPasswordPage.vue';
 import DashboardPage from '../pages/DashboardPage.vue';
@@ -54,10 +57,15 @@ const routes = [
   { path: '/blog/glp1-nausea-timeline', name: 'blog-glp1-nausea-timeline', component: Glp1NauseaTimelinePage, meta: { public: true, marketing: true } },
   { path: '/blog/ozempic-vs-wegovy-vs-compounded-semaglutide', name: 'blog-ozempic-vs-wegovy', component: OzempicVsWegovyPage, meta: { public: true, marketing: true } },
   { path: '/blog/managing-glp1-side-effects', name: 'blog-managing-side-effects', component: ManagingSideEffectsPage, meta: { public: true, marketing: true } },
+  { path: '/blog/adhd-nutrition-tracker', name: 'blog-adhd-nutrition-tracker', component: AdhdNutritionTrackerPage, meta: { public: true, marketing: true } },
   { path: '/compare', name: 'compare', component: CompareIndexPage, meta: { public: true, marketing: true } },
   { path: '/compare/:slug', name: 'comparison', component: ComparisonPage, meta: { public: true, marketing: true } },
   { path: '/login', name: 'login', component: LoginPage, meta: { guest: true, public: true } },
   { path: '/register', name: 'register', component: RegisterPage, meta: { guest: true, public: true } },
+  // Demo-mode converter signup. Same guest gate as /register; both routes
+  // now collect email + password (or Google) and route to the /welcome
+  // wizard for profile setup. See plans/demo-mode.md §9.
+  { path: '/start', name: 'start', component: StartPage, meta: { guest: true, public: true } },
   { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage, meta: { guest: true, public: true } },
   { path: '/reset-password', name: 'reset-password', component: ResetPasswordPage, meta: { guest: true, public: true } },
   { path: '/welcome', name: 'welcome', component: WelcomePage, meta: { requiresAuth: true, hideAppChrome: true } },
@@ -95,19 +103,29 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
+  const demo = useDemoStore();
 
   if (!auth.checked) {
     await auth.fetchMe();
   }
+  if (!demo.checked) {
+    await demo.fetchStatus();
+  }
 
-  if (to.meta.requiresAuth && !auth.user) {
+  // Anonymous demo sessions count as "authenticated enough" for app routes —
+  // they have a sandbox and the data routes scope to it. Real auth only
+  // matters for the auth-only edges (settings/billing/etc), which are
+  // protected server-side.
+  const hasSession = Boolean(auth.user) || demo.mode === 'anon';
+
+  if (to.meta.requiresAuth && !hasSession) {
     return { name: 'login' };
   }
   if (to.meta.requiresAdmin && !auth.user?.isAdmin) {
     return { name: 'log' };
   }
-  // Force unfinished users through the wizard. Logout is handled inside the
-  // wizard itself; everything else under requiresAuth is gated until done.
+  // Force unfinished real users through the wizard. Demo sessions skip this —
+  // their sandbox arrives pre-populated.
   if (
     auth.user &&
     !auth.user.onboardingComplete &&
@@ -132,9 +150,10 @@ router.beforeEach(async (to) => {
     return { name: 'log' };
   }
   // Logged-in users hitting the public landing go straight to the app.
-  // Logged-in users on *other* marketing pages (features/pricing/faq/etc.)
-  // stay where they are — they may be researching the upgrade flow or
-  // showing the pricing table to a partner.
+  // Demo sessions are intentionally NOT redirected — visitors should be
+  // able to navigate back to marketing (and from there optionally restart
+  // the demo or sign up). The "Log" nav link points at /log directly so
+  // it doesn't fight this.
   if (to.name === 'landing' && auth.user) {
     return { name: 'log' };
   }

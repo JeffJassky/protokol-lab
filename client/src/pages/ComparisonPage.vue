@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import MarketingLayout from '../components/MarketingLayout.vue';
+import MarketingEndCta from '../components/MarketingEndCta.vue';
 import { useSeo, ORIGIN } from '../composables/useSeo.js';
 import { getComparison, listComparisons } from '../comparisons.js';
 import '../styles/marketing.css';
@@ -146,13 +147,16 @@ function displayCell(v) {
           <p class="faq-body">{{ f.a }}</p>
         </div>
 
-        <div class="mkt-cta-row">
-          <a href="/register" class="mkt-btn-primary">Try Protokol Lab free →</a>
-          <a href="/pricing" class="mkt-btn-secondary">See pricing</a>
+        <div class="external-link-row">
           <a :href="cmp.website" rel="nofollow noopener" target="_blank" class="cmp-ext">
             Visit {{ cmp.name }} ↗
           </a>
         </div>
+        <MarketingEndCta
+          heading="See Protokol Lab for yourself."
+          lead="Real data. No signup required."
+          variant="pricing"
+        />
 
         <div v-if="related.length" class="cmp-related">
           <h3 class="mkt-h3">Other comparisons</h3>

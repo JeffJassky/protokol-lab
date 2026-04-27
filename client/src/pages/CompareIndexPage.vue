@@ -1,5 +1,6 @@
 <script setup>
 import MarketingLayout from '../components/MarketingLayout.vue';
+import MarketingEndCta from '../components/MarketingEndCta.vue';
 import { useRouteSeo, ORIGIN } from '../composables/useSeo.js';
 import { listComparisons } from '../comparisons.js';
 import '../styles/marketing.css';
@@ -77,12 +78,13 @@ useRouteSeo({
           <li><strong>Agentic AI</strong> — reads your full log, searches the web, creates custom foods, and writes entries into your day.</li>
         </ul>
 
-        <div class="mkt-cta-row">
-          <a href="/register" class="mkt-btn-primary">Start tracking free →</a>
-          <a href="/pricing" class="mkt-btn-secondary">See pricing</a>
-        </div>
       </div>
     </section>
+    <MarketingEndCta
+      heading="See it for yourself."
+      lead="Real data. No signup required."
+      variant="pricing"
+    />
   </MarketingLayout>
 </template>
 

@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth.js';
 import { startCheckout } from '../api/stripe.js';
 import { PLANS, PLAN_IDS } from '../../../shared/plans.js';
 import { useRouteSeo } from '../composables/useSeo.js';
+import { useTryDemo } from '../composables/useTryDemo.js';
 import MarketingLayout from '../components/MarketingLayout.vue';
 
 useRouteSeo();
@@ -13,6 +14,17 @@ const router = useRouter();
 const auth = useAuthStore();
 const checkoutErr = ref('');
 const billingInterval = ref('yearly');
+
+// Cold-traffic primary CTA. Mints an anonymous sandbox (or toggles authed
+// users in via /api/demo/enter) + drops the visitor on /dashboard. PRD §6.1.
+const { tryDemo: doTryDemo, demoStarting } = useTryDemo();
+async function tryDemo() {
+  try {
+    await doTryDemo();
+  } catch (err) {
+    checkoutErr.value = err.message || 'Could not start demo';
+  }
+}
 
 const premiumPlan = PLANS[PLAN_IDS.PREMIUM];
 const unlimitedPlan = PLANS[PLAN_IDS.UNLIMITED];
@@ -387,10 +399,13 @@ const aiTrail = [
             whole history.
           </p>
           <div class="hero-ctas">
-            <button class="btn-primary" @click="goRegister">
-              Start tracking →
+            <button class="btn-primary" :disabled="demoStarting" @click="tryDemo">
+              {{ demoStarting ? 'Loading…' : "Try the demo →" }}
             </button>
-            <button class="btn-secondary" @click="goLogin">Sign in</button>
+            <button class="btn-secondary" @click="goRegister">
+              Sign up
+            </button>
+            <button class="btn-tertiary" @click="goLogin">Sign in</button>
           </div>
           <div class="hero-meta">
             <div class="hero-meta-row">
@@ -1324,9 +1339,12 @@ const aiTrail = [
             Food, doses, weight, how you feel — one app, one place. See what's
             actually working for you.
           </p>
-          <button class="btn-primary big" @click="goRegister">
-            Get started free →
-          </button>
+          <div class="end-ctas">
+            <button class="btn-primary big" :disabled="demoStarting" @click="tryDemo">
+              {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
+            </button>
+            <button class="btn-secondary big" @click="goRegister">Sign up free</button>
+          </div>
         </div>
       </section>
     </div>
@@ -1517,6 +1535,8 @@ const aiTrail = [
 }
 .btn-primary.wide { width: 100%; }
 .btn-primary.big { font-size: 14px; padding: 16px 28px; }
+.btn-secondary.big { font-size: 14px; padding: 16px 28px; }
+.end-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .btn-secondary {
   padding: 14px 22px; background: transparent; color: var(--text);
   border: 1px solid var(--border-strong); font-weight: 600; font-size: 13px;
@@ -1526,6 +1546,14 @@ const aiTrail = [
 }
 .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
 .btn-secondary.wide { width: 100%; }
+.btn-tertiary {
+  padding: 14px 12px; background: transparent; color: var(--text-secondary);
+  border: none; font-weight: 600; font-size: 13px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer; font-family: inherit;
+  transition: color .15s;
+}
+.btn-tertiary:hover { color: var(--text); }
 .hero-meta {
   margin-top: 36px;
   font-size: 11px; color: var(--text-tertiary);
