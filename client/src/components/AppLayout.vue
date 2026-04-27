@@ -1,12 +1,9 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted, watch } from 'vue';
 import { useAuthStore } from '../stores/auth.js';
-import { useDemoStore } from '../stores/demo.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { usePushStore } from '../stores/push.js';
 import { useTheme } from '../composables/useTheme.js';
-import { api } from '../api/index.js';
 import ChatDrawer from './ChatDrawer.vue';
 import OnboardingBanner from './OnboardingBanner.vue';
 import DemoBanner from './DemoBanner.vue';
@@ -14,18 +11,9 @@ import ProfileFieldsModal from './ProfileFieldsModal.vue';
 import BrandLockup from './BrandLockup.vue';
 
 const auth = useAuthStore();
-const demo = useDemoStore();
 const onboarding = useOnboardingStore();
 const pushStore = usePushStore();
-const router = useRouter();
 
-// Anon demo visitors aren't logged in — there's no JWT to clear, just a
-// demo cookie. The right primary action for them is "Exit demo" which
-// drops the cookie and returns them to marketing.
-const isAnonDemo = computed(() => !auth.user && demo.mode === 'anon');
-const sessionAction = computed(() =>
-  isAnonDemo.value ? { label: 'Exit demo', handler: handleExitDemo } : { label: 'Logout', handler: handleLogout },
-);
 const showChat = ref(false);
 
 const theme = useTheme();
@@ -49,22 +37,6 @@ watch(() => auth.user, (u) => {
   const uid = u._id || u.id;
   if (uid) onboarding.hydrate(String(uid));
 });
-
-async function handleLogout() {
-  await auth.logout();
-  router.push('/login');
-}
-
-async function handleExitDemo() {
-  // Server clears the cookie via the public endpoint; demo store flips back
-  // to 'none' after the status refresh, then we navigate home so the
-  // visitor lands on marketing instead of a demo dashboard with no banner.
-  try {
-    await api.post('/api/demo/clear-cookie');
-  } catch (_) { /* not fatal */ }
-  await demo.fetchStatus();
-  router.push('/');
-}
 </script>
 
 <template>
@@ -74,7 +46,6 @@ async function handleExitDemo() {
     <nav class="top-nav">
       <router-link to="/" class="brand" aria-label="Protokol Lab — home">
         <BrandLockup class="brand-desktop" :size="16" :show-icon="false" />
-        <BrandLockup class="brand-mobile" :size="16" :show-wordmark="false" />
       </router-link>
       <div class="nav-links">
         <router-link to="/log">Log</router-link>
@@ -131,7 +102,6 @@ async function handleExitDemo() {
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
           </svg>
         </button>
-        <button class="logout-btn" @click="sessionAction.handler">{{ sessionAction.label }}</button>
       </div>
     </nav>
     <div class="main-area" :class="{ 'chat-open': showChat }">
@@ -176,7 +146,6 @@ async function handleExitDemo() {
   color: var(--text);
   text-decoration: none;
 }
-.brand-mobile { display: none; }
 .brand-desktop { display: inline-flex; }
 .nav-links {
   display: flex;
@@ -226,20 +195,6 @@ async function handleExitDemo() {
   transition: color var(--transition-fast);
 }
 
-.logout-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-small);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-  margin-left: var(--space-2);
-  transition: background var(--transition-base);
-}
-.logout-btn:hover {
-  background: var(--bg);
-}
 .main-area {
   flex: 1;
   display: flex;
@@ -289,7 +244,7 @@ async function handleExitDemo() {
 /* ───────────────────────────────────────────────────────────────────────
    Mobile (≤ 768px)
    - Top nav becomes a bottom-fixed nav bar.
-   - Brand + logout are hidden (logout moves to /settings).
+   - Brand is hidden (logout lives on /settings).
    - Content goes edge-to-edge with no horizontal padding.
    - Chat takes over the full viewport when open.
    - Bottom-safe-area inset keeps iOS home indicator clear.
@@ -299,17 +254,10 @@ async function handleExitDemo() {
     height: 100dvh; /* dvh handles iOS URL-bar height changes */
   }
 
-  /* Mobile bottom bar: icon-only brand on the left, nav links flex the rest.
-     Theme toggle + logout move to /settings. */
-  .top-nav .logout-btn,
   .top-nav .theme-toggle {
     display: none;
   }
   .top-nav .brand-desktop { display: none; }
-  .top-nav .brand-mobile {
-    display: inline-flex;
-    padding: 12px 14px;
-  }
 
   .top-nav {
     position: fixed;
