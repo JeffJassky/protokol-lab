@@ -80,8 +80,10 @@ export function buildRouter(ctx) {
       sendShell(res, ctx.config.basePath);
     });
   } else {
-    // Helpful placeholder when UI hasn't been built yet
-    router.get('*', ...auth, (req, res) => {
+    // Helpful placeholder when UI hasn't been built yet. Express 5 /
+    // path-to-regexp v6 rejects bare '*' as a path; use a regex so the
+    // catch-all stays compatible with both express 4 and 5.
+    router.get(/.*/, ...auth, (req, res) => {
       res.type('html').send(unbuiltShell(ctx.config.basePath));
     });
   }
