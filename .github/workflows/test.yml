@@ -27,6 +27,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
 
+      # Server depends on @jeffjassky/marketing-admin via file:../marketing.
+      # That package's runtime imports (mongoose, claude-agent-sdk) need its
+      # own node_modules populated, so install marketing first. --legacy-peer-deps
+      # mirrors the heroku-postbuild step.
+      - name: Install marketing deps
+        working-directory: marketing
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: npm ci --legacy-peer-deps
+
       - name: Install server deps
         working-directory: server
         run: npm ci
