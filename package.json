@@ -9,7 +9,7 @@
     "dev:server": "npm run dev --prefix server",
     "install:all": "npm install && npm install --prefix client && npm install --prefix server && npm install --prefix marketing",
     "build": "npm run build --prefix client",
-    "heroku-postbuild": "npm install --prefix marketing && npm run build:ui --prefix marketing && npm prune --omit=dev --prefix marketing && npm install --prefix server && npm install --prefix client && npm run build --prefix client",
+    "heroku-postbuild": "npm install --prefix marketing --legacy-peer-deps && npm run build:ui --prefix marketing && npm prune --omit=dev --prefix marketing --legacy-peer-deps && npm install --prefix server && npm install --prefix client && npm run build --prefix client",
     "start": "npm start --prefix server",
     "seed": "node server/src/scripts/seed-user.js",
     "test": "npm test --prefix server && npm test --prefix client",
