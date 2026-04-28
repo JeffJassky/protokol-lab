@@ -1,5 +1,6 @@
-// Demo routes — anon start, authed enter/exit/reset, status.
-// Verifies the full HTTP contract that the client will rely on.
+// Demo routes — anon /start + /status. Demo is pre-register only;
+// /enter, /exit, /reset have been removed (cleanup happens in routes/auth.js
+// on login/register).
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
@@ -79,103 +80,18 @@ describe('POST /api/demo/start (anonymous)', () => {
   });
 });
 
-describe('POST /api/demo/enter (authed)', () => {
+describe('removed authed-toggle routes — 404', () => {
   beforeAll(async () => { await User.syncIndexes(); });
-  beforeEach(async () => {
-    await User.deleteMany({});
-    await FoodLog.deleteMany({});
-    await FoodItem.deleteMany({});
-    await WeightLog.deleteMany({});
-  });
+  beforeEach(async () => { await User.deleteMany({}); });
 
-  it('401 without auth', async () => {
-    const res = await request(app).post('/api/demo/enter');
-    expect(res.status).toBe(401);
-  });
-
-  it('creates parented sandbox + sets activeProfileId', async () => {
-    await seedTinyTemplate();
-    const { agent, userId } = await registerReal();
-    const res = await agent.post('/api/demo/enter');
-    expect(res.status).toBe(200);
-    expect(res.body.mode).toBe('authed');
-    expect(res.body.created).toBe(true);
-
-    const real = await User.findById(userId);
-    expect(String(real.activeProfileId)).toBe(res.body.sandboxId);
-
-    const sandbox = await User.findById(res.body.sandboxId);
-    expect(String(sandbox.parentUserId)).toBe(String(userId));
-  });
-
-  it('reuses existing sandbox on second enter (no re-clone)', async () => {
-    await seedTinyTemplate();
-    const { agent } = await registerReal();
-    const a = await agent.post('/api/demo/enter');
-    const b = await agent.post('/api/demo/enter');
-    expect(a.body.sandboxId).toBe(b.body.sandboxId);
-    expect(b.body.created).toBe(false);
-    expect(await WeightLog.countDocuments({ userId: a.body.sandboxId })).toBe(1);
-  });
-});
-
-describe('POST /api/demo/exit (authed)', () => {
-  beforeAll(async () => { await User.syncIndexes(); });
-  beforeEach(async () => {
-    await User.deleteMany({});
-    await FoodLog.deleteMany({});
-    await FoodItem.deleteMany({});
-    await WeightLog.deleteMany({});
-  });
-
-  it('clears activeProfileId', async () => {
-    await seedTinyTemplate();
-    const { agent, userId } = await registerReal();
-    await agent.post('/api/demo/enter');
-    const res = await agent.post('/api/demo/exit');
-    expect(res.status).toBe(200);
-    const real = await User.findById(userId);
-    expect(real.activeProfileId).toBeNull();
-  });
-});
-
-describe('POST /api/demo/reset (authed)', () => {
-  beforeAll(async () => { await User.syncIndexes(); });
-  beforeEach(async () => {
-    await User.deleteMany({});
-    await FoodLog.deleteMany({});
-    await FoodItem.deleteMany({});
-    await WeightLog.deleteMany({});
-  });
-
-  it('404 when user has no sandbox', async () => {
-    await seedTinyTemplate();
-    const { agent } = await registerReal();
-    const res = await agent.post('/api/demo/reset');
-    expect(res.status).toBe(404);
-  });
-
-  it('wipes user-added rows after reset', async () => {
-    await seedTinyTemplate();
-    const { agent } = await registerReal();
-    const enter = await agent.post('/api/demo/enter');
-    const sandboxId = enter.body.sandboxId;
-
-    // Add a row directly to the sandbox.
-    const fi = await FoodItem.findOne({ userId: sandboxId });
-    await FoodLog.create({
-      userId: sandboxId,
-      foodItemId: fi._id,
-      date: new Date(),
-      mealType: 'snack',
-      servingCount: 1,
-    });
-    expect(await FoodLog.countDocuments({ userId: sandboxId })).toBe(2);
-
-    const res = await agent.post('/api/demo/reset');
-    expect(res.status).toBe(200);
-    expect(await FoodLog.countDocuments({ userId: sandboxId })).toBe(1);
-  });
+  it.each(['/api/demo/enter', '/api/demo/exit', '/api/demo/reset'])(
+    '%s no longer routed',
+    async (path) => {
+      const { agent } = await registerReal();
+      const res = await agent.post(path);
+      expect(res.status).toBe(404);
+    },
+  );
 });
 
 describe('GET /api/demo/status', () => {
@@ -214,15 +130,6 @@ describe('GET /api/demo/status', () => {
     expect(res.body.sandboxId).toBeNull();
   });
 
-  it('mode=authed with sandboxId after enter', async () => {
-    await seedTinyTemplate();
-    const { agent } = await registerReal();
-    const enter = await agent.post('/api/demo/enter');
-    const res = await agent.get('/api/demo/status');
-    expect(res.body.mode).toBe('authed');
-    expect(res.body.sandboxId).toBe(enter.body.sandboxId);
-  });
-
   it('returns activePlanId=unlimited for anon demo (sandbox plan visible to client)', async () => {
     await seedTinyTemplate();
     const agent = request.agent(app);
@@ -231,15 +138,7 @@ describe('GET /api/demo/status', () => {
     expect(res.body.activePlanId).toBe('unlimited');
   });
 
-  it('returns activePlanId=unlimited for authed user toggled into demo', async () => {
-    await seedTinyTemplate();
-    const { agent } = await registerReal();
-    await agent.post('/api/demo/enter');
-    const res = await agent.get('/api/demo/status');
-    expect(res.body.activePlanId).toBe('unlimited');
-  });
-
-  it('returns no activePlanId when authed user has no toggle', async () => {
+  it('returns no activePlanId for an authed user (demo is pre-register only)', async () => {
     await seedTinyTemplate();
     const { agent } = await registerReal();
     const res = await agent.get('/api/demo/status');
@@ -303,28 +202,22 @@ describe('demo session round-trip — sandbox data scoping', () => {
     expect(res.body.entries?.length).toBe(1);
   });
 
-  it('authed user with toggle on sees sandbox data, not real data', async () => {
+  it('authed user with grandfathered activeProfileId still scopes to sandbox (middleware unchanged)', async () => {
+    // The /enter route is gone but the requireAuth middleware still
+    // honors a stored activeProfileId — this preserves the data scoping
+    // for any pre-existing record until the next login() call wipes it.
     await seedTinyTemplate();
-    const { agent } = await registerReal();
-    // Pre-seed real user with their own weight (different from template)
+    const { agent, userId } = await registerReal();
     await agent.post('/api/weight').send({ weightLbs: 150, date: '2026-01-15' });
 
-    // Without demo toggle: sees own weight
-    let r = await agent.get('/api/weight');
+    // Manually create a parented sandbox + point activeProfileId at it
+    // (simulates a record from before this change).
+    const { getOrCreateSandbox } = await import('../src/services/demo.js');
+    const { sandbox } = await getOrCreateSandbox({ authUserId: userId });
+    await User.updateOne({ _id: userId }, { $set: { activeProfileId: sandbox._id } });
+
+    const r = await agent.get('/api/weight');
     expect(r.body.entries.length).toBe(1);
-    expect(r.body.entries[0].weightLbs).toBe(150);
-
-    // Toggle demo on
-    await agent.post('/api/demo/enter');
-
-    // Now sees sandbox's cloned weight from template (180)
-    r = await agent.get('/api/weight');
-    expect(r.body.entries.length).toBe(1);
-    expect(r.body.entries[0].weightLbs).toBe(180);
-
-    // Exit
-    await agent.post('/api/demo/exit');
-    r = await agent.get('/api/weight');
-    expect(r.body.entries[0].weightLbs).toBe(150);
+    expect(r.body.entries[0].weightLbs).toBe(180); // sandbox's cloned weight
   });
 });

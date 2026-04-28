@@ -43,6 +43,7 @@ const FoodSearchPage = () => import('../pages/FoodSearchPage.vue');
 const AdminDashboardPage = () => import('../pages/AdminDashboardPage.vue');
 const AdminUsersPage = () => import('../pages/AdminUsersPage.vue');
 const AdminUserDetailPage = () => import('../pages/AdminUserDetailPage.vue');
+const AdminFunnelPage = () => import('../pages/AdminFunnelPage.vue');
 const SupportPage = () => import('../pages/SupportPage.vue');
 const SupportTicketDetailPage = () => import('../pages/SupportTicketDetailPage.vue');
 const FeatureRequestDetailPage = () => import('../pages/FeatureRequestDetailPage.vue');
@@ -97,6 +98,7 @@ const routes = [
   { path: '/account', redirect: (to) => ({ path: '/profile/settings/account/subscription', query: to.query }) },
   { path: '/food/search', name: 'foodsearch', component: FoodSearchPage, meta: { requiresAuth: true } },
   { path: '/admin', name: 'admin', component: AdminDashboardPage, meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/admin/funnel', name: 'admin-funnel', component: AdminFunnelPage, meta: { requiresAuth: true, requiresAdmin: true } },
   { path: '/admin/users', name: 'admin-users', component: AdminUsersPage, meta: { requiresAuth: true, requiresAdmin: true } },
   { path: '/admin/users/:id', name: 'admin-user-detail', component: AdminUserDetailPage, meta: { requiresAuth: true, requiresAdmin: true } },
   { path: '/support', name: 'support', component: SupportPage, meta: { requiresAuth: true } },

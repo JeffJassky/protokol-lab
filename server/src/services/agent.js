@@ -15,6 +15,7 @@ import User from "../models/User.js";
 import { childLogger, errContext } from "../lib/logger.js";
 import { evaluateStorageCap, getEffectiveChatLimits } from "../lib/planLimits.js";
 import { getPlanForUser } from "../../../shared/plans.js";
+import { mockChatStream, isMockAgentEnabled } from "./agent.mock.js";
 
 const log = childLogger('agent');
 
@@ -823,6 +824,14 @@ function renderSources(groundingMetadata) {
 }
 
 export async function* chatStream(userId, history, opts = {}) {
+  // E2E + mock-agent branch. Activated by AGENT_PROVIDER=mock so production
+  // can never accidentally serve canned content. Same generator shape as the
+  // real Gemini path — same event types, so route + client are unchanged.
+  if (isMockAgentEnabled()) {
+    yield* mockChatStream(userId, history, opts);
+    return;
+  }
+
   const sLog = log.child({ userId: String(userId) });
   const streamStart = Date.now();
 

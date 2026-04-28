@@ -14,6 +14,7 @@ import Compound from '../models/Compound.js';
 import WeightLog from '../models/WeightLog.js';
 import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
+import { getResetToken, clearResetTokens } from '../lib/testHelperState.js';
 
 const router = Router();
 
@@ -94,7 +95,26 @@ router.post('/reset', async (req, res) => {
   for (const name of Object.keys(collections)) {
     await collections[name].deleteMany({});
   }
+  clearResetTokens();
   res.json({ ok: true });
+});
+
+// GET /api/__test/last-reset-token?email=...
+// Returns the most recent raw password-reset token issued for that email,
+// captured by routes/auth.js during /forgot-password. Used by Playwright to
+// complete the reset flow without going through SendGrid. Token is held in
+// memory only and the recorder no-ops outside NODE_ENV=e2e — see
+// lib/testHelperState.js.
+router.get('/last-reset-token', (req, res) => {
+  const email = typeof req.query?.email === 'string' ? req.query.email.toLowerCase().trim() : '';
+  if (!email) {
+    return res.status(400).json({ error: 'email required' });
+  }
+  const token = getResetToken(email);
+  if (!token) {
+    return res.status(404).json({ error: 'no reset token for that email' });
+  }
+  res.json({ token });
 });
 
 export default router;

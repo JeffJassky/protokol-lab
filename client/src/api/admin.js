@@ -24,3 +24,7 @@ export function updateUserPlan(userId, body) {
 export function syncUserFromStripe(userId) {
   return api.post(`/api/admin/users/${userId}/stripe-sync`);
 }
+
+export function fetchAdminFunnel({ days = 30 } = {}) {
+  return api.get(`/api/admin/funnel?days=${days}`);
+}

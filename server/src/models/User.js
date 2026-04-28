@@ -1,5 +1,25 @@
 import mongoose from 'mongoose';
 import { DEFAULT_PLAN_ID } from '../../../shared/plans.js';
+import { stripe, isStripeConfigured } from '../services/stripe.js';
+import { S3_CONFIGURED, deleteObject } from '../services/s3.js';
+import { childLogger, errContext } from '../lib/logger.js';
+
+const cascadeLog = childLogger('user.cascade');
+
+// Every collection that hangs off `userId`. Drives the cascade-delete hook
+// below. Adding a new model with a `userId` ref means adding it here, or
+// orphaned rows will accumulate after account/sandbox deletion.
+//
+// Exported so the cascade test imports the same list rather than mirroring
+// it manually — drift in either direction (added or removed) surfaces as
+// a test failure instead of silently ignored coverage.
+export const CASCADE_COLLECTIONS = [
+  'ChatThread', 'ChatUsage', 'Compound', 'DayNote', 'DoseLog',
+  'FavoriteFood', 'FeatureRequest', 'FoodItem', 'FoodLog',
+  'FunnelEvent', 'Meal', 'MealProposal', 'Photo', 'PushSubscription',
+  'RecentFood', 'Symptom', 'SymptomLog', 'SupportTicket',
+  'UserSettings', 'WaistLog', 'WeightLog',
+];
 
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -116,5 +136,122 @@ async function preventTemplateUpdate() {
 userSchema.pre('updateOne', preventTemplateUpdate);
 userSchema.pre('updateMany', preventTemplateUpdate);
 userSchema.pre('findOneAndUpdate', preventTemplateUpdate);
+
+// Cascade delete. Fires only on document-level `doc.deleteOne()` and
+// `findOneAndDelete` (see hook below); query-level `User.deleteMany({})` is
+// intentionally left alone so test setups can wipe the collection without
+// paying the cascade per row. All production user deletions must route
+// through `services/userDeletion.deleteUser()` or `doc.deleteOne()` — see
+// docs/testing.md.
+//
+// Order matters: capture S3 keys before deleting Mongo rows that hold them.
+// If any step fails, the User row stays (the actual delete runs after all
+// pre hooks resolve), so a re-run is idempotent — every downstream operation
+// is safe to retry.
+userSchema.pre('deleteOne', { document: true, query: false }, async function cascadeDelete() {
+  const User = mongoose.model('User');
+  const userId = this._id;
+  const ctx = { userId: String(userId), email: this.email };
+
+  try {
+    // 1. Recursively delete child sandboxes (parentUserId → this user).
+    // Only sandbox children are valid here; a non-sandbox parented row would
+    // indicate data corruption (and could form a cycle), so refuse to recurse.
+    const sandboxes = await User.find({ parentUserId: userId, isDemoSandbox: true });
+    for (const sb of sandboxes) {
+      await sb.deleteOne();
+    }
+
+    // 2. Capture S3 keys BEFORE deleting rows so we know what to clean up.
+    let s3Keys = [];
+    if (S3_CONFIGURED) {
+      const Photo = mongoose.model('Photo');
+      const SupportTicket = mongoose.model('SupportTicket');
+      const [photos, tickets] = await Promise.all([
+        Photo.find({ userId }).select('s3Key').lean(),
+        SupportTicket.find({ userId }).select('attachments messages.attachments').lean(),
+      ]);
+      s3Keys = [
+        ...photos.map((p) => p.s3Key),
+        ...tickets.flatMap((t) => [
+          ...(t.attachments || []),
+          ...((t.messages || []).flatMap((m) => m.attachments || [])),
+        ].map((a) => a.s3Key)),
+      ].filter(Boolean);
+    }
+
+    // 3. Stripe customer deletion runs BEFORE Mongo wipes. If Stripe errors
+    //    non-recoverably (e.g. rate_limit, network), the throw aborts the
+    //    cascade — the User row and every owned collection are preserved so
+    //    the caller can retry cleanly. Putting Stripe last would mean a
+    //    Stripe failure leaves the user retryable but the owned data already
+    //    wiped — unrecoverable. `resource_missing` is treated as already-gone.
+    let stripeCleared = false;
+    if (this.stripeCustomerId && isStripeConfigured()) {
+      try {
+        await stripe.customers.del(this.stripeCustomerId);
+        stripeCleared = true;
+      } catch (err) {
+        if (err?.code === 'resource_missing') {
+          cascadeLog.info({ ...ctx, stripeCustomerId: this.stripeCustomerId }, 'Stripe customer already gone');
+          stripeCleared = true;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // 4. Cascade Mongoose collections in parallel.
+    const counts = await Promise.all(
+      CASCADE_COLLECTIONS.map(async (name) => {
+        const Model = mongoose.model(name);
+        const r = await Model.deleteMany({ userId });
+        return [name, r.deletedCount || 0];
+      }),
+    );
+    const totalRows = counts.reduce((sum, [, n]) => sum + n, 0);
+
+    // 5. Best-effort S3 object cleanup. Failures here log but don't block
+    //    user deletion — orphaned S3 objects are a janitor problem, not a
+    //    correctness problem.
+    let s3Deleted = 0;
+    let s3Failed = 0;
+    for (const key of s3Keys) {
+      try {
+        await deleteObject(key);
+        s3Deleted += 1;
+      } catch (err) {
+        s3Failed += 1;
+        cascadeLog.warn({ ...ctx, key, ...errContext(err) }, 'S3 cleanup failed for key');
+      }
+    }
+
+    cascadeLog.info(
+      {
+        ...ctx,
+        sandboxes: sandboxes.length,
+        mongoRows: totalRows,
+        byCollection: Object.fromEntries(counts),
+        s3Deleted,
+        s3Failed,
+        stripeCleared,
+      },
+      'user cascade complete',
+    );
+  } catch (err) {
+    cascadeLog.error({ ...ctx, ...errContext(err) }, 'user cascade failed');
+    throw err;
+  }
+});
+
+// Mirror the cascade onto findOneAndDelete / findByIdAndDelete. Mongoose
+// treats those as a separate hook surface; without this, those code paths
+// would skip the cascade. We load the doc and call doc.deleteOne() (which
+// fires the doc-level hook above) — the original query then runs as a
+// harmless no-op since the row is already gone.
+userSchema.pre('findOneAndDelete', async function cascadeFromQuery() {
+  const doc = await this.model.findOne(this.getFilter());
+  if (doc) await doc.deleteOne();
+});
 
 export default mongoose.model('User', userSchema);

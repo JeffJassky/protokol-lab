@@ -1,4 +1,8 @@
 import 'dotenv/config';
+// Sentry must initialize before anything else — its integrations patch
+// http/express/mongoose at import time. Modules loaded before this line
+// are not instrumented.
+import './instrument.js';
 import mongoose from 'mongoose';
 import { createApp } from './app.js';
 import { runStartupBackup } from './services/backup.js';
@@ -22,14 +26,30 @@ mongoose.connection.on('error', (err) => {
   childLogger('db').error(errContext(err), 'mongoose error');
 });
 
-process.on('uncaughtException', (err) => {
-  logger.fatal(errContext(err), 'uncaughtException — exiting');
+// Sentry's Node SDK already registers process-level capture handlers in
+// instrument.js. We additionally flush before exiting so the in-flight
+// event reaches Sentry — `Sentry.close()` resolves once the queue is
+// drained or the timeout fires.
+//
+// The `crashing` flag prevents a second uncaught exception (which can
+// fire while Sentry is still flushing) from racing process.exit — both
+// would interleave logs and call exit simultaneously.
+let crashing = false;
+async function fatalExit(err, kind) {
+  if (crashing) {
+    logger.fatal(errContext(err), `${kind} — already exiting, ignoring`);
+    return;
+  }
+  crashing = true;
+  logger.fatal(errContext(err), `${kind} — exiting`);
+  try {
+    const Sentry = await import('@sentry/node');
+    await Sentry.close(2000);
+  } catch { /* best-effort */ }
   process.exit(1);
-});
-process.on('unhandledRejection', (err) => {
-  logger.fatal(errContext(err), 'unhandledRejection — exiting');
-  process.exit(1);
-});
+}
+process.on('uncaughtException', (err) => { fatalExit(err, 'uncaughtException'); });
+process.on('unhandledRejection', (err) => { fatalExit(err, 'unhandledRejection'); });
 
 let server;
 let shuttingDown = false;

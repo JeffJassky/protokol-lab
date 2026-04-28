@@ -9,6 +9,7 @@ import OnboardingBanner from './OnboardingBanner.vue';
 import DemoBanner from './DemoBanner.vue';
 import ProfileFieldsModal from './ProfileFieldsModal.vue';
 import BrandLockup from './BrandLockup.vue';
+import BugReportFab from './BugReportFab.vue';
 
 const auth = useAuthStore();
 const onboarding = useOnboardingStore();
@@ -174,6 +175,9 @@ watch(() => auth.user, (u) => {
     <button v-if="!showChat" class="chat-fab" @click="showChat = true">
       💬
     </button>
+
+    <!-- Always-on bug reporter (real accounts only — demo skips it like Support nav). -->
+    <BugReportFab v-if="auth.user" />
 
     <!-- Just-in-time profile field gate (PRD §9). Listens to a global queue;
          appears only when a feature awaits ensure([...]) and a field is missing. -->

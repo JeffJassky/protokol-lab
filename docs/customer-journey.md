@@ -20,20 +20,26 @@ worse than noise.
 | **Anon visitor** | — | — | null | `'none'` | Marketing pages |
 | **Anon demo** | — | ✓ | null | `'anon'` | App (sandbox-scoped) |
 | **Authed user** | ✓ | — | real | `'authed'`, no `sandboxId` | App (real data) |
-| **Authed in demo** | ✓ | — | real | `'authed'`, `sandboxId` set | App (sandbox-scoped) |
 | **Authed mid-wizard** | ✓ | — | real, `onboardingComplete=false` | `'authed'` | `/welcome` only |
 
-Anon demo and authed-with-toggle both have an "active sandbox profile"
-that data routes scope to. The session-split middleware
+**Demo is pre-register only.** Once a visitor authenticates, the demo is
+destroyed: register/login both clear the demo cookie, delete any
+parented sandbox doc, and clear the user's `activeProfileId` (cleanup
+lives in `server/src/routes/auth.js`). Re-entering the demo requires
+logging out and starting fresh.
+
+Only anon demo has an active sandbox; the session-split middleware
 (`server/src/middleware/requireAuth.js`) resolves `req.userId` (data
-scope) and `req.authUserId` (auth identity) accordingly.
+scope) and `req.authUserId` (auth identity) accordingly. The
+`activeProfileId` field is read defensively in case a grandfathered
+record exists, but no route sets it anymore.
 
 ---
 
 ## 2. Canonical conversion paths
 
-Five paths in total. Every CTA on every page should funnel into one of
-these — if you find yourself inventing a sixth, push back and reuse one.
+Four paths in total. Every CTA on every page should funnel into one of
+these — if you find yourself inventing a fifth, push back and reuse one.
 
 ### A. Cold → Demo → Real account
 The flagship cold-traffic path. PRD §6.1.
@@ -67,12 +73,12 @@ Visitor selected a paid plan from pricing. Plan intent preserved through the fun
 2. Email + password (or Google)
 3. → `/log` (or, if `?plan=` carried in via login URL: → Stripe checkout)
 
-### E. Authed user → Toggle into demo
-PRD §6.2. Retention pattern: new users with sparse data flip over to see "what this becomes."
-
-1. Logged in, viewing real data → corner badge **"View Jeff's demo"** → `POST /api/demo/enter`
-2. Server creates parented sandbox (reused on subsequent toggles) + sets `user.activeProfileId`
-3. App now reads sandbox data; in-demo banner shows **"Exit"** + **"Reset"**
+### ~~E. Authed user → Toggle into demo~~ — REMOVED
+The "View Jeff's demo" toggle for authed users (PRD §6.2) has been
+removed. Demo is pre-register only. To see the demo again, log out and
+click **"Try the demo"**. The retention motivation (new users with
+sparse data wanting to see "what this becomes") will be addressed via
+in-app sample data / empty-state UX instead of a toggleable sandbox.
 
 ---
 
@@ -92,8 +98,6 @@ optionally **tertiary** CTAs in this order. Anything else is noise.
 | **App top nav (authed)** | (nav links) | — | Logout / Exit demo |
 | **Demo banner expanded (anon)** | Set Up My Profile | Keep Exploring | — |
 | **Demo banner collapsed (anon)** | Set Up Profile → | (expand button) | — |
-| **Demo badge (authed, no toggle)** | View Jeff's demo | — | — |
-| **Demo badge (authed, in demo)** | Exit | Reset | — |
 
 Rules of thumb:
 - **One primary per screen.** A page with three "primary" buttons has zero.
@@ -172,8 +176,7 @@ collected at the end of this section.
 ### App — DemoBanner.vue
 - ✅ Anon expanded: "Set Up My Profile" + "Keep Exploring"
 - ✅ Anon collapsed: "Set Up Profile →"
-- ✅ Authed (no toggle): "View Jeff's demo"
-- ✅ Authed (in demo): "Exit" + "Reset"
+- (Authed states removed — demo is pre-register only.)
 
 ### App — AppLayout.vue (authed top nav)
 - ✅ Logout/Exit-demo button is context-aware
@@ -198,10 +201,24 @@ These are mistakes we've made or nearly made — call them out in PR review.
 - **Auto-redirecting demo sessions to `/log` from `/`.** This makes marketing unreachable from inside the demo. Brand logo and `<router-link to="/">` should land on the actual landing page; only auto-redirect logged-in (real-account) users.
 - **Showing onboarding install/notification nudges in demo.** Sandbox users can't receive push and have nothing to "install"; suppress these (`OnboardingChecklist`, `OnboardingBanner`) when `demo.inDemo`.
 - **Showing upsells in demo.** Sandbox plan is `unlimited`; `usePlanLimits` and `upgradeModal.openForGate` must read the demo plan when in demo mode, not the null `auth.user.plan`.
+- **Letting authed users back into the demo.** Demo is pre-register only. Once a user has authenticated, the cookie + sandbox are destroyed; the only path back is logout → "Try the demo." Do not add a "View demo" affordance in the authed nav, do not re-introduce `/api/demo/enter|exit|reset`, and do not call `demo.startAnon()` from authed UI (the server returns 400 `already_authenticated`).
 
 ---
 
-## 7. Open questions
+## 7. Funnel telemetry
+
+The conversion pipeline (page view → CTA click → demo start →
+register → onboarding → subscription) is tracked by the in-house
+`FunnelEvent` store. The canonical step ordering, allowlists,
+anon→user stitching, and admin UI live in
+[Funnel Analytics](./funnel-analytics.md).
+
+When you add or rename a step in `FUNNEL_STEPS` (`server/src/lib/funnelEvents.js`),
+update that doc. Don't duplicate the step list here.
+
+---
+
+## 8. Open questions
 
 - **Demo + cold-email landing**: PRD §14 says cold-email recipients should land in a demo with email pre-populated and create their own account. Today `/start` honors `?email=` but the cold-email flow isn't wired end-to-end. Need a one-click magic link → demo + prefilled email.
 - **Demo for plan evaluation**: should a visitor who clicks "Start free trial" on Premium see a sandbox running on the Premium plan (so they evaluate exactly what they'd be paying for)? Currently every demo runs `unlimited`. PRD §10 left "multi-template" demos out of scope for v1; this is the same shape of question.
@@ -209,7 +226,7 @@ These are mistakes we've made or nearly made — call them out in PR review.
 
 ---
 
-## 8. Files this document covers
+## 9. Files this document covers
 
 | File | Role |
 |------|------|
@@ -227,3 +244,6 @@ These are mistakes we've made or nearly made — call them out in PR review.
 | `client/src/stores/demo.js` | Client-side demo session state |
 | `server/src/routes/demo.js` | Demo start/enter/exit/reset/status endpoints |
 | `server/src/middleware/requireAuth.js` | `requireAuth`, `requireAuthUser`, `requireRealProfile` |
+
+Telemetry-side files (FunnelEvent, beacon, admin funnel page) are
+inventoried in [Funnel Analytics](./funnel-analytics.md).

@@ -145,9 +145,9 @@ describe('Path A — Cold → Demo → Real account', () => {
     expect(finalStatus.body.mode).toBe('authed');
     expect(finalStatus.body.sandboxId).toBeNull();
 
-    // The sandbox row still exists but is no longer attached to anything;
-    // the cleanup cron will reap it within 24h. We don't assert deletion
-    // here (cleanup is its own test).
+    // Demo is pre-register only — the sandbox is destroyed at register time,
+    // not left for the cleanup cron. (See routes/auth.js wipeDemoForAuthedSession.)
+    expect(await User.findById(start.body.sandboxId)).toBeNull();
   });
 });
 
@@ -234,7 +234,32 @@ describe('Path D — Existing user → Login', () => {
     expect(me.body.user.email).toBe('returning@example.com');
   });
 
-  it('login from an active demo session preserves the JWT path (auth identity wins)', async () => {
+  it('logout → can start a fresh demo (lifecycle round-trip)', async () => {
+    await seedTemplate();
+
+    // Register, log out, log back in to demonstrate a real authed session.
+    const agent = request.agent(app);
+    await agent.post('/api/auth/register').send({
+      email: 'looper@example.com',
+      password: 'passw0rd-ok',
+    });
+    // While authed: demo is unavailable.
+    let blocked = await agent.post('/api/demo/start');
+    expect(blocked.status).toBe(400);
+    expect(blocked.body.error).toBe('already_authenticated');
+
+    // Logout.
+    const logout = await agent.post('/api/auth/logout');
+    expect(logout.status).toBe(200);
+
+    // Now /demo/start works again — fresh anon sandbox.
+    const start = await agent.post('/api/demo/start');
+    expect(start.status).toBe(201);
+    expect(start.body.mode).toBe('anon');
+    expect(start.body.sandboxId).toBeDefined();
+  });
+
+  it('login from an active demo session destroys the demo (cookie cleared, sandbox deleted)', async () => {
     await seedTemplate();
     const a = request.agent(app);
     await a.post('/api/auth/register').send({
@@ -242,82 +267,100 @@ describe('Path D — Existing user → Login', () => {
       password: 'passw0rd-ok',
     });
 
-    // Now: visitor in a demo, then logs in (same browser).
+    // Visitor in a demo, then logs in to existing acct (same browser).
     const b = request.agent(app);
-    await b.post('/api/demo/start');
+    const start = await b.post('/api/demo/start');
+    const sandboxId = start.body.sandboxId;
+    expect(sandboxId).toBeTruthy();
+
     const login = await b.post('/api/auth/login').send({
       email: 'returning2@example.com',
       password: 'passw0rd-ok',
     });
     expect(login.status).toBe(200);
 
-    // /api/auth/me works → JWT path dominates over the still-present demo cookie.
+    // Demo cookie was cleared on login response.
+    const demoCookie = findCookie(setCookies(login), 'demo_token');
+    expect(demoCookie, 'login response must clear demo_token cookie').toBeTruthy();
+    const cleared =
+      /expires=Thu, 01 Jan 1970/i.test(demoCookie) ||
+      /max-age=0\b/i.test(demoCookie) ||
+      /max-age=-\d+/i.test(demoCookie);
+    expect(cleared).toBe(true);
+
+    // The anon sandbox was deleted.
+    expect(await User.findById(sandboxId)).toBeNull();
+
+    // /api/auth/me works — auth identity is the real user.
     const me = await b.get('/api/auth/me');
     expect(me.status).toBe(200);
     expect(me.body.user.email).toBe('returning2@example.com');
+
+    // /api/demo/status reports authed (no sandbox).
+    const status = await b.get('/api/demo/status');
+    expect(status.body.mode).toBe('authed');
+    expect(status.body.sandboxId).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Path E: Authed user → Toggle into demo
+// Pre-register-only demo: once authed, demo is destroyed and unavailable.
 // ---------------------------------------------------------------------------
-describe('Path E — Authed user → Toggle into demo', () => {
+describe('Demo is pre-register only', () => {
   beforeAll(async () => { await User.syncIndexes(); });
   beforeEach(clearAll);
 
-  it('toggle in → see sandbox data; toggle out → see real data; reset → fresh sandbox', async () => {
+  it('authed user cannot start a fresh demo', async () => {
     await seedTemplate();
     const agent = request.agent(app);
     await agent.post('/api/auth/register').send({
-      email: 'toggler@example.com',
+      email: 'noredemo@example.com',
       password: 'passw0rd-ok',
     });
+    const res = await agent.post('/api/demo/start');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('already_authenticated');
+  });
 
-    // Real user logs their own weight.
-    await agent.post('/api/weight').send({ weightLbs: 170, date: '2026-04-01' });
+  it('register from inside an anon demo deletes the sandbox doc', async () => {
+    await seedTemplate();
+    const agent = request.agent(app);
+    const start = await agent.post('/api/demo/start');
+    const sandboxId = start.body.sandboxId;
+    expect(await User.findById(sandboxId)).not.toBeNull();
 
-    // Default state: sees own weight only.
-    let weight = await agent.get('/api/weight');
-    expect(weight.body.entries.length).toBe(1);
-    expect(weight.body.entries[0].weightLbs).toBe(170);
+    await agent.post('/api/auth/register').send({
+      email: 'converter@example.com',
+      password: 'passw0rd-ok',
+    });
+    expect(await User.findById(sandboxId)).toBeNull();
+  });
 
-    // Toggle into demo.
-    const enter = await agent.post('/api/demo/enter');
-    expect(enter.status).toBe(200);
-    expect(enter.body.created).toBe(true);
+  it('login wipes any parented sandbox + clears activeProfileId (legacy cleanup)', async () => {
+    await seedTemplate();
 
-    // Now sees sandbox-cloned weights from template (2 of them).
-    weight = await agent.get('/api/weight');
-    expect(weight.body.entries.length).toBe(2);
+    // Set up a real user with a grandfathered parented sandbox.
+    const setup = request.agent(app);
+    const reg = await setup.post('/api/auth/register').send({
+      email: 'legacy@example.com',
+      password: 'passw0rd-ok',
+    });
+    const userId = reg.body.user.id;
+    const { getOrCreateSandbox } = await import('../src/services/demo.js');
+    const { sandbox } = await getOrCreateSandbox({ authUserId: userId });
+    await User.updateOne({ _id: userId }, { $set: { activeProfileId: sandbox._id } });
 
-    // Status reflects the toggle + unlimited plan.
-    let status = await agent.get('/api/demo/status');
-    expect(status.body.mode).toBe('authed');
-    expect(status.body.sandboxId).toBe(enter.body.sandboxId);
-    expect(status.body.activePlanId).toBe('unlimited');
+    // Fresh agent → log in. Cleanup runs.
+    const agent = request.agent(app);
+    const login = await agent.post('/api/auth/login').send({
+      email: 'legacy@example.com',
+      password: 'passw0rd-ok',
+    });
+    expect(login.status).toBe(200);
 
-    // Edit the sandbox: log a new weight.
-    await agent.post('/api/weight').send({ weightLbs: 188, date: '2026-04-15' });
-    weight = await agent.get('/api/weight');
-    expect(weight.body.entries.length).toBe(3);
-
-    // Toggle back out.
-    await agent.post('/api/demo/exit');
-    weight = await agent.get('/api/weight');
-    expect(weight.body.entries.length).toBe(1);
-    expect(weight.body.entries[0].weightLbs).toBe(170);
-
-    // Re-enter → reuses same sandbox (sandbox edits intact).
-    const enter2 = await agent.post('/api/demo/enter');
-    expect(enter2.body.created).toBe(false);
-    expect(enter2.body.sandboxId).toBe(enter.body.sandboxId);
-    weight = await agent.get('/api/weight');
-    expect(weight.body.entries.length).toBe(3); // includes the 188 they added
-
-    // Reset → wipes sandbox + reclones from template (back to 2 weights).
-    await agent.post('/api/demo/reset');
-    weight = await agent.get('/api/weight');
-    expect(weight.body.entries.length).toBe(2);
+    expect(await User.findById(sandbox._id)).toBeNull();
+    const reloaded = await User.findById(userId);
+    expect(reloaded.activeProfileId).toBeNull();
   });
 });
 
@@ -368,25 +411,6 @@ describe('Visitor-state matrix — every state surfaces the right /me + /demo/st
     expect(status.body.activePlanId).toBeNull();
   });
 
-  it('Authed in demo: /me returns real user, /demo/status carries sandboxId + unlimited', async () => {
-    await seedTemplate();
-    const agent = request.agent(app);
-    await agent.post('/api/auth/register').send({
-      email: 'toggler@example.com',
-      password: 'passw0rd-ok',
-    });
-    const enter = await agent.post('/api/demo/enter');
-
-    const me = await agent.get('/api/auth/me');
-    expect(me.status).toBe(200);
-    expect(me.body.user.email).toBe('toggler@example.com'); // auth identity, not sandbox
-
-    const status = await agent.get('/api/demo/status');
-    expect(status.body.mode).toBe('authed');
-    expect(status.body.sandboxId).toBe(enter.body.sandboxId);
-    expect(status.body.activePlanId).toBe('unlimited');
-  });
-
   it('Authed mid-wizard: onboardingComplete=false visible on /me', async () => {
     const agent = request.agent(app);
     const reg = await agent.post('/api/auth/register').send({
@@ -432,13 +456,19 @@ describe('Auth-only edges reject anon demo', () => {
     expect(r.status).toBe(403);
   });
 
-  it('authed user IN DEMO also blocked from /api/chat (requireRealProfile)', async () => {
+  it('authed user with grandfathered activeProfileId blocked from /api/chat (requireRealProfile)', async () => {
+    // The /enter route is gone, but requireRealProfile still has to refuse
+    // any session whose data scope is a sandbox — defends against legacy
+    // records before the next login() wipes them.
     await seedTemplate();
     const agent = request.agent(app);
-    await agent.post('/api/auth/register').send({
+    const reg = await agent.post('/api/auth/register').send({
       email: 'd@example.com', password: 'passw0rd-ok',
     });
-    await agent.post('/api/demo/enter');
+    const userId = reg.body.user.id;
+    const { getOrCreateSandbox } = await import('../src/services/demo.js');
+    const { sandbox } = await getOrCreateSandbox({ authUserId: userId });
+    await User.updateOne({ _id: userId }, { $set: { activeProfileId: sandbox._id } });
     const r = await agent.get('/api/chat/threads');
     expect(r.status).toBe(403);
   });

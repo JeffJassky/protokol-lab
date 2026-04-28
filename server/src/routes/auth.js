@@ -9,7 +9,11 @@ import { requireAuth, requireAuthUser } from '../middleware/requireAuth.js';
 import { sendPasswordResetEmail, sendWelcomeEmail } from '../services/email.js';
 import { readDemoCookie, verifyDemoToken, clearDemoCookie } from '../lib/demoSession.js';
 import { emitDemoEvent } from '../lib/demoEvents.js';
+import { insertFunnelEvent } from '../lib/funnelEvents.js';
+import { deleteSandbox } from '../services/demo.js';
 import { childLogger, errContext } from '../lib/logger.js';
+import FunnelEvent from '../models/FunnelEvent.js';
+import { recordResetToken } from '../lib/testHelperState.js';
 
 const log = childLogger('auth');
 const router = Router();
@@ -27,8 +31,59 @@ const RESET_RESEND_MIN_MS = 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DUMMY_HASH = '$2b$10$CwTycUXWue0Thq9StjUM0uJ8.q2FujYYQH3VjXm9gxzQc.IgXe3uS';
 
+// Demo is pre-register only. On every successful login we (a) drop any anon
+// demo cookie + delete its sandbox, and (b) wipe any parented sandbox left
+// over from the legacy "authed-toggle into demo" feature, clearing
+// activeProfileId so requireAuth stops dereferencing it.
+async function wipeDemoForAuthedSession({ req, res, userId, rlog }) {
+  const demoSandboxId = verifyDemoToken(readDemoCookie(req));
+  if (demoSandboxId) {
+    clearDemoCookie(res);
+    await deleteSandbox(demoSandboxId).catch((err) => {
+      rlog.error(
+        { ...errContext(err), sandboxId: String(demoSandboxId) },
+        'auth: failed to delete anon demo sandbox on login',
+      );
+    });
+  }
+
+  const parented = await User.find({
+    parentUserId: userId,
+    isDemoSandbox: true,
+  }).select('_id').lean();
+  for (const sb of parented) {
+    await deleteSandbox(sb._id).catch((err) => {
+      rlog.error(
+        { ...errContext(err), sandboxId: String(sb._id) },
+        'auth: failed to delete parented demo sandbox on login',
+      );
+    });
+  }
+  await User.updateOne({ _id: userId }, { $set: { activeProfileId: null } });
+}
+
 function signToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+}
+
+// Backfill the freshly-bound userId onto every FunnelEvent that shares
+// this anonId. Lets the admin funnel join a /pricing page_view → demo
+// → register sequence into one row keyed by user. Best-effort: never
+// throws into the auth flow.
+async function stitchAnonToUser(anonId, userId, rlog) {
+  if (!anonId || !userId) return;
+  try {
+    const result = await FunnelEvent.updateMany(
+      { anonId, userId: null },
+      { $set: { userId } },
+    );
+    rlog.info(
+      { anonId, userId: String(userId), matched: result.matchedCount, modified: result.modifiedCount },
+      'funnel: stitched anon→user',
+    );
+  } catch (err) {
+    rlog.warn({ ...errContext(err), anonId, userId: String(userId) }, 'funnel: stitch failed');
+  }
 }
 
 function serializeUser(u) {
@@ -151,17 +206,27 @@ router.post('/register', registerLimiter, async (req, res) => {
   const user = await User.create({ email, passwordHash });
   rlog.info({ userId: String(user._id), email }, 'register: new user created');
 
+  await stitchAnonToUser(req.anonId, user._id, rlog);
+
   const token = signToken(user._id);
   res.cookie('token', token, COOKIE_OPTS);
 
-  // If this signup completed an anonymous demo session, emit a convert
-  // event and drop the demo cookie so the new account starts on real data.
+  // If this signup completed an anonymous demo session, drop the cookie,
+  // emit a convert event, and delete the sandbox doc so it doesn't linger
+  // as an orphan. Demo is pre-register only — once you have an account,
+  // the sandbox is gone.
   const demoSandboxId = verifyDemoToken(readDemoCookie(req));
   if (demoSandboxId) {
     clearDemoCookie(res);
     emitDemoEvent(req, 'demo_signup_convert', {
       sandboxId: demoSandboxId,
       newUserId: String(user._id),
+    });
+    await deleteSandbox(demoSandboxId).catch((err) => {
+      rlog.error(
+        { ...errContext(err), sandboxId: String(demoSandboxId) },
+        'register: failed to delete anon demo sandbox',
+      );
     });
   }
 
@@ -192,6 +257,9 @@ router.post('/login', loginLimiter, async (req, res) => {
   const token = signToken(user._id);
   res.cookie('token', token, COOKIE_OPTS);
   rlog.info({ userId: String(user._id), email: normalized }, 'login: success');
+
+  await stitchAnonToUser(req.anonId, user._id, rlog);
+  await wipeDemoForAuthedSession({ req, res, userId: user._id, rlog });
 
   res.json({ user: serializeUser(user) });
 });
@@ -273,6 +341,9 @@ router.post('/google', loginLimiter, async (req, res) => {
     });
   }
 
+  await stitchAnonToUser(req.anonId, user._id, rlog);
+  await wipeDemoForAuthedSession({ req, res, userId: user._id, rlog });
+
   res.status(created ? 201 : 200).json({ user: serializeUser(user) });
 });
 
@@ -321,6 +392,13 @@ router.post('/onboarding/complete', requireAuth, requireAuthUser, async (req, re
     { new: true },
   ).select('-passwordHash');
   (req.log || log).info({ userId: String(user._id) }, 'onboarding: complete');
+  insertFunnelEvent({
+    name: 'onboarding_complete',
+    anonId: req.anonId || null,
+    userId: user._id,
+    ua: req.headers['user-agent'] || null,
+    ip: req.ip || null,
+  });
   res.json({ user: serializeUser(user) });
 });
 
@@ -360,6 +438,14 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
   user.passwordResetTokenHash = tokenHash;
   user.passwordResetExpiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
   await user.save();
+
+  // E2E side channel — defense in depth: gate at the call site too, even
+  // though recordResetToken self-checks NODE_ENV. A future change to the
+  // helper that loosens its check shouldn't silently start storing raw
+  // reset tokens in process memory in production.
+  if (process.env.NODE_ENV === 'e2e') {
+    recordResetToken(user.email, rawToken);
+  }
 
   const appUrl = process.env.APP_URL || '';
   const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;

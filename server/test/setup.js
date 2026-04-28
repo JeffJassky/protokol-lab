@@ -11,6 +11,10 @@
 import { beforeAll, afterAll, afterEach, vi } from 'vitest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+// Register every Mongoose model up front. The User cascade hook resolves
+// models by string name; tests that don't import the route surface still
+// need every model registered for the cascade to find them.
+import '../src/models/index.js';
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-do-not-use-in-prod';
@@ -48,7 +52,7 @@ vi.mock('../src/services/push.js', () => ({
 vi.mock('../src/services/stripe.js', () => ({
   stripe: {
     checkout: { sessions: { create: vi.fn() } },
-    customers: { create: vi.fn(), update: vi.fn() },
+    customers: { create: vi.fn(), update: vi.fn(), del: vi.fn(async () => ({ deleted: true })) },
     subscriptions: { retrieve: vi.fn(), cancel: vi.fn(), update: vi.fn() },
     webhooks: { constructEvent: vi.fn() },
     billingPortal: { sessions: { create: vi.fn() } },

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import User from '../models/User.js';
+import FunnelEvent from '../models/FunnelEvent.js';
 import {
   stripe,
   STRIPE_WEBHOOK_SECRET,
@@ -14,6 +15,7 @@ import {
   DEFAULT_PLAN_ID,
 } from '../../../shared/plans.js';
 import { childLogger, errContext } from '../lib/logger.js';
+import { insertFunnelEvent } from '../lib/funnelEvents.js';
 
 const log = childLogger('stripe');
 
@@ -252,6 +254,27 @@ async function onCheckoutCompleted(session, rlog) {
 
   await user.save();
   rlog.info({ userId: String(user._id), plan: user.plan }, 'user activated from checkout');
+
+  // Stripe retries the webhook on any 5xx until it gets 2xx, so a transient
+  // failure later in the chain can replay this handler. Dedupe on sessionId
+  // before inserting a funnel row to avoid double-counting subscription
+  // conversions in the admin funnel.
+  const existing = await FunnelEvent.findOne({
+    name: 'subscription_started',
+    'props.sessionId': session.id,
+  }).lean();
+  if (existing) {
+    rlog.debug({ sessionId: session.id }, 'subscription_started already recorded — skipping dupe');
+    return;
+  }
+  insertFunnelEvent({
+    name: 'subscription_started',
+    userId: user._id,
+    props: {
+      plan: user.plan,
+      sessionId: session.id,
+    },
+  });
 }
 
 async function onSubscriptionUpserted(sub, rlog) {

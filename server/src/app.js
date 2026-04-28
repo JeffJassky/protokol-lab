@@ -24,9 +24,12 @@ import adminRoutes from './routes/admin.js';
 import supportRoutes from './routes/support.js';
 import adminSupportRoutes from './routes/adminSupport.js';
 import demoRoutes from './routes/demo.js';
+import trackRoutes from './routes/track.js';
 import testHelperRoutes from './routes/testHelpers.js';
+import * as Sentry from '@sentry/node';
 import { requireAuth, requireAuthUser, requireRealProfile } from './middleware/requireAuth.js';
 import { requireAdmin } from './middleware/requireAdmin.js';
+import { ensureAnonId } from './middleware/anonId.js';
 import { logger, httpLogger, childLogger, errContext } from './lib/logger.js';
 import { getMarketingAdmin } from './services/marketingAdmin.js';
 
@@ -105,6 +108,17 @@ export function createApp({ serveClient = true } = {}) {
 
   app.use(express.json());
   app.use(cookieParser());
+  // Funnel tracking. Sets a long-lived bo_aid cookie on first request so
+  // server-emitted events (demo_start, demo_signup_convert) and client
+  // beacons (page_view, cta_click) share an anonymous identity that can
+  // be stitched onto the real userId at register time. Skipped on CORS
+  // preflights (the cookie can't be honored on a credentials:'omit' OPTIONS)
+  // and on the Stripe webhook (server-to-server, never carries cookies).
+  app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') return next();
+    if (req.path.startsWith('/api/stripe/webhook')) return next();
+    return ensureAnonId(req, res, next);
+  });
 
   app.use(httpLogger);
 
@@ -116,6 +130,12 @@ export function createApp({ serveClient = true } = {}) {
   // Demo routes have a mix of public (anon start, status) and authed
   // endpoints; auth is applied per-route inside the file.
   app.use('/api/demo', demoRoutes);
+  // Public funnel beacon. Reads the anon cookie + JWT (if present) but
+  // does not require auth — visitors on marketing pages emit page_view.
+  // Tight body cap: a real beacon is well under 2KB. The global
+  // express.json() default of 100KB combined with the 60-rpm rate limit
+  // would let a single IP write ~6MB/min into Mongo as garbage props.
+  app.use('/api/track', express.json({ limit: '8kb' }), trackRoutes);
 
   // Test-only helpers (seed template, reset DB) — mounted ONLY in e2e env.
   // The handlers double-check NODE_ENV at runtime as defense in depth.
@@ -221,6 +241,14 @@ export function createApp({ serveClient = true } = {}) {
 
       res.sendFile(SHELL_FILE);
     });
+  }
+
+  // Sentry's Express error handler must run *before* our final handler
+  // so it can capture the error before we respond. It only forwards 5xx
+  // (and unhandled exceptions) — 4xx noise stays out of Sentry. No-op
+  // when SENTRY_DSN is unset.
+  if (process.env.SENTRY_DSN) {
+    Sentry.setupExpressErrorHandler(app);
   }
 
   app.use((err, req, res, _next) => {
