@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js 2>&1 | tee /tmp/protokol-lab-server.log",
-    "start": "node src/index.js",
+    "dev": "node --import ./src/instrument.js --watch src/index.js 2>&1 | tee /tmp/protokol-lab-server.log",
+    "start": "node --import ./src/instrument.js src/index.js",
     "restore": "node src/scripts/restore.js",
     "cleanup:test-users": "node src/scripts/cleanup-test-users.js",
     "seed:demo-template": "node src/scripts/seed-demo-template.js",
