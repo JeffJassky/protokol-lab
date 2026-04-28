@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { MARKETING_NAV } from '../marketing-nav.js';
 import { useAuthStore } from '../stores/auth.js';
 import { useDemoStore } from '../stores/demo.js';
+import { track } from '../composables/useTracker.js';
+import { useTryDemo } from '../composables/useTryDemo.js';
 import BrandWordmark from './BrandWordmark.vue';
 
 const router = useRouter();
@@ -11,22 +13,22 @@ const route = useRoute();
 const auth = useAuthStore();
 const demo = useDemoStore();
 
-const goLogin = () => router.push('/login');
-const goRegister = () => router.push('/register');
+const goLogin = () => {
+  track('cta_click', { cta: 'login', surface: 'nav' });
+  router.push('/login');
+};
+const goRegister = () => {
+  track('cta_click', { cta: 'signup', surface: 'nav' });
+  router.push('/register');
+};
 const goHome = () => router.push('/');
 const goApp = () => router.push('/dashboard');
 
-const demoStarting = ref(false);
-async function tryDemo() {
-  demoStarting.value = true;
-  try {
-    if (!demo.checked) await demo.fetchStatus();
-    if (!demo.inDemo) await demo.startAnon();
-    router.push('/dashboard');
-  } finally {
-    demoStarting.value = false;
-  }
-}
+// Use the shared composable so the nav CTA gets the same authed-user guard
+// as marketing-page CTAs (authed visitors land on /dashboard rather than
+// hitting /api/demo/start, which rejects authed sessions with 400).
+const { tryDemo: startDemo, demoStarting } = useTryDemo();
+const tryDemo = () => startDemo({ surface: 'nav' });
 
 // Visible CTAs depend on session state — see docs/customer-journey.md §3.
 const inApp = computed(() => Boolean(auth.user) || demo.inDemo);

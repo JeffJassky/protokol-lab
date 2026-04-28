@@ -2,6 +2,8 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import ChatUsage from '../models/ChatUsage.js';
+import FunnelEvent from '../models/FunnelEvent.js';
+import { FUNNEL_STEPS } from '../lib/funnelEvents.js';
 import {
   getEffectiveChatLimits,
   getEffectivePlanFeatures,
@@ -489,7 +491,7 @@ router.get('/users/:userId', async (req, res) => {
   const windows = getQuotaWindows();
 
   try {
-    const [chatWindowRes, chatNowRes, recentRows, stripeData] = await Promise.all([
+    const [chatWindowRes, chatNowRes, recentRows, stripeData, recentEvents] = await Promise.all([
       ChatUsage.aggregate([
         { $match: { userId: uid, createdAt: { $gte: startAt, $lte: endAt } } },
         {
@@ -575,6 +577,13 @@ router.get('/users/:userId', async (req, res) => {
         rlog.warn({ err: err.message, userId }, 'admin: stripe fetch failed');
         return { error: err.message || 'stripe_fetch_failed' };
       }),
+      // Funnel timeline — most recent events tied to this user, either
+      // emitted while authenticated or backfilled at register time via
+      // anonId stitching. Capped to keep payloads small.
+      FunnelEvent.find({ userId: uid })
+        .sort({ ts: -1 })
+        .limit(50)
+        .lean(),
     ]);
 
     const firstOr = (arr) => (Array.isArray(arr) && arr[0]) || {};
@@ -636,6 +645,18 @@ router.get('/users/:userId', async (req, res) => {
         errorMessage: r.errorMessage,
       })),
       stripe: stripeData,
+      funnelEvents: recentEvents.map((e) => ({
+        id: String(e._id),
+        name: e.name,
+        ts: e.ts,
+        path: e.path,
+        props: e.props,
+        utm: {
+          source: e.utmSource,
+          medium: e.utmMedium,
+          campaign: e.utmCampaign,
+        },
+      })),
     });
   } catch (err) {
     rlog.error({ ...errContext(err), userId }, 'admin: user detail failed');
@@ -825,5 +846,94 @@ async function fetchStripeDataForUser(user) {
     mrrUsd,
   };
 }
+
+// =============================================================================
+// Funnel — self-hosted analytics for the customer journey. Source data is
+// FunnelEvent rows written by lib/demoEvents.js (server emits) and the
+// /api/track beacon (client emits). FUNNEL_STEPS in lib/funnelEvents.js
+// is the canonical ordering — change it there when a step is added.
+// =============================================================================
+
+// GET /api/admin/funnel?days=30
+// Counts unique visitors per step (by anonId fallback to userId), with
+// drop-off vs the previous step. Cheap because FunnelEvent has indexes
+// on (name, ts) — one $facet branch per step.
+router.get('/funnel', async (req, res) => {
+  const rlog = req.log || log;
+  const { days, startAt, endAt } = parseWindow(req);
+
+  try {
+    const facet = {};
+    for (const step of FUNNEL_STEPS) {
+      facet[step] = [
+        { $match: { name: step } },
+        // Identity = anonId (preferred) || userId (server-only emits).
+        // Coerce both to string so the set dedupes correctly.
+        {
+          $group: {
+            _id: {
+              $ifNull: [
+                '$anonId',
+                { $cond: [{ $ne: ['$userId', null] }, { $toString: '$userId' }, null] },
+              ],
+            },
+          },
+        },
+        { $match: { _id: { $ne: null } } },
+        { $count: 'visitors' },
+      ];
+    }
+
+    const [result] = await FunnelEvent.aggregate([
+      { $match: { ts: { $gte: startAt, $lte: endAt } } },
+      { $facet: facet },
+    ]);
+
+    const steps = FUNNEL_STEPS.map((step, i) => {
+      const visitors = result?.[step]?.[0]?.visitors || 0;
+      return { name: step, visitors, index: i };
+    });
+    // Drop-off vs previous step (and overall vs first).
+    const top = steps[0]?.visitors || 0;
+    let prev = top;
+    for (const s of steps) {
+      s.dropFromPrev = prev > 0 ? +(((prev - s.visitors) / prev) * 100).toFixed(1) : 0;
+      s.conversionFromTop = top > 0 ? +((s.visitors / top) * 100).toFixed(1) : 0;
+      prev = s.visitors;
+    }
+
+    // Top UTM sources for the window — drives "what brought visitors in"
+    // panel on the funnel page. Keyed on utmSource only; medium/campaign
+    // can be added later if useful.
+    const utmRows = await FunnelEvent.aggregate([
+      {
+        $match: {
+          ts: { $gte: startAt, $lte: endAt },
+          name: 'page_view',
+          utmSource: { $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: '$utmSource',
+          visitors: { $addToSet: { $ifNull: ['$anonId', { $toString: '$userId' }] } },
+        },
+      },
+      { $project: { _id: 0, source: '$_id', visitors: { $size: '$visitors' } } },
+      { $sort: { visitors: -1 } },
+      { $limit: 10 },
+    ]);
+
+    rlog.info({ days, top }, 'admin: funnel overview');
+    res.json({
+      window: { days, startAt: startAt.toISOString(), endAt: endAt.toISOString() },
+      steps,
+      utm: utmRows,
+    });
+  } catch (err) {
+    rlog.error({ ...errContext(err) }, 'admin: funnel aggregate failed');
+    res.status(500).json({ error: 'funnel_query_failed' });
+  }
+});
 
 export default router;

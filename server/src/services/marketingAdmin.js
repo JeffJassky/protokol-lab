@@ -31,15 +31,18 @@ export function getMarketingAdmin() {
     basePath: '/admin/marketing',
     requireAuth: [requireAuth, requireAuthUser, requireAdmin],
     youtubeApiKey: process.env.YOUTUBE_API_KEY,
-    reddit: process.env.REDDIT_CLIENT_ID
-      ? {
-          clientId: process.env.REDDIT_CLIENT_ID,
-          clientSecret: process.env.REDDIT_CLIENT_SECRET,
-          userAgent: process.env.REDDIT_USER_AGENT || 'protokol-marketing-admin/0.0.1',
-          username: process.env.REDDIT_USERNAME,
-          password: process.env.REDDIT_PASSWORD,
-        }
-      : null,
+    // Reddit access defaults to public-JSON mode (no auth, no API approval
+    // needed). Pass a User-Agent regardless so requests identify properly.
+    // Set REDDIT_CLIENT_ID/SECRET (+ optional REDDIT_USERNAME/PASSWORD) to
+    // upgrade to OAuth — useful only if Reddit ever clamps down on
+    // logged-out JSON access. See marketing/src/shared/tools/builtins/reddit/client.js.
+    reddit: {
+      userAgent: process.env.REDDIT_USER_AGENT || 'protokol-marketing-admin/0.1 by /u/jeffjassky',
+      clientId: process.env.REDDIT_CLIENT_ID || null,
+      clientSecret: process.env.REDDIT_CLIENT_SECRET || null,
+      username: process.env.REDDIT_USERNAME || null,
+      password: process.env.REDDIT_PASSWORD || null,
+    },
     logger: log,
   });
 

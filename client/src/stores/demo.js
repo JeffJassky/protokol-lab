@@ -1,6 +1,10 @@
 // Demo session state. Mirrors the server's session-split model:
 //   mode = 'none' | 'anon' | 'authed'
-//   sandboxId — set whenever the active profile is a sandbox
+//   sandboxId — only set for anonymous demo (mode='anon')
+//
+// Demo is pre-register only. Authed sessions never have a sandbox attached
+// (`mode='authed'` always means real data, no toggle); the legacy
+// authed-toggle flow has been removed. See docs/blog/customer-journey.md.
 //
 // Used by the router guard (anon-demo can hit requiresAuth pages),
 // the demo banner (renders state-specific CTAs), and any feature that
@@ -51,27 +55,6 @@ export const useDemoStore = defineStore('demo', () => {
     return data;
   }
 
-  // Authed: toggle into demo (creates parented sandbox or reuses existing).
-  async function enter() {
-    const data = await api.post('/api/demo/enter');
-    mode.value = 'authed';
-    sandboxId.value = data.sandboxId;
-    isAnonymous.value = false;
-    return data;
-  }
-
-  async function exit() {
-    await api.post('/api/demo/exit');
-    sandboxId.value = null;
-    isAnonymous.value = false;
-    if (mode.value === 'authed') return;
-    mode.value = 'none';
-  }
-
-  async function reset() {
-    await api.post('/api/demo/reset');
-  }
-
   // Beacon for client-side "wow feature" interactions. Fire-and-forget.
   function trackFeature(feature) {
     api.post('/api/demo/event', { feature }).catch(() => {});
@@ -89,7 +72,7 @@ export const useDemoStore = defineStore('demo', () => {
 
   return {
     mode, sandboxId, isAnonymous, templateAvailable, activePlanId, template, checked, banner, inDemo,
-    fetchStatus, startAnon, enter, exit, reset, trackFeature,
+    fetchStatus, startAnon, trackFeature,
     collapseBanner, expandBanner, clear,
   };
 });

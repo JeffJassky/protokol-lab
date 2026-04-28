@@ -1,0 +1,14 @@
+{
+  "name": "protokol-lab-docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Protokol Lab internal documentation site (VitePress).",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.5.0"
+  }
+}

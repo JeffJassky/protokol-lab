@@ -28,17 +28,16 @@ export function setupInfluencers(ctx) {
   ctx.tools.register(rssFeedTool);
   ctx.tools.register(saveFindingTool);
 
-  // Reddit tools (also used by the redditEngagement module)
-  if (ctx.config.reddit?.clientId) {
-    const redditClient = buildRedditClient({ ...ctx.config.reddit, logger: ctx.logger });
-    if (redditClient) {
-      ctx.redditClient = redditClient;
-      for (const t of buildRedditTools({ client: redditClient, logger: ctx.logger })) {
-        ctx.tools.register(t);
-      }
-    }
-  } else {
-    ctx.logger.warn?.('[marketing-admin] reddit.clientId not set — reddit tools disabled');
+  // Reddit tools (also used by the redditEngagement module). The client
+  // always builds — falls back to public-JSON mode when no OAuth creds.
+  // See shared/tools/builtins/reddit/client.js.
+  const redditClient = buildRedditClient({ ...(ctx.config.reddit || {}), logger: ctx.logger });
+  ctx.redditClient = redditClient;
+  for (const t of buildRedditTools({ client: redditClient, logger: ctx.logger })) {
+    ctx.tools.register(t);
+  }
+  if (redditClient.mode === 'public-json') {
+    ctx.logger.info?.('[marketing-admin] reddit tools using public-json mode (no API credentials)');
   }
 
   // YouTube tools (transcript tool works without API key)

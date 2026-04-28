@@ -1,0 +1,178 @@
+name: deploy
+
+# Production deploy gate. Triggers a DigitalOcean App Platform deployment
+# only after pre-deploy tests (test.yml + e2e.yml) succeed on main, then
+# runs a post-deploy @synthetic smoke against the live site. On smoke
+# failure, rolls back to the previous active deployment.
+#
+# This workflow only does anything once DO is reconfigured to NOT deploy on
+# push (set `services[].github.deploy_on_push: false` in the app spec). Until
+# that flip happens, DO is still deploying every commit on its own and this
+# workflow is duplicate work — but harmless: doctl is idempotent and the
+# rollback step only fires on smoke failure.
+#
+# See docs/testing.md → "CI / CD pipeline" + "Auto-rollback".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Serialize deploys per branch — never two doctl create-deployment runs
+  # in flight against the same app.
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DO_APP_ID: 82fcee11-c0bc-4e54-b0df-75163e543941
+  PROD_BASE_URL: https://protokollab.com
+
+jobs:
+  # Wait for the test + e2e workflows that fired on this same SHA. We want
+  # this workflow to fail fast (and not deploy) if either is red.
+  await-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait for test.yml
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: server
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+      - name: Wait for client tests
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: client
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+      - name: Wait for e2e
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: playwright
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+
+  deploy:
+    needs: await-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      previous_deployment_id: ${{ steps.capture.outputs.id }}
+      new_deployment_id: ${{ steps.deploy.outputs.id }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Capture previous active deployment id
+        id: capture
+        # Used as the rollback target if smoke fails. ACTIVE = currently
+        # serving production traffic. Empty string is acceptable on first
+        # deploy of a fresh app — we just won't be able to roll back.
+        run: |
+          PREV=$(doctl apps list-deployments "$DO_APP_ID" \
+            --format ID,Phase --no-header \
+            | awk '$2=="ACTIVE"{print $1; exit}')
+          echo "id=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Previous deployment: $PREV"
+
+      - name: Trigger DigitalOcean deployment
+        id: deploy
+        # --wait blocks until the deployment finishes (success or failure),
+        # exiting non-zero on failure. Without --wait we'd race the smoke
+        # job against an in-progress build.
+        run: |
+          OUTPUT=$(doctl apps create-deployment "$DO_APP_ID" --wait --format ID --no-header)
+          echo "id=$OUTPUT" >> "$GITHUB_OUTPUT"
+          echo "New deployment: $OUTPUT"
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Run even if the deploy step succeeds with non-zero exit (defensive),
+    # but skip if the deploy job itself was cancelled.
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    outputs:
+      smoke_passed: ${{ steps.smoke.outcome == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root deps (Playwright)
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run @synthetic specs against prod
+        id: smoke
+        # The @synthetic subset is intentionally small (golden paths only).
+        # Specs override baseURL via env so the same spec file runs against
+        # mem-mongo in CI e2e and against prod here. PROD_SYNTHETIC=1 also
+        # disables any test-helper fallbacks the specs may use locally.
+        env:
+          PROD_SYNTHETIC: '1'
+          SYNTHETIC_BASE_URL: ${{ env.PROD_BASE_URL }}
+        run: npx playwright test --grep @synthetic
+
+      - name: Upload Playwright trace on smoke failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report-${{ needs.deploy.outputs.new_deployment_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 30
+
+  rollback:
+    needs: [deploy, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Only roll back when smoke actually failed AND we have a previous
+    # deployment id to roll back to. Skipping in any other case.
+    if: >
+      always()
+      && needs.deploy.result == 'success'
+      && needs.smoke.result == 'failure'
+      && needs.deploy.outputs.previous_deployment_id != ''
+
+    steps:
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Roll back to previous active deployment
+        # Important caveat: rollback restores code, not data. Migrations that
+        # ran during the failed deploy are NOT undone. Schema discipline
+        # (additive-only by default, two-phase deploys for breaking changes)
+        # is what makes this safe — see docs/testing.md → Migration discipline.
+        run: |
+          PREV="${{ needs.deploy.outputs.previous_deployment_id }}"
+          echo "Rolling back to deployment $PREV"
+          doctl apps create-deployment "$DO_APP_ID" --rollback-deployment-id "$PREV" --wait
+          echo "::error::Smoke check failed against ${{ env.PROD_BASE_URL }} — rolled back to $PREV"
+          exit 1

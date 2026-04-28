@@ -1,20 +1,23 @@
 name: e2e
 
-# Playwright end-to-end tests. Heavier than the unit suite because it boots
-# the full stack (server + client + in-memory Mongo) and downloads a browser.
-# Schedule:
-#   - Nightly cron (07:00 UTC = 02:00 CT) catches drift before the workday
-#   - Manual dispatch for ad-hoc runs from a feature branch
-#   - On every PR labeled `e2e` so risky changes get gated explicitly
-# (We deliberately don't run on every PR — keep merges fast unless tagged.)
+# Playwright end-to-end tests against an ephemeral mem-mongo stack.
+#
+# Triggers:
+#   - Every PR + push to main: gates merge + deploy. e2e is the most
+#     comprehensive pre-deploy layer (see docs/testing.md), so we pay the
+#     ~2-3min cost on every change to keep regressions out of prod.
+#   - Nightly cron (07:00 UTC) catches dependency / browser drift even on
+#     branches that don't see commits.
+#   - Manual dispatch for ad-hoc runs.
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: '0 7 * * *'
   workflow_dispatch:
-  pull_request:
-    types: [labeled, synchronize]
-    branches: [main]
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -22,11 +25,6 @@ concurrency:
 
 jobs:
   playwright:
-    # Skip on label events that aren't "e2e"; run only when the PR carries
-    # the e2e label or the workflow is dispatched/scheduled.
-    if: >
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'e2e')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -40,6 +38,15 @@ jobs:
 
       - name: Install root deps (Playwright)
         run: npm ci
+
+      # Server depends on @jeffjassky/marketing-admin via file:../marketing.
+      # That package's runtime imports need its own node_modules populated.
+      # --legacy-peer-deps mirrors the heroku-postbuild step.
+      - name: Install marketing deps
+        working-directory: marketing
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: npm ci --legacy-peer-deps
 
       - name: Install server deps
         working-directory: server

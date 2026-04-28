@@ -11,18 +11,29 @@
 
 import { useRouter } from 'vue-router';
 import { useTryDemo } from '../composables/useTryDemo.js';
+import { track } from '../composables/useTracker.js';
 
 const props = defineProps({
   heading: { type: String, default: 'Stop guessing. Start tracking.' },
   lead: { type: String, default: '' },
   variant: { type: String, default: 'default' }, // 'default' | 'pricing'
+  // Tags emitted cta_click events so the funnel page can break clicks
+  // down by which page surfaced this CTA (e.g. blog post vs /features).
+  surface: { type: String, default: 'end_cta' },
 });
 
 const router = useRouter();
 const { tryDemo, demoStarting } = useTryDemo();
 
-function goSignup() { router.push('/register'); }
-function goPricing() { router.push('/pricing'); }
+function onTryDemo() { tryDemo({ surface: props.surface }); }
+function goSignup() {
+  track('cta_click', { cta: 'signup', surface: props.surface });
+  router.push('/register');
+}
+function goPricing() {
+  track('cta_click', { cta: 'pricing', surface: props.surface });
+  router.push('/pricing');
+}
 </script>
 
 <template>
@@ -31,7 +42,7 @@ function goPricing() { router.push('/pricing'); }
     <p v-if="lead" class="end-cta-lead">{{ lead }}</p>
     <slot />
     <div class="end-cta-buttons">
-      <button class="end-btn primary" :disabled="demoStarting" @click="tryDemo">
+      <button class="end-btn primary" :disabled="demoStarting" @click="onTryDemo">
         {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
       </button>
       <button

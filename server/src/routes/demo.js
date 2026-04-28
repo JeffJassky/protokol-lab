@@ -1,27 +1,21 @@
-// Demo mode entry/exit endpoints.
+// Demo mode endpoints.
 //
 //   POST /api/demo/start   — anonymous: mint a sandbox + set demo cookie.
 //                            IP-rate-limited so a bot can't spawn thousands.
-//   POST /api/demo/enter   — authed:    create-or-reuse a parented sandbox
-//                            and set activeProfileId so requireAuth swaps
-//                            req.userId on subsequent requests.
-//   POST /api/demo/exit    — authed:    clear activeProfileId, return to real data.
-//   POST /api/demo/reset   — authed:    nuke + reclone the user's sandbox
-//                            (used when the canonical template was updated).
 //   GET  /api/demo/status  — public:    summarize the current session's demo
 //                            state so the client can render the right banner.
+//
+// Demo is pre-register only. Once a visitor authenticates (register or login),
+// the demo is destroyed and unavailable until they log out and start a fresh
+// one. Cleanup lives in routes/auth.js (clears demo cookie + deletes any
+// parented sandbox + clears activeProfileId).
 
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import Compound from '../models/Compound.js';
 import WeightLog from '../models/WeightLog.js';
-import { requireAuth, requireAuthUser } from '../middleware/requireAuth.js';
-import {
-  getOrCreateSandbox,
-  resetSandbox,
-  findTemplate,
-} from '../services/demo.js';
+import { getOrCreateSandbox, findTemplate } from '../services/demo.js';
 import { setDemoCookie, clearDemoCookie, readDemoCookie, verifyDemoToken } from '../lib/demoSession.js';
 import { emitDemoEvent } from '../lib/demoEvents.js';
 import { childLogger, errContext } from '../lib/logger.js';
@@ -46,30 +40,28 @@ const startLimiter = rateLimit({
 
 const router = Router();
 
-// Internal: tries to identify any current demo session (anon or authed).
+// Internal: identify the current session's demo state.
+//
+// Authed users always read mode='authed' / sandboxId=null — demo is
+// pre-register only, so an authed JWT and a demo session are mutually
+// exclusive. The `activeProfileId` toggle field is no longer set by any
+// route, but we read it defensively in case a grandfathered record exists
+// (the next login() call clears it).
 async function readSessionDemoState(req) {
-  // Authed user with toggle on?
   const token = req.cookies?.token;
   if (token) {
-    // We don't re-verify JWT here — requireAuth would have, but this endpoint
-    // is public so we duplicate just enough to detect the toggle. If JWT is
-    // bad we just ignore and check the demo cookie.
     try {
       const jwt = (await import('jsonwebtoken')).default;
       const payload = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(payload.userId).lean();
-      if (user && user.activeProfileId) {
-        return { mode: 'authed', sandboxId: user.activeProfileId, authUserId: user._id };
-      }
       if (user) {
         return { mode: 'authed', sandboxId: null, authUserId: user._id };
       }
     } catch {
-      // fall through
+      // fall through to anon-cookie check
     }
   }
 
-  // Anon demo cookie?
   const demoToken = readDemoCookie(req);
   const sandboxId = verifyDemoToken(demoToken);
   if (sandboxId) {
@@ -82,17 +74,16 @@ async function readSessionDemoState(req) {
   return { mode: 'none', sandboxId: null, authUserId: null };
 }
 
-// POST /api/demo/start  (anonymous)
-// Creates a fresh anonymous sandbox and sets the demo cookie. If the caller
-// already has a JWT (real user), they should use /enter instead — we don't
-// want to mint orphaned anonymous sandboxes for already-authed sessions.
+// POST /api/demo/start  (anonymous only)
+// Creates a fresh anonymous sandbox and sets the demo cookie. Authed users
+// can't start a demo — they must log out first (demo is pre-register only).
 router.post('/start', startLimiter, async (req, res) => {
   // Reject only when there's a *valid* JWT for a real user — a stale/invalid
   // token cookie shouldn't block a returning visitor from starting an anon
   // demo.
   const session = await readSessionDemoState(req);
   if (session.mode === 'authed') {
-    return res.status(400).json({ error: 'already_authenticated', hint: 'use /api/demo/enter' });
+    return res.status(400).json({ error: 'already_authenticated', hint: 'log out to start a demo' });
   }
 
   // If the visitor already has a live demo cookie, reuse the existing
@@ -121,49 +112,6 @@ router.post('/start', startLimiter, async (req, res) => {
   } catch (err) {
     (req.log || log).error(errContext(err), 'demo: start failed');
     res.status(500).json({ error: 'demo_start_failed' });
-  }
-});
-
-// POST /api/demo/enter  (authed)
-// Switches the real user's active profile to a parented sandbox. Reuses the
-// existing sandbox if present so prior experiments are intact.
-router.post('/enter', requireAuth, requireAuthUser, async (req, res) => {
-  try {
-    const { sandbox, created } = await getOrCreateSandbox({ authUserId: req.authUserId });
-    await User.updateOne({ _id: req.authUserId }, { $set: { activeProfileId: sandbox._id } });
-    emitDemoEvent(req, 'demo_enter', { sandboxId: sandbox._id, created });
-    res.json({ sandboxId: String(sandbox._id), mode: 'authed', created });
-  } catch (err) {
-    (req.log || log).error(errContext(err), 'demo: enter failed');
-    res.status(500).json({ error: 'demo_enter_failed' });
-  }
-});
-
-// POST /api/demo/exit  (authed)
-router.post('/exit', requireAuth, requireAuthUser, async (req, res) => {
-  await User.updateOne({ _id: req.authUserId }, { $set: { activeProfileId: null } });
-  emitDemoEvent(req, 'demo_exit');
-  res.json({ ok: true });
-});
-
-// POST /api/demo/reset  (authed)
-// Nukes the user's sandbox and re-clones from the current template. Used
-// when Jeff has updated the canonical data and the user wants the new
-// version. PRD §6.2 leans toward a confirm modal on the client.
-router.post('/reset', requireAuth, requireAuthUser, async (req, res) => {
-  const me = await User.findById(req.authUserId).lean();
-  const sandboxId = me?.activeProfileId
-    || (await User.findOne({ parentUserId: req.authUserId, isDemoSandbox: true }))?._id;
-  if (!sandboxId) {
-    return res.status(404).json({ error: 'no_sandbox' });
-  }
-  try {
-    await resetSandbox(sandboxId);
-    emitDemoEvent(req, 'demo_reset', { sandboxId });
-    res.json({ ok: true, sandboxId: String(sandboxId) });
-  } catch (err) {
-    (req.log || log).error(errContext(err), 'demo: reset failed');
-    res.status(500).json({ error: 'demo_reset_failed' });
   }
 });
 

@@ -11,6 +11,7 @@ import {
   removeUpvote,
   updateMyProfile,
 } from '../api/support.js';
+import { snapshotContext, buildSubject, buildDescription } from '../utils/bugReport.js';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -30,7 +31,7 @@ const tickets = ref([]);
 const ticketsLoading = ref(false);
 const ticketsError = ref(null);
 const showNewTicket = ref(false);
-const newTicket = ref({ subject: '', description: '' });
+const newTicket = ref({ happened: '', expected: '', doing: '' });
 const creatingTicket = ref(false);
 const newTicketErr = ref(null);
 
@@ -51,8 +52,12 @@ async function submitTicket() {
   newTicketErr.value = null;
   creatingTicket.value = true;
   try {
-    const { ticket } = await createTicket(newTicket.value);
-    newTicket.value = { subject: '', description: '' };
+    const ctx = snapshotContext(route);
+    const { ticket } = await createTicket({
+      subject: buildSubject(newTicket.value.happened),
+      description: buildDescription(newTicket.value, ctx),
+    });
+    newTicket.value = { happened: '', expected: '', doing: '' };
     showNewTicket.value = false;
     await loadTickets();
     router.push(`/support/tickets/${ticket.id || ticket._id}`);
@@ -177,9 +182,11 @@ function fmtDate(v) {
       <div>
         <h1>Support</h1>
         <p class="subtitle">
-          Signed in as <strong>{{ effectiveDisplayName() }}</strong>
-          &middot; {{ auth.user?.email }}
-          <button class="link-btn" @click="openNameEditor">edit display name</button>
+          Signed in as <strong>{{ effectiveDisplayName() }}</strong> &middot;
+          {{ auth.user?.email }}
+          <button class="link-btn" @click="openNameEditor">
+            edit display name
+          </button>
         </p>
       </div>
     </header>
@@ -187,7 +194,11 @@ function fmtDate(v) {
     <div v-if="editingName" class="card inline-editor">
       <label>
         <span>Display name</span>
-        <input v-model="draftName" maxlength="60" placeholder="How you appear on feature requests" />
+        <input
+          v-model="draftName"
+          maxlength="60"
+          placeholder="How you appear on feature requests"
+        />
       </label>
       <div class="row-actions">
         <button class="btn" :disabled="savingName" @click="saveName">
@@ -219,22 +230,55 @@ function fmtDate(v) {
         </button>
       </div>
 
-      <form v-if="showNewTicket" class="card composer" @submit.prevent="submitTicket">
+      <form
+        v-if="showNewTicket"
+        class="card composer"
+        @submit.prevent="submitTicket"
+      >
+        <p class="composer-intro">Tell us in your own words.</p>
         <label>
-          <span>Subject</span>
-          <input v-model="newTicket.subject" maxlength="200" required placeholder="Short summary" />
+          <span>What happened?</span>
+          <textarea
+            v-model="newTicket.happened"
+            maxlength="2000"
+            rows="3"
+            required
+            placeholder="e.g. The page went blank after I clicked Save."
+          />
         </label>
         <label>
-          <span>Describe the issue</span>
-          <textarea v-model="newTicket.description" maxlength="10000" rows="6" required
-            placeholder="What happened? What were you trying to do? Steps to reproduce help us fix it faster." />
+          <span>What did you expect to happen instead?</span>
+          <textarea
+            v-model="newTicket.expected"
+            maxlength="2000"
+            rows="2"
+            placeholder="e.g. I expected my note to be saved and shown in the list."
+          />
+        </label>
+        <label>
+          <span
+            >What were you doing right before?
+            <em class="optional">(optional)</em></span
+          >
+          <textarea
+            v-model="newTicket.doing"
+            maxlength="2000"
+            rows="2"
+            placeholder="e.g. I tapped on a meal, edited the calories, then hit Save."
+          />
         </label>
         <p v-if="newTicketErr" class="error">{{ newTicketErr }}</p>
         <div class="row-actions">
-          <button class="btn primary" :disabled="creatingTicket" type="submit">
-            {{ creatingTicket ? 'Submitting…' : 'Submit ticket' }}
+          <button
+            class="btn primary"
+            :disabled="creatingTicket || !newTicket.happened.trim()"
+            type="submit"
+          >
+            {{ creatingTicket ? 'Sending…' : 'Send report' }}
           </button>
-          <p class="hint">You can attach files on the ticket page after it's created.</p>
+          <p class="hint">
+            You can attach screenshots after the ticket is created.
+          </p>
         </div>
       </form>
 
@@ -252,10 +296,17 @@ function fmtDate(v) {
         <tbody>
           <tr v-for="t in tickets" :key="t.id">
             <td>
-              <router-link :to="`/support/tickets/${t.id}`">{{ t.subject }}</router-link>
+              <router-link
+                :to="`/support/tickets/${t.id}`"
+                >{{ t.subject }}</router-link
+              >
             </td>
             <td>
-              <span class="status-pill" :data-status="t.status">{{ ticketStatusLabel[t.status] }}</span>
+              <span
+                class="status-pill"
+                :data-status="t.status"
+                >{{ ticketStatusLabel[t.status] }}</span
+              >
             </td>
             <td class="num">{{ t.messageCount }}</td>
             <td>{{ fmtDate(t.updatedAt) }}</td>
@@ -274,27 +325,48 @@ function fmtDate(v) {
         </button>
       </div>
 
-      <form v-if="showNewFeature" class="card composer" @submit.prevent="submitFeature">
+      <form
+        v-if="showNewFeature"
+        class="card composer"
+        @submit.prevent="submitFeature"
+      >
         <label>
           <span>Title</span>
-          <input v-model="newFeature.title" maxlength="160" required placeholder="What's the idea?" />
+          <input
+            v-model="newFeature.title"
+            maxlength="160"
+            required
+            placeholder="What's the idea?"
+          />
         </label>
         <label>
           <span>Describe it</span>
-          <textarea v-model="newFeature.description" maxlength="6000" rows="5" required
-            placeholder="Who benefits? What problem does it solve?" />
+          <textarea
+            v-model="newFeature.description"
+            maxlength="6000"
+            rows="5"
+            required
+            placeholder="Who benefits? What problem does it solve?"
+          />
         </label>
         <p v-if="newFeatureErr" class="error">{{ newFeatureErr }}</p>
         <div class="row-actions">
           <button class="btn primary" :disabled="creatingFeature" type="submit">
             {{ creatingFeature ? 'Posting…' : 'Post request' }}
           </button>
-          <p class="hint">Your display name ({{ effectiveDisplayName() }}) is shown publicly.</p>
+          <p class="hint">
+            Your display name ({{ effectiveDisplayName() }}) is shown publicly.
+          </p>
         </div>
       </form>
 
       <div class="filter-bar">
-        <input v-model="featureQ" type="search" placeholder="Search…" class="search-input" />
+        <input
+          v-model="featureQ"
+          type="search"
+          placeholder="Search…"
+          class="search-input"
+        />
         <select v-model="featureFilter">
           <option value="">All statuses</option>
           <option value="open">Open</option>
@@ -323,14 +395,26 @@ function fmtDate(v) {
             <span class="count">{{ f.upvoteCount }}</span>
           </button>
           <div class="feature-body">
-            <router-link :to="`/support/features/${f.id}`" class="feature-title">
+            <router-link
+              :to="`/support/features/${f.id}`"
+              class="feature-title"
+            >
               {{ f.title }}
             </router-link>
             <p class="feature-excerpt">{{ f.description }}</p>
             <div class="feature-meta">
-              <span class="status-pill" :data-status="f.status">{{ featureStatusLabel[f.status] }}</span>
-              <span>{{ f.authorDisplayName || f.authorEmail?.split('@')[0] }}</span>
-              <span>{{ f.commentCount }} comment{{ f.commentCount === 1 ? '' : 's' }}</span>
+              <span
+                class="status-pill"
+                :data-status="f.status"
+                >{{ featureStatusLabel[f.status] }}</span
+              >
+              <span
+                >{{ f.authorDisplayName || f.authorEmail?.split('@')[0] }}</span
+              >
+              <span
+                >{{ f.commentCount }}
+                comment{{ f.commentCount === 1 ? '' : 's' }}</span
+              >
               <span>{{ fmtDate(f.createdAt) }}</span>
             </div>
           </div>
@@ -359,10 +443,12 @@ function fmtDate(v) {
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-small, 6px); padding: 16px; margin: 0 0 16px; }
 .composer { display: flex; flex-direction: column; gap: 12px; }
-.composer label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
-.composer input, .composer textarea { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; font-family: inherit; font-size: 14px; text-transform: none; letter-spacing: 0; }
-.composer textarea { resize: vertical; min-height: 96px; }
+.composer label { display: flex; flex-direction: column; gap: 4px; font-family: var(--font-display, inherit); font-size: 13px; font-weight: var(--font-weight-bold, 600); color: var(--text); text-transform: uppercase; letter-spacing: 0.06em; }
+.composer input, .composer textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; font-family: var(--font-body, inherit); font-weight: 400; font-size: 14px; text-transform: none; letter-spacing: 0; }
+.composer textarea { resize: vertical; min-height: 64px; }
 .composer input:focus, .composer textarea:focus { outline: none; border-color: var(--primary); }
+.composer-intro { font-size: 13px; color: var(--text-secondary); margin: 0 0 4px; line-height: 1.5; }
+.composer .optional { color: var(--text-secondary); font-style: normal; text-transform: none; letter-spacing: 0; }
 
 .inline-editor { display: flex; flex-direction: column; gap: 10px; }
 .inline-editor label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }

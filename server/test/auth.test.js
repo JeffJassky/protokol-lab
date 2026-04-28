@@ -46,8 +46,9 @@ describe('POST /api/auth/register', () => {
     expect(res.status).toBe(201);
     expect(res.body.user).toMatchObject({ email: valid.email });
     expect(res.body.user.id).toBeDefined();
-    expect(res.headers['set-cookie']?.[0]).toMatch(/^token=/);
-    expect(res.headers['set-cookie'][0]).toMatch(/HttpOnly/i);
+    const tokenCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith('token='));
+    expect(tokenCookie).toBeDefined();
+    expect(tokenCookie).toMatch(/HttpOnly/i);
 
     // welcomeEmail is fire-and-forget — wait a microtask for the .catch chain.
     await new Promise((r) => setImmediate(r));
@@ -99,7 +100,8 @@ describe('POST /api/auth/login', () => {
     const res = await request(app).post('/api/auth/login').send(valid);
     expect(res.status).toBe(200);
     expect(res.body.user.email).toBe(valid.email);
-    expect(res.headers['set-cookie']?.[0]).toMatch(/^token=/);
+    const tokenCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith('token='));
+    expect(tokenCookie).toBeDefined();
   });
 
   it('returns 401 on wrong password', async () => {
@@ -107,7 +109,8 @@ describe('POST /api/auth/login', () => {
       .post('/api/auth/login')
       .send({ email: valid.email, password: 'wrong-pass' });
     expect(res.status).toBe(401);
-    expect(res.headers['set-cookie']).toBeUndefined();
+    const tokenCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith('token='));
+    expect(tokenCookie).toBeUndefined();
   });
 
   it('returns 401 on unknown email (same error shape = no enumeration)', async () => {
@@ -381,7 +384,8 @@ describe('POST /api/auth/google', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.user.email).toBe('google-user@example.com');
-    expect(res.headers['set-cookie']?.[0]).toMatch(/^token=/);
+    const tokenCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith('token='));
+    expect(tokenCookie).toBeDefined();
 
     const persisted = await User.findOne({ email: 'google-user@example.com' });
     expect(persisted.googleId).toBe('google-sub-123');
@@ -437,7 +441,8 @@ describe('POST /api/auth/google', () => {
       .post('/api/auth/google')
       .send({ credential: 'tampered' });
     expect(res.status).toBe(401);
-    expect(res.headers['set-cookie']).toBeUndefined();
+    const tokenCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith('token='));
+    expect(tokenCookie).toBeUndefined();
   });
 
   it('rejects payload with email_verified=false (401)', async () => {
@@ -461,5 +466,31 @@ describe('POST /api/auth/google', () => {
       .send({ credential: 'fake-id-token' });
     expect(res.status).toBe(503);
     process.env.GOOGLE_CLIENT_ID = ORIGINAL_CLIENT_ID;
+  });
+
+  it('Google login from an anon demo session destroys the demo (cookie + sandbox)', async () => {
+    // Seed a template + start an anon demo on the same agent.
+    await User.create({ email: 'tmpl@demo.local', isDemoTemplate: true });
+    const agent = request.agent(app);
+    const start = await agent.post('/api/demo/start');
+    expect(start.status).toBe(201);
+    const sandboxId = start.body.sandboxId;
+    expect(await User.findById(sandboxId)).not.toBeNull();
+
+    mockGooglePayload({ email: 'returning-google@example.com', sub: 'g-sub-cleanup' });
+    // Pre-create the user so this is a "returning google user" login, not signup.
+    await User.create({ email: 'returning-google@example.com', googleId: 'g-sub-cleanup' });
+
+    const login = await agent
+      .post('/api/auth/google')
+      .send({ credential: 'fake-id-token' });
+    expect(login.status).toBe(200);
+
+    // Sandbox doc gone, demo cookie cleared, no activeProfileId left over.
+    expect(await User.findById(sandboxId)).toBeNull();
+    const demoCookie = (login.headers['set-cookie'] || [])
+      .find((c) => c.startsWith('demo_token='));
+    expect(demoCookie, 'login response must clear demo_token cookie').toBeTruthy();
+    expect(demoCookie).toMatch(/expires=Thu, 01 Jan 1970|max-age=0\b|max-age=-\d+/i);
   });
 });

@@ -329,10 +329,12 @@ export async function resetSandbox(sandboxId) {
 }
 
 export async function deleteSandbox(sandboxId) {
-  for (const spec of CLONE_PLAN) {
-    await spec.model.deleteMany({ userId: sandboxId });
-  }
-  await User.deleteOne({ _id: sandboxId, isDemoSandbox: true });
+  // Cascade-delete via the User model's doc-level hook. Loading the doc
+  // first ensures the hook fires and clears every userId-referencing row,
+  // not just the CLONE_PLAN subset.
+  const sandbox = await User.findOne({ _id: sandboxId, isDemoSandbox: true });
+  if (!sandbox) return;
+  await sandbox.deleteOne();
 }
 
 // Seed the canonical template from a real user (typically the founder's
@@ -345,13 +347,12 @@ export async function seedTemplateFromUser(sourceUserId, { sanitize } = {}) {
   const source = await User.findById(sourceUserId);
   if (!source) throw new Error(`source user not found: ${sourceUserId}`);
 
-  // Drop any existing template + its data first.
+  // Drop any existing template + its data first. The User cascade hook
+  // clears every userId-referencing row, so a manual per-collection loop
+  // isn't needed here.
   const existing = await User.findOne({ isDemoTemplate: true });
   if (existing) {
-    for (const spec of CLONE_PLAN) {
-      await spec.model.deleteMany({ userId: existing._id });
-    }
-    await User.deleteOne({ _id: existing._id });
+    await existing.deleteOne();
   }
 
   const template = await User.create({

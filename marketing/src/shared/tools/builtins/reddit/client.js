@@ -1,18 +1,93 @@
-// Lightweight Reddit OAuth client. App-only auth (client_credentials)
-// is enough for reading public posts/comments — we don't need a user
-// password unless we ever post (Phase 8 keeps posting manual). When
-// username/password are configured, we use the script-app flow which
-// has slightly higher rate limits and personalized listings.
+// Reddit client. Two modes:
 //
-// Token cache + refresh on 401.
+//   - **public-json (default)** — unauthenticated requests against
+//     www.reddit.com with `.json` appended to every path. No API approval
+//     needed, no client_id/secret required. Rate limits are lower than
+//     OAuth (~10 req/min ceiling) but our scan cadence (5 subs × hourly,
+//     ~80 req/hr peak) sits far below that.
+//
+//   - **oauth** — used only when `clientId` and `clientSecret` are
+//     configured. Hits oauth.reddit.com with a Bearer token. Slightly
+//     higher rate limits + access to authenticated endpoints (we don't
+//     currently need those — write actions are manual per PLAN).
+//
+// Both modes expose the same `api(pathOrUrl, params)` shape so the tool
+// layer doesn't care which is in use.
+//
+// Token cache + refresh on 401 (oauth mode only).
 
 const TOKEN_URL = 'https://www.reddit.com/api/v1/access_token';
-const API_BASE = 'https://oauth.reddit.com';
+const OAUTH_BASE = 'https://oauth.reddit.com';
+const PUBLIC_BASE = 'https://www.reddit.com';
 
-export function buildRedditClient({ clientId, clientSecret, userAgent, username, password, logger }) {
-  if (!clientId || !clientSecret) return null;
-  const ua = userAgent || 'marketing-admin/0.1';
+export function buildRedditClient({ clientId, clientSecret, userAgent, username, password, logger } = {}) {
+  const ua = userAgent || 'protokol-marketing-admin/0.1 (public-json)';
+  const useOAuth = Boolean(clientId && clientSecret);
 
+  if (!useOAuth) {
+    return buildPublicJsonClient({ ua, logger });
+  }
+  return buildOAuthClient({ clientId, clientSecret, username, password, ua, logger });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Public-JSON client. Every Reddit URL has a `.json` twin that returns
+// the same data shape as the OAuth API without authentication.
+// ──────────────────────────────────────────────────────────────────────
+
+function buildPublicJsonClient({ ua, logger }) {
+  async function api(pathOrUrl, params = {}) {
+    const url = buildPublicUrl(pathOrUrl, params);
+    const res = await fetch(url, {
+      headers: { 'User-Agent': ua },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (res.status === 429) {
+      const body = await res.text();
+      throw new Error(`reddit 429 (rate limited): ${body.slice(0, 120)}`);
+    }
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`reddit ${res.status}: ${body.slice(0, 200)}`);
+    }
+    return res.json();
+  }
+  return { api, mode: 'public-json' };
+}
+
+function buildPublicUrl(pathOrUrl, params) {
+  let base;
+  let path;
+  if (pathOrUrl.startsWith('http')) {
+    const u = new URL(pathOrUrl);
+    // If someone passed an oauth.reddit.com URL, rewrite to www.reddit.com
+    base = `${u.protocol}//www.reddit.com`;
+    path = u.pathname + u.search;
+  } else {
+    base = PUBLIC_BASE;
+    path = pathOrUrl;
+  }
+  // Insert `.json` before the query string (if any).
+  const qIdx = path.indexOf('?');
+  const pathOnly = qIdx === -1 ? path : path.slice(0, qIdx);
+  const existingQuery = qIdx === -1 ? '' : path.slice(qIdx + 1);
+  const jsonPath = pathOnly.endsWith('.json') ? pathOnly : `${pathOnly}.json`;
+  // Merge passed params with any query already on the URL.
+  const merged = new URLSearchParams(existingQuery);
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null) merged.set(k, String(v));
+  }
+  // raw_json=1 disables Reddit's HTML-entity escaping — gives us clean strings.
+  if (!merged.has('raw_json')) merged.set('raw_json', '1');
+  const qs = merged.toString();
+  return `${base}${jsonPath}${qs ? `?${qs}` : ''}`;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// OAuth client (kept for users who set REDDIT_CLIENT_ID).
+// ──────────────────────────────────────────────────────────────────────
+
+function buildOAuthClient({ clientId, clientSecret, username, password, ua, logger }) {
   let tokenCache = null;
 
   async function getToken() {
@@ -54,7 +129,7 @@ export function buildRedditClient({ clientId, clientSecret, userAgent, username,
     const token = await getToken();
     const url = pathOrUrl.startsWith('http')
       ? pathOrUrl
-      : `${API_BASE}${pathOrUrl}${pathOrUrl.includes('?') ? '&' : '?'}${new URLSearchParams(params)}`;
+      : `${OAUTH_BASE}${pathOrUrl}${pathOrUrl.includes('?') ? '&' : '?'}${new URLSearchParams(params)}`;
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -64,7 +139,6 @@ export function buildRedditClient({ clientId, clientSecret, userAgent, username,
     });
     if (res.status === 401) {
       tokenCache = null;
-      // single retry
       const token2 = await getToken();
       const res2 = await fetch(url, {
         headers: { Authorization: `Bearer ${token2}`, 'User-Agent': ua },
@@ -80,5 +154,5 @@ export function buildRedditClient({ clientId, clientSecret, userAgent, username,
     return res.json();
   }
 
-  return { api, getToken };
+  return { api, getToken, mode: 'oauth' };
 }

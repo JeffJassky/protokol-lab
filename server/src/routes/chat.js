@@ -65,7 +65,11 @@ router.post('/', chatUpload, parseChatPayload, requireChatQuota, async (req, res
   let streamStatus = 'ok';
   let streamError = null;
   try {
-    for await (const event of chatStream(req.authUserId, messages, { threadId, timezone })) {
+    // Mock-agent scenario hint, e2e only. The mock service in agent.mock.js
+    // ignores this in production builds (AGENT_PROVIDER must be 'mock' for
+    // the mock path to fire), so reading the header here is safe.
+    const scenario = req.get('x-mock-scenario') || undefined;
+    for await (const event of chatStream(req.authUserId, messages, { threadId, timezone, scenario })) {
       if (event.type === 'usage') {
         // Captured server-side only; not forwarded to the client stream.
         usageEvent = event;

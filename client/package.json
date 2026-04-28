@@ -17,6 +17,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@sentry/vite-plugin": "^5.2.0",
+    "@sentry/vue": "^10.50.0",
     "@unhead/vue": "^3.0.5",
     "@vueuse/core": "^14.2.1",
     "@zxing/browser": "^0.1.5",

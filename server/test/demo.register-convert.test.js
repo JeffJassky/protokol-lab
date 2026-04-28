@@ -100,6 +100,27 @@ describe('POST /api/auth/register — demo conversion behavior', () => {
     expect(status.body.activePlanId).toBeNull();
   });
 
+  it('register from a demo session deletes the sandbox doc + its child rows', async () => {
+    await seedTinyTemplate();
+    const agent = request.agent(app);
+    const start = await agent.post('/api/demo/start');
+    const sandboxId = start.body.sandboxId;
+
+    // Sandbox + cloned rows are present pre-register.
+    expect(await User.findById(sandboxId)).not.toBeNull();
+    expect(await WeightLog.countDocuments({ userId: sandboxId })).toBeGreaterThan(0);
+
+    await agent.post('/api/auth/register').send({
+      email: 'destroyer@example.com',
+      password: 'passw0rd-ok',
+    });
+
+    // Demo is pre-register only — sandbox + child rows are wiped immediately.
+    expect(await User.findById(sandboxId)).toBeNull();
+    expect(await WeightLog.countDocuments({ userId: sandboxId })).toBe(0);
+    expect(await FoodLog.countDocuments({ userId: sandboxId })).toBe(0);
+  });
+
   it('register without a demo cookie is unaffected (no spurious clear)', async () => {
     const agent = request.agent(app);
     const reg = await agent.post('/api/auth/register').send({

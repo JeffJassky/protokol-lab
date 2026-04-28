@@ -1,15 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Root-level Playwright config. Spins up:
-//   - Server on :3001 with USE_MEM_MONGO=1 (zero-install ephemeral Mongo)
-//   - Client (Vite dev) on :5173, proxying /api → :3001
+// Root-level Playwright config.
 //
-// Each `npm run test:e2e` gets a fresh in-memory Mongo instance for the run
-// (one per webServer boot, not per test). Test-level isolation is handled by
-// unique emails per spec; destructive tests should not be run against data
-// they didn't create.
+// Two modes:
+//   1. Local / CI e2e (default) — spins up the full stack against an
+//      ephemeral mem-mongo. Specs run against http://localhost:5174.
+//   2. Production synthetic — set PROD_SYNTHETIC=1 + SYNTHETIC_BASE_URL.
+//      Skips the webServer block, points at the live URL, and drops the
+//      internal-test-token header (the prod server never accepts it).
+//      Used by deploy.yml (post-deploy smoke) and synthetic.yml (cron).
 //
 // To develop specs interactively: `npm run test:e2e -- --ui`.
+
+const SYNTHETIC_MODE = process.env.PROD_SYNTHETIC === '1';
+const BASE_URL = SYNTHETIC_MODE
+  ? (process.env.SYNTHETIC_BASE_URL || 'https://protokollab.com')
+  : 'http://localhost:5174';
 
 export default defineConfig({
   testDir: './test/e2e',
@@ -21,14 +27,16 @@ export default defineConfig({
   retries: 0,
 
   use: {
-    baseURL: 'http://localhost:5174',
+    baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     // Test-only helpers (/api/__test/*) require this header in addition to
     // NODE_ENV=e2e on the server. Keeps a stray NODE_ENV=e2e in CI/staging
-    // from exposing the reset-everything endpoint.
-    extraHTTPHeaders: {
+    // from exposing the reset-everything endpoint. Prod synthetic must not
+    // send it (prod server rejects on missing NODE_ENV match anyway, but
+    // omitting the header makes the intent loud).
+    extraHTTPHeaders: SYNTHETIC_MODE ? {} : {
       'x-internal-test-token': 'e2e-internal-token-not-for-prod',
     },
   },
@@ -40,7 +48,8 @@ export default defineConfig({
     },
   ],
 
-  webServer: [
+  // No webServer when probing prod — the app is already running there.
+  webServer: SYNTHETIC_MODE ? undefined : [
     {
       name: 'server',
       command: 'npm run start --prefix server',
@@ -63,6 +72,10 @@ export default defineConfig({
         // server's .env may carry into the e2e shell.
         STRIPE_SECRET_KEY: 'sk_test_e2e_dummy',
         STRIPE_WEBHOOK_SECRET: '',
+        // Force the mock agent so e2e never hits Gemini. Production code
+        // path is untouched — only AGENT_PROVIDER=mock activates the mock
+        // (see services/agent.mock.js).
+        AGENT_PROVIDER: 'mock',
         // Don't fan out emails during E2E.
         SENDGRID_API_KEY: '',
         // VAPID keys are required at boot (initPush throws if missing). We

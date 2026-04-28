@@ -43,6 +43,7 @@ const chatTotals = computed(() => data.value?.chatTotals || {});
 const chatByDay = computed(() => data.value?.chatByDay || []);
 const recentMessages = computed(() => data.value?.recentMessages || []);
 const stripe = computed(() => data.value?.stripe || null);
+const funnelEvents = computed(() => data.value?.funnelEvents || []);
 
 const limitEntries = computed(() => Object.entries(currentLimits.value));
 const featureEntries = computed(() =>
@@ -412,6 +413,36 @@ function fmtDuration(ms) {
           </tbody>
         </table>
         <div v-else class="empty">No recent messages.</div>
+      </section>
+
+      <!-- Funnel timeline — events tied to this user, including those
+           backfilled at register time via anonId stitching. -->
+      <section class="card">
+        <h2>Funnel timeline</h2>
+        <table v-if="funnelEvents.length" class="data-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Event</th>
+              <th>Path</th>
+              <th>UTM</th>
+              <th>Props</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="e in funnelEvents" :key="e.id">
+              <td>{{ fmtDateTime(e.ts) }}</td>
+              <td><code>{{ e.name }}</code></td>
+              <td class="muted">{{ e.path || '—' }}</td>
+              <td class="muted">
+                <span v-if="e.utm?.source">{{ e.utm.source }}</span>
+                <span v-else>—</span>
+              </td>
+              <td class="muted"><code>{{ JSON.stringify(e.props || {}) }}</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty">No funnel events captured yet.</div>
       </section>
     </template>
   </div>

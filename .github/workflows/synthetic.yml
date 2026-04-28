@@ -1,0 +1,75 @@
+name: synthetic
+
+# Hourly @synthetic probe against production. Catches issues that have
+# nothing to do with code pushes:
+#   - Mongo cluster down / connection limit hit
+#   - Expired API key (Stripe, Gemini, SendGrid)
+#   - TLS cert expiry
+#   - Third-party outage
+#   - DO config drift after a manual dashboard edit
+#
+# Same Playwright spec files as CI e2e + post-deploy smoke (single source
+# of truth — see docs/testing.md → "@synthetic tag"). The only differences
+# are baseURL (live prod) and the absence of test-helper endpoints in prod.
+#
+# Phase 1: workflow goes red on failure, visible in the Actions UI. No
+# email/Slack destination wired yet. Add when we know what real signal
+# vs flake looks like.
+#
+# Cadence: hourly. Tighten to 15 min once we have paying customers / SLA.
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: synthetic
+  cancel-in-progress: false
+
+env:
+  PROD_BASE_URL: https://protokollab.com
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root deps (Playwright)
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run @synthetic specs against prod
+        env:
+          PROD_SYNTHETIC: '1'
+          SYNTHETIC_BASE_URL: ${{ env.PROD_BASE_URL }}
+        run: npx playwright test --grep @synthetic
+
+      - name: Upload Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-trace-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 30

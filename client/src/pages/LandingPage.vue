@@ -6,6 +6,7 @@ import { startCheckout } from '../api/stripe.js';
 import { PLANS, PLAN_IDS } from '../../../shared/plans.js';
 import { useRouteSeo } from '../composables/useSeo.js';
 import { useTryDemo } from '../composables/useTryDemo.js';
+import { track } from '../composables/useTracker.js';
 import MarketingLayout from '../components/MarketingLayout.vue';
 
 useRouteSeo();
@@ -15,12 +16,13 @@ const auth = useAuthStore();
 const checkoutErr = ref('');
 const billingInterval = ref('yearly');
 
-// Cold-traffic primary CTA. Mints an anonymous sandbox (or toggles authed
-// users in via /api/demo/enter) + drops the visitor on /dashboard. PRD §6.1.
+// Cold-traffic primary CTA. Mints an anonymous sandbox + drops the visitor
+// on /dashboard. Authed visitors fall through to /dashboard (no demo).
+// Demo is pre-register only — see docs/blog/customer-journey.md.
 const { tryDemo: doTryDemo, demoStarting } = useTryDemo();
-async function tryDemo() {
+async function tryDemo(surface = 'hero') {
   try {
-    await doTryDemo();
+    await doTryDemo({ surface });
   } catch (err) {
     checkoutErr.value = err.message || 'Could not start demo';
   }
@@ -57,12 +59,18 @@ const annualSavePct = computed(() => {
 // Logged-in visitors skip register entirely and go straight to Stripe; the
 // paid intent is otherwise lost to the router's guest-redirect guard on
 // /register.
-async function goRegister(planId, interval) {
+async function goRegister(planId, interval, surface = 'unknown') {
   checkoutErr.value = '';
   if (!planId) {
+    track('cta_click', { cta: 'signup', surface });
     router.push('/register');
     return;
   }
+  track('pricing_plan_select', {
+    plan: planId,
+    interval: interval || 'monthly',
+    surface,
+  });
   if (auth.user) {
     try {
       await startCheckout(planId, interval || 'monthly');
@@ -77,7 +85,10 @@ async function goRegister(planId, interval) {
   });
 }
 
-const goLogin = () => router.push('/login');
+const goLogin = () => {
+  track('cta_click', { cta: 'login', surface: 'hero' });
+  router.push('/login');
+};
 
 // Sub-Q Bateman PK: ka ~ 6h absorption, ke from half-life in days.
 // Matches the `subq` profile in SettingsPage — rises over a few hours,
@@ -402,11 +413,11 @@ const aiTrail = [
             <button
               class="btn-primary"
               :disabled="demoStarting"
-              @click="tryDemo"
+              @click="tryDemo('hero')"
             >
               {{ demoStarting ? 'Loading…' : "Try the demo →" }}
             </button>
-            <button class="btn-secondary" @click="goRegister">Sign up</button>
+            <button class="btn-secondary" @click="goRegister(null, null, 'hero')">Sign up</button>
             <button class="btn-tertiary" @click="goLogin">Sign in</button>
           </div>
           <div class="hero-meta">
@@ -1304,7 +1315,7 @@ const aiTrail = [
                 <li>Rolling 7-day calorie budget</li>
                 <li>Progress photos with side-by-side compare</li>
               </ul>
-              <button class="btn-secondary wide" @click="goRegister">
+              <button class="btn-secondary wide" @click="goRegister(null, null, 'pricing_free')">
                 Get started
               </button>
             </div>
@@ -1351,7 +1362,7 @@ const aiTrail = [
               </ul>
               <button
                 class="btn-primary wide"
-                @click="goRegister(premiumPlan.id, billingInterval)"
+                @click="goRegister(premiumPlan.id, billingInterval, 'pricing_premium')"
               >
                 Start {{ premiumPlan.pricing.trialDays }}-day free trial →
               </button>
@@ -1398,7 +1409,7 @@ const aiTrail = [
               </ul>
               <button
                 class="btn-secondary wide"
-                @click="goRegister(unlimitedPlan.id, billingInterval)"
+                @click="goRegister(unlimitedPlan.id, billingInterval, 'pricing_unlimited')"
               >
                 Start {{ unlimitedPlan.pricing.trialDays }}-day free trial →
               </button>
@@ -1422,11 +1433,11 @@ const aiTrail = [
             <button
               class="btn-primary big"
               :disabled="demoStarting"
-              @click="tryDemo"
+              @click="tryDemo('landing_end')"
             >
               {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
             </button>
-            <button class="btn-secondary big" @click="goRegister">
+            <button class="btn-secondary big" @click="goRegister(null, null, 'landing_end')">
               Sign up free
             </button>
           </div>

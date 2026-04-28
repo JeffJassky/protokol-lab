@@ -55,6 +55,7 @@ function fmtDate(v) {
             <option :value="365">1 year</option>
           </select>
         </label>
+        <router-link to="/admin/funnel" class="link-button">Funnel →</router-link>
         <router-link to="/admin/users" class="link-button">Users →</router-link>
         <router-link to="/admin/support" class="link-button">Support →</router-link>
       </div>

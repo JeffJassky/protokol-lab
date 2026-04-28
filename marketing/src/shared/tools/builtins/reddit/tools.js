@@ -52,13 +52,15 @@ export function buildRedditTools({ client, logger }) {
     },
     async execute({ query, subreddit, sort = 'relevance', time = 'year', limit = 15 }) {
       try {
-        const path = subreddit ? `/r/${encodeURIComponent(subreddit)}/search` : '/search';
-        const data = await client.api(path, {
-          q: query,
+        // Use site-wide /search with `subreddit:NAME` modifier rather than
+        // /r/X/search?restrict_sr — the latter silently returns no results
+        // when running unauthenticated against the public-JSON endpoint.
+        const q = subreddit ? `${query} subreddit:${subreddit}` : query;
+        const data = await client.api('/search', {
+          q,
           sort,
           t: time,
           limit: Math.min(limit, 25),
-          restrict_sr: subreddit ? 'on' : 'off',
         });
         const posts = (data?.data?.children || []).map((p) => ({
           id: p.data.id,
