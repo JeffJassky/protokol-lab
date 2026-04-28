@@ -42,7 +42,7 @@ const marketing = createMarketingAdmin({
   collectionPrefix: 'marketing_',
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   perplexityApiKey: process.env.PERPLEXITY_API_KEY,
-  reddit: { clientId, clientSecret, userAgent, username, password }, // password only if posting
+  reddit: { userAgent }, // public-JSON mode by default (no creds needed); add clientId/clientSecret/username/password to upgrade to OAuth
   youtubeApiKey: process.env.YOUTUBE_API_KEY,
   basePath: '/admin/marketing',
   requireAuth: requireAdmin,

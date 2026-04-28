@@ -93,6 +93,14 @@ export function registerScanJob(registry) {
         );
         if (opp.createdAt && Date.now() - opp.createdAt.getTime() < 5_000) {
           candidatesIdentified++;
+          // Auto-enqueue triage for the newly-created opportunity. Triage
+          // (Haiku) decides fit and, if medium/high, chains into draftReply
+          // (Sonnet). Existing opportunities (re-seen on a later scan) are
+          // skipped — they were triaged on first sight.
+          await ctx.worker.enqueue({
+            type: 'redditEngagement.triageOpportunity',
+            opportunityId: opp._id,
+          });
         }
       }
 
