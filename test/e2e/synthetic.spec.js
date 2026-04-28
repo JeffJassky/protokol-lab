@@ -32,16 +32,18 @@ test('@synthetic landing page renders the primary demo CTA', async ({ page }) =>
   ).toBeVisible({ timeout: 15_000 });
 });
 
-test('@synthetic demo flow lands an anon visitor on the dashboard with template data', async ({ page }) => {
+test('@synthetic demo flow takes an anon visitor into a sandbox', async ({ page }) => {
   // CI cold-boot can take 20s+ for the Vite dev server to compile + hydrate
-  // the dashboard route on first visit. Bump the per-test budget so a single
-  // slow first run doesn't trip the smoke check.
+  // the post-click route on first visit. Bump the per-test budget so a
+  // single slow first run doesn't trip the smoke check.
   test.setTimeout(60_000);
 
   await page.goto('/');
   await page.getByRole('button', { name: /try the demo/i }).first().click();
 
-  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 45_000 });
-  // Demo banner is the most stable signal that we're inside a sandbox.
-  await expect(page.getByText(/previewing jeff's profile/i)).toBeVisible({ timeout: 15_000 });
+  // Demo banner is the load-bearing assertion: it only renders inside a
+  // demo sandbox, regardless of which app route the click lands on (the
+  // specific destination — /dashboard vs /profile vs /log — has shifted
+  // with the Settings/Profile IA work and isn't stable enough to assert).
+  await expect(page.getByText(/previewing jeff's profile/i)).toBeVisible({ timeout: 30_000 });
 });
