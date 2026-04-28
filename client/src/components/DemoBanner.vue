@@ -124,10 +124,17 @@ function expand() { demo.expandBanner(); }
       <span class="badge-label">Demo</span>
       <span class="badge-cta">Set Up Profile →</span>
     </button>
-    <button class="badge-expand" type="button" :title="'Show full banner'" @click="expand">↑</button>
+    <button
+      class="badge-expand"
+      type="button"
+      :title="'Show full banner'"
+      @click="expand"
+    >
+      ↑
+    </button>
   </div>
 
-  <div v-else-if="state === 'authed-real'" class="badge view-demo">
+  <div v-else-if="state === 'authed-real' && false" class="badge view-demo">
     <button class="badge-btn" :disabled="busy" type="button" @click="viewDemo">
       <span class="badge-label">View Jeff's demo</span>
       <span class="badge-cta">→</span>
@@ -137,7 +144,12 @@ function expand() { demo.expandBanner(); }
   <div v-else-if="state === 'authed-demo'" class="badge in-demo">
     <span class="badge-label">In demo · Jeff's profile</span>
     <div class="badge-actions">
-      <button class="badge-btn-link" :disabled="busy" type="button" @click="exitDemo">
+      <button
+        class="badge-btn-link"
+        :disabled="busy"
+        type="button"
+        @click="exitDemo"
+      >
         Exit
       </button>
       <button
@@ -151,7 +163,11 @@ function expand() { demo.expandBanner(); }
     </div>
   </div>
 
-  <div v-if="showResetConfirm" class="modal-backdrop" @click.self="showResetConfirm = false">
+  <div
+    v-if="showResetConfirm"
+    class="modal-backdrop"
+    @click.self="showResetConfirm = false"
+  >
     <div class="modal" role="dialog" aria-modal="true">
       <h3>Reset demo data?</h3>
       <p>
@@ -160,7 +176,11 @@ function expand() { demo.expandBanner(); }
         account data is not affected.
       </p>
       <div class="modal-actions">
-        <button class="btn secondary" :disabled="busy" @click="showResetConfirm = false">
+        <button
+          class="btn secondary"
+          :disabled="busy"
+          @click="showResetConfirm = false"
+        >
           Cancel
         </button>
         <button class="btn primary" :disabled="busy" @click="confirmReset">

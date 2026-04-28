@@ -137,8 +137,8 @@ router.post('/create-checkout-session', async (req, res) => {
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       ...customerParams,
-      success_url: `${process.env.APP_URL || 'http://localhost:5173'}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.APP_URL || 'http://localhost:5173'}/account?checkout=cancel`,
+      success_url: `${process.env.APP_URL || 'http://localhost:5173'}/profile/settings/account/subscription?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL || 'http://localhost:5173'}/profile/settings/account/subscription?checkout=cancel`,
       client_reference_id: String(user._id),
       metadata: {
         userId: String(user._id),
@@ -176,7 +176,7 @@ router.post('/create-portal-session', async (req, res) => {
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: user.stripeCustomerId,
-      return_url: `${process.env.APP_URL || 'http://localhost:5173'}/account`,
+      return_url: `${process.env.APP_URL || 'http://localhost:5173'}/profile/settings/account/subscription`,
     });
     rlog.info({ sessionId: session.id }, 'portal session created');
     res.json({ url: session.url });

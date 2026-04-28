@@ -21,12 +21,15 @@ defineProps({
           <template v-for="(line, i) in title.split('|')" :key="i">
             <span v-if="i > 0"><br /></span>
             <template v-if="accent && line.includes(accent)">
-              {{ line.split(accent)[0] }}<span class="accent">{{ accent }}</span>{{ line.split(accent)[1] }}
+              {{ line.split(accent)[0] }}<span class="accent">{{ accent }}</span
+              >{{ line.split(accent)[1] }}
             </template>
             <template v-else>{{ line }}</template>
           </template>
         </h1>
-        <div class="meta">Published {{ date }} · {{ readTime }} · by Protokol Lab</div>
+        <div class="meta">
+          Published {{ date }} · {{ readTime }} · by Protokol Lab
+        </div>
 
         <div class="body">
           <slot />

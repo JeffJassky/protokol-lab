@@ -99,7 +99,9 @@ function isSelected(photo) {
     </div>
 
     <div v-if="!hasAny" class="tl-empty">
-      No photos yet — add one from the Log page.
+      No photos yet. Add one from the
+      <router-link :to="{ name: 'log', hash: '#photos' }">Log</router-link>
+      page.
     </div>
 
     <div v-else class="tl-rows">
@@ -119,14 +121,20 @@ function isSelected(photo) {
             :title="`${row.label} — ${p.date}`"
             @click="handleThumbClick(p)"
           >
-            <img :src="p.thumbUrl" :alt="`${row.label} ${p.date}`" loading="lazy" />
+            <img
+              :src="p.thumbUrl"
+              :alt="`${row.label} ${p.date}`"
+              loading="lazy"
+            />
             <span class="tl-date">{{ formatShort(p.date) }}</span>
           </button>
         </div>
       </div>
     </div>
 
-    <p v-if="hasAny" class="tl-hint">Tap two photos to compare with a slider.</p>
+    <p v-if="hasAny" class="tl-hint">
+      Tap two photos to compare with a slider.
+    </p>
 
     <PhotoCompareModal
       :open="compareOpen"
@@ -181,7 +189,7 @@ function isSelected(photo) {
 .tl-cancel:hover { color: var(--text); }
 
 .tl-empty {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: var(--font-size-s);
   text-align: center;
   padding: var(--space-4) 0;

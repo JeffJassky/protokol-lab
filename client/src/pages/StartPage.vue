@@ -69,7 +69,9 @@ onMounted(async () => {
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <BrandWordmark class="auth-brand" :size="24" />
+      <router-link to="/" class="auth-brand-link" aria-label="Home">
+        <BrandWordmark class="auth-brand" :size="24" />
+      </router-link>
       <h1>Create your account</h1>
       <p class="subtitle">
         Your demo data won't carry over. We'll set up the rest of your

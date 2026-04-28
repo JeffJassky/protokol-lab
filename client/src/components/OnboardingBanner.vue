@@ -41,7 +41,7 @@ async function onCta() {
   if (step.value?.id === 'notifications') {
     const ok = await pushStore.enable();
     if (!ok && pushStore.permission === 'denied') {
-      router.push('/settings');
+      router.push('/profile/settings/notifications');
     }
   } else {
     router.push('/dashboard');

@@ -14,15 +14,15 @@
  * Intentionally omits height / padding — per-case sizing stays with the
  * component so scoped overrides don't fight a global size.
  */
-input[type='text'],
-input[type='number'],
-input[type='email'],
-input[type='password'],
-input[type='search'],
-input[type='time'],
-input[type='date'],
-input[type='url'],
-input[type='tel'],
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="time"],
+input[type="date"],
+input[type="url"],
+input[type="tel"],
 textarea,
 select {
   font-family: inherit;
@@ -30,22 +30,24 @@ select {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 /* ---- Focus ring --------------------------------------------------- *
  * Single rule for every text-entry control. Buttons use focus-visible
  * so mouse clicks don't show a lingering ring.
  */
-input[type='text']:focus,
-input[type='number']:focus,
-input[type='email']:focus,
-input[type='password']:focus,
-input[type='search']:focus,
-input[type='time']:focus,
-input[type='date']:focus,
-input[type='url']:focus,
-input[type='tel']:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+input[type="time"]:focus,
+input[type="date"]:focus,
+input[type="url"]:focus,
+input[type="tel"]:focus,
 textarea:focus,
 select:focus {
   outline: none;
@@ -76,7 +78,6 @@ button:focus-visible {
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--tracking-wider);
   text-transform: uppercase;
-  height: var(--control-height-md);
   padding: 0 var(--space-4);
   border-radius: var(--radius-small);
   cursor: pointer;
@@ -145,7 +146,7 @@ button:focus-visible {
  * level page sections where the label carries meaning.
  */
 .eyebrow {
-  font-family: var(--font-body);
+  font-family: var(--font-display);
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -156,7 +157,7 @@ button:focus-visible {
   margin: 0 0 var(--space-3);
 }
 .eyebrow::before {
-  content: '';
+  content: "";
   width: 20px;
   height: 1px;
   background: currentColor;
@@ -212,15 +213,21 @@ button:focus-visible {
     border-left: none !important;
     border-right: none !important;
     border-radius: 0 !important;
-    margin: 0 !important;
+    margin: 2px 0 !important;
     /* Margins collapsed → bump inner padding so content has breathing room
        and adjacent cards don't feel cramped against each other. */
     padding: var(--space-5) var(--space-5) !important;
   }
+  /* WeeklyBudgetStrip wraps its own padded header + body, so the bump
+     above produces nested padding that reads cramped on mobile. Reset
+     the outer padding so only the inner wb-header/wb-body padding applies. */
+  .weekly-budget {
+    padding: 0 !important;
+  }
   /* Wrappers that don't render their own border but introduce vertical
      gap — kill their margin so adjacent containers tile flush. */
   .weekly-wrap {
-    margin: 0 !important;
+    margin: 2px 0 !important;
   }
   /* Adjacent section cards collapse to a single shared divider — drop the
      top border so we don't get a doubled line between cards. */
@@ -247,4 +254,46 @@ button:focus-visible {
   .page-title {
     display: none !important;
   }
+}
+
+/* ---- Auth pages -------------------------------------------------- *
+ * Login / register / forgot-password / reset / start all share the
+ * same .auth-page > .auth-card shell. Labels, buttons, links, and
+ * other chrome use the display font for the brand-forward feel; the
+ * actual typed-text inputs stay on the body font for legibility.
+ */
+.auth-card,
+.auth-card label,
+.auth-card button,
+.auth-card a,
+.auth-card .switch,
+.auth-card .divider,
+.auth-card .subtitle,
+.auth-card .hint,
+.auth-card .error,
+.auth-card h1 {
+  font-family: var(--font-display);
+}
+.auth-card input,
+.auth-card textarea,
+.auth-card select {
+  font-family: var(--font-body);
+}
+/* Cross-page width invariant. !important beats each page's scoped
+   .auth-card max-width (380px) since scoped attribute selectors
+   out-specify a plain class selector. */
+.auth-card {
+  max-width: 440px !important;
+}
+/* The submit button on auth pages — beef it up: real vertical padding,
+   bold weight, full-width hero feel. */
+.auth-card .btn-primary[type="submit"] {
+  padding: var(--space-3) var(--space-4) !important;
+  font-weight: var(--font-weight-bold) !important;
+}
+.auth-brand-link {
+  display: flex;
+  justify-content: center;
+  text-decoration: none;
+  color: inherit;
 }

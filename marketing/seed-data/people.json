@@ -1,0 +1,1217 @@
+[
+  {
+    "name": "Dave Knapp",
+    "displayHandle": "@onthepen",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "newsletter-author", "substack-writer", "youtuber"],
+    "bio": "Independent GLP-1 news host running daily live shows + Substack + YouTube as 'On The Pen'.",
+    "niche": "Daily/M-W-F live GLP-1 news, FDA actions, drug shortages, compounding policy. Top-1%-globally claim from host. Substack carries Bestseller badge.",
+    "tags": ["glp1", "regulatory", "news", "compounding"],
+    "presences": [
+      { "platform": "podcast", "handle": "onthepen", "url": "https://onthepen.com", "role": "host", "audienceSize": 100000, "audienceSizeRaw": "claims top 1% globally; likely 50k–150k weekly downloads", "audienceConfidence": "low", "isPrimary": true },
+      { "platform": "substack", "handle": "onthepen", "url": "https://onthepen.substack.com", "role": "writer", "audienceSize": 30000, "audienceSizeRaw": "10k–30k", "audienceConfidence": "medium", "isPrimary": false },
+      { "platform": "youtube", "handle": "@onthepen", "url": "https://youtube.com/@OnThePen", "role": "host", "audienceSize": 80000, "audienceSizeRaw": "30k–80k", "audienceConfidence": "medium", "isPrimary": false }
+    ],
+    "conflicts": ["Sponsor: Shed (telehealth) — non-pharma"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Kim Carlos",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "youtuber"],
+    "niche": "Co-host of The Plus SideZ. GLP-1 community, patient stories, obesity advocacy. TikTok-grown audience.",
+    "tags": ["glp1", "patient-advocacy", "community"],
+    "presences": [
+      { "platform": "podcast", "handle": "theplussidez", "url": "https://theplussidez.com", "role": "host", "audienceSize": 50000, "audienceSizeRaw": "Est. 20k–50k", "audienceConfidence": "medium", "isPrimary": true },
+      { "platform": "youtube", "handle": "theplussidez", "url": "https://youtube.com/c/ThePlusSideZ", "role": "host", "audienceSize": 60000, "audienceSizeRaw": "20k–60k", "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Kat Carter",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "niche": "Co-host of The Plus SideZ. GLP-1 community, patient stories, obesity advocacy.",
+    "tags": ["glp1", "patient-advocacy", "community"],
+    "presences": [
+      { "platform": "podcast", "handle": "theplussidez", "url": "https://theplussidez.com", "role": "host", "audienceSize": 50000, "audienceSizeRaw": "Est. 20k–50k", "audienceConfidence": "medium", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Gianna Beasley",
+    "displayHandle": "Your GLP-1 Bestie",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "clinician"],
+    "niche": "Registered dietitian and GLP-1 user. Nutrition-focused podcast.",
+    "tags": ["glp1", "nutrition", "rd"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 20000, "audienceSizeRaw": "est. 5k–20k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Ana Reisdorf",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "substack-writer", "newsletter-author", "youtuber", "clinician"],
+    "bio": "Registered dietitian running GLP-1 Hub: podcast, paid community ($49/mo), Substack, and YouTube.",
+    "niche": "GLP-1-focused content for health professionals. Practical guides + research updates on managing drug-induced nutritional deficits.",
+    "tags": ["glp1", "rd", "nutrition", "professional"],
+    "presences": [
+      { "platform": "podcast", "handle": "glp-1hub", "url": "https://glp-1hub.com", "role": "host", "audienceSize": 30000, "audienceSizeRaw": "Est. 10k–30k", "audienceConfidence": "medium", "isPrimary": true },
+      { "platform": "youtube", "handle": "@glp-1hub", "url": "https://youtube.com/@GLP-1hub", "role": "host", "audienceSize": 30000, "audienceSizeRaw": "10k–30k", "audienceConfidence": "low", "isPrimary": false },
+      { "platform": "substack", "handle": "glp1dietitianhub", "url": "https://www.glp1dietitianhub.com", "role": "writer", "audienceSize": 20000, "audienceSizeRaw": "1k–20k", "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": ["Affiliate codes for Harvest Snaps, Barimelts, Timeline (non-pharma)"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Hunter Williams",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "youtuber", "founder"],
+    "niche": "Peptides, TRT, hormone optimization. Long-form podcast + YouTube.",
+    "tags": ["peptides", "trt", "hormones"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 80000, "audienceSizeRaw": "Est. 30k–80k", "audienceConfidence": "medium", "isPrimary": true },
+      { "platform": "youtube", "handle": "hunterwilliams", "url": "https://hunterwilliams.com", "role": "host", "audienceSize": 90000, "audienceSizeRaw": "40k–90k", "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": ["Conflict: co-runs BioLongevity Labs / sells peptide protocols"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Nick Urban",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "youtuber", "blogger"],
+    "bio": "Outliyr / High Performance Longevity. Biohacking, peptides, ancestral health, performance.",
+    "niche": "Biohacking, peptides, ancestral health, performance. Has affiliate/sponsor relationships through Outliyr shop (non-pharma).",
+    "tags": ["biohacking", "peptides", "ancestral", "performance"],
+    "presences": [
+      { "platform": "podcast", "handle": "outliyr", "url": "https://outliyr.com", "role": "host", "audienceSize": 40000, "audienceSizeRaw": "Est. 10k–40k", "audienceConfidence": "medium", "isPrimary": true },
+      { "platform": "youtube", "handle": "outliyr", "url": "https://youtube.com/@Outliyr", "role": "host", "audienceSize": 30000, "audienceSizeRaw": "10k–30k", "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": ["Affiliate/sponsor relationships through Outliyr shop (non-pharma)"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Nathalie Niddam",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "researcher"],
+    "bio": "Longevity podcast host running 6+ years, 426+ episodes. Foremost independent expert on Russian bioregulators and epigenetic repair.",
+    "niche": "Peptides, bioregulators, biohacking. Systems-based approach over isolated pharmaceutical shortcuts.",
+    "tags": ["peptides", "bioregulators", "longevity", "epigenetics"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": "https://www.youtube.com/watch?v=7A4Owmh8HhY", "role": "host", "audienceSize": 80000, "audienceSizeRaw": "Est. 30k–80k", "audienceConfidence": "medium", "isPrimary": true }
+    ],
+    "conflicts": ["Sells courses; non-pharma sponsors"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "JD Denham",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "niche": "Co-host of Peptide of The Week. Athletic/performance angle on peptides.",
+    "tags": ["peptides", "performance", "athletic"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 20000, "audienceSizeRaw": "Est. 5k–20k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Will Haas",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "niche": "Co-host of Peptide of The Week. Athletic/performance angle on peptides.",
+    "tags": ["peptides", "performance", "athletic"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 20000, "audienceSizeRaw": "Est. 5k–20k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Sharon Polsky",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "niche": "Weight Loss Decoded GLP Edition. GLP-1 + menopause, body comp, expert panels.",
+    "tags": ["glp1", "menopause", "body-composition", "female-focused"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 15000, "audienceSizeRaw": "Est. 5k–15k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Amanda Bonello",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "substack-writer", "newsletter-author"],
+    "bio": "Patient advocate running GLP-1 Studio podcast + Substack. Teaches patients to navigate insurance and access compounded medications.",
+    "niche": "Patient advocacy, access/affordability angle. Tactical manual for patients facing insurance denials.",
+    "tags": ["glp1", "patient-advocacy", "insurance", "compounding"],
+    "presences": [
+      { "platform": "substack", "handle": "glp1studio", "url": "https://glp1studio.substack.com", "role": "writer", "audienceSize": 20000, "audienceSizeRaw": "1k–20k (Est. 3k–10k for podcast tier)", "audienceConfidence": "medium", "isPrimary": true },
+      { "platform": "podcast", "handle": "glp1studio", "url": "https://glp1studio.substack.com", "role": "host", "audienceSize": 10000, "audienceSizeRaw": "Est. 3k–10k", "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "The Peptide Queen",
+    "displayHandle": "The Peptide Queen",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "clinician"],
+    "bio": "Clinical pharmacist running The Peptide Podcast — daily ~2-min episodes explaining peptides simply.",
+    "niche": "Daily ~2-min episodes; clinical pharmacist explaining peptides simply.",
+    "tags": ["peptides", "clinical", "pharmacist", "daily"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 30000, "audienceSizeRaw": "Est. 10k–30k", "audienceConfidence": "medium", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Kylie Burton",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "clinician"],
+    "bio": "Co-host of PepTalk: Peptides Unpacked. Functional medicine practitioner.",
+    "niche": "Highly specialized limited series demystifying peptide science for patients; teaches functional medicine practitioners how to build sustainable compounding businesses.",
+    "tags": ["peptides", "functional-medicine", "compounding", "clinical"],
+    "presences": [
+      { "platform": "podcast", "handle": "drkylieburton", "url": "https://drkylieburton.com", "role": "host", "audienceSize": 10000, "audienceSizeRaw": "Est. 3k–10k", "audienceConfidence": "low", "isPrimary": true },
+      { "platform": "apple-podcasts", "handle": null, "url": "https://podcasts.apple.com/us/podcast/peptalk-peptides-unpacked/id1857738461", "role": "host", "audienceSize": null, "audienceSizeRaw": null, "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": ["Discloses affiliate compensation for peptide referrals"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Jessica Briecke",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "niche": "Co-host of PepTalk: Peptides Unpacked.",
+    "tags": ["peptides", "functional-medicine"],
+    "presences": [
+      { "platform": "podcast", "handle": "drkylieburton", "url": "https://drkylieburton.com", "role": "host", "audienceSize": 10000, "audienceSizeRaw": "Est. 3k–10k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Discloses affiliate compensation for peptide referrals"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Christopher Durham",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "podcaster"],
+    "bio": "The Downsized — husband-wife team sharing 150+ lb combined GLP-1 weight loss journey via daily YouTube + podcast.",
+    "niche": "150+ lb combined weight loss on GLP-1, daily content covering the full journey including 100+-shot retrospective.",
+    "tags": ["glp1", "weight-loss", "transformation", "daily"],
+    "presences": [
+      { "platform": "youtube", "handle": "thedownsized", "url": null, "role": "host", "audienceSize": 60000, "audienceSizeRaw": "Est. 20k–60k", "audienceConfidence": "medium", "isPrimary": true },
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 30000, "audienceSizeRaw": "Est. 10k–30k", "audienceConfidence": "medium", "isPrimary": false }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Laraine Durham",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "podcaster"],
+    "bio": "The Downsized — husband-wife team sharing 150+ lb combined GLP-1 weight loss journey.",
+    "niche": "150+ lb combined weight loss on GLP-1, daily content.",
+    "tags": ["glp1", "weight-loss", "transformation", "daily"],
+    "presences": [
+      { "platform": "youtube", "handle": "thedownsized", "url": null, "role": "host", "audienceSize": 60000, "audienceSizeRaw": "Est. 20k–60k", "audienceConfidence": "medium", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Jay Campbell",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "youtuber", "founder"],
+    "niche": "The Jay Campbell Podcast and YouTube. Peptides, hormones. Long-running large-audience creator.",
+    "tags": ["peptides", "hormones", "trt"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "Est. 50k–100k+", "audienceConfidence": "low", "isPrimary": true },
+      { "platform": "youtube", "handle": null, "url": null, "role": "host", "audienceSize": 150000, "audienceSizeRaw": "Est. 80k–150k", "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": ["Major commercial conflict (though not pharma): sells peptide books, courses, supplements"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "David Despain",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "clinician"],
+    "niche": "GLP-1 Weight Wellness Podcast. Nutritionist on diet/lifestyle while on GLP-1.",
+    "tags": ["glp1", "nutrition", "lifestyle"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 10000, "audienceSizeRaw": "Est. 2k–10k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "The Peptide List",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "bio": "Independent peptide market and regulatory analyst publishing on Substack.",
+    "niche": "Independent peptide market/regulatory analysis. Subscribe-for-free model. Quality, evidence-tier framework.",
+    "tags": ["peptides", "regulatory", "market-analysis"],
+    "presences": [
+      { "platform": "substack", "handle": "thepeptidelist", "url": "https://thepeptidelist.substack.com", "role": "writer", "audienceSize": 15000, "audienceSizeRaw": "Est. 3k–15k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Howard Luks",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "clinician", "newsletter-author"],
+    "bio": "Orthopedic surgeon publishing the cleanest GLP-1 series on Substack — biology, practical use, future.",
+    "niche": "Orthopedic surgeon writing detailed GLP-1 series — biology, practical use, future.",
+    "tags": ["glp1", "biology", "clinical", "orthopedic"],
+    "presences": [
+      { "platform": "substack", "handle": "howardluksmd", "url": "https://howardluksmd.substack.com", "role": "writer", "audienceSize": 20000, "audienceSizeRaw": "Est. 5k–20k", "audienceConfidence": "medium", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Jake Goodman",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "clinician", "newsletter-author"],
+    "bio": "Psychiatrist on Substack. 'Once You Start a GLP-1 Drug, Can You Ever Come Off?' was widely shared.",
+    "niche": "Psychiatrist; widely-shared takes on long-term GLP-1 use and discontinuation.",
+    "tags": ["glp1", "psychiatry", "discontinuation"],
+    "presences": [
+      { "platform": "substack", "handle": "jakegoodmanmd", "url": "https://jakegoodmanmd.substack.com", "role": "writer", "audienceSize": 50000, "audienceSizeRaw": "Est. 10k–50k", "audienceConfidence": "medium", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Laurie Marbas",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "clinician", "newsletter-author"],
+    "bio": "MD writing The Habit Healers Substack on lifestyle medicine + GLP-1.",
+    "niche": "Lifestyle medicine + GLP-1 commentary.",
+    "tags": ["glp1", "lifestyle-medicine"],
+    "presences": [
+      { "platform": "substack", "handle": null, "url": null, "role": "writer", "audienceSize": 10000, "audienceSizeRaw": "Est. 3k–10k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Mara Gordon",
+    "relationship": "target",
+    "classification": "journalist",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "journalist", "clinician", "contributing-writer"],
+    "bio": "MD, NPR contributor. Writes Chief Complaint on Substack — weight-inclusive medicine angle. Took then quit Ozempic.",
+    "niche": "NPR contributor, weight-inclusive medicine angle, took then quit Ozempic.",
+    "tags": ["glp1", "weight-inclusive", "journalism"],
+    "presences": [
+      { "platform": "substack", "handle": "maragordonmd", "url": "https://maragordonmd.substack.com", "role": "writer", "audienceSize": 10000, "audienceSizeRaw": "Est. 3k–10k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Mia Rigden",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "niche": "Practical GLP-1 nutrition for women.",
+    "tags": ["glp1", "nutrition", "female-focused"],
+    "presences": [
+      { "platform": "substack", "handle": "miarigden", "url": "https://miarigden.substack.com", "role": "writer", "audienceSize": 10000, "audienceSizeRaw": "Est. 2k–10k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "GLP-1 Real Talk",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "niche": "Personal GLP-1 journey writer; nutrition cert in progress.",
+    "tags": ["glp1", "personal-journey", "nutrition"],
+    "presences": [
+      { "platform": "substack", "handle": "glp1realtalk", "url": "https://glp1realtalk.substack.com", "role": "writer", "audienceSize": 5000, "audienceSizeRaw": "Est. 1k–5k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Celia W. Chen",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "niche": "Expert Q&A series including GLP-1.",
+    "tags": ["glp1", "expert-interviews"],
+    "presences": [
+      { "platform": "substack", "handle": "celiawchen", "url": "https://celiawchen.substack.com", "role": "writer", "audienceSize": 5000, "audienceSizeRaw": "Est. 1k–5k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Sally Squires",
+    "relationship": "target",
+    "classification": "journalist",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "journalist", "newsletter-author"],
+    "bio": "Former Washington Post health writer running Lean Plate Club Substack. Now covering GLP-1.",
+    "niche": "Former WaPo health writer covering GLP-1.",
+    "tags": ["glp1", "journalism", "health"],
+    "presences": [
+      { "platform": "substack", "handle": "leanplateclub", "url": "https://leanplateclub.substack.com", "role": "writer", "audienceSize": 15000, "audienceSizeRaw": "Est. 5k–15k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Manos Mastorakis",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "bio": "Ex-pharma equity analyst writing on GLP-1 + nutrition.",
+    "niche": "Ex-pharma equity analyst; GLP-1 + nutrition.",
+    "tags": ["glp1", "nutrition", "pharma-analysis"],
+    "presences": [
+      { "platform": "substack", "handle": "manosmastorakis", "url": "https://manosmastorakis.substack.com", "role": "writer", "audienceSize": 5000, "audienceSizeRaw": "Est. 1k–5k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Neel Shah",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "clinician", "newsletter-author"],
+    "bio": "OB/GYN writing The Preprint Substack on women's health + GLP-1 access.",
+    "niche": "OB/GYN on women's health + GLP-1 access.",
+    "tags": ["glp1", "ob-gyn", "womens-health", "access"],
+    "presences": [
+      { "platform": "substack", "handle": "mavenpreprint", "url": "https://mavenpreprint.substack.com", "role": "writer", "audienceSize": 10000, "audienceSizeRaw": "Est. 2k–10k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Benjamin Koch",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "bio": "Insight Compass — biohacking critique angle ('The Biohacking Illusion').",
+    "niche": "Skeptical/critical takes on biohacking.",
+    "tags": ["biohacking", "skeptic"],
+    "presences": [
+      { "platform": "substack", "handle": "insightcompass", "url": "https://insightcompass.substack.com", "role": "writer", "audienceSize": 5000, "audienceSizeRaw": "Est. 1k–5k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Ryan Frankel",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "bio": "Longevity Today — 'Biohacking or Bullshit' framing — skeptical/practical.",
+    "niche": "Skeptical/practical takes on biohacking and longevity.",
+    "tags": ["biohacking", "longevity", "skeptic"],
+    "presences": [
+      { "platform": "substack", "handle": "ryanfrankel", "url": "https://ryanfrankel.substack.com", "role": "writer", "audienceSize": 5000, "audienceSizeRaw": "Est. 1k–5k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Tracy Dennis-Tiwary",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "researcher", "newsletter-author"],
+    "bio": "NYU psychology professor; writes The Biohacker Substack on biohacking from a cultural/critical lens.",
+    "niche": "NYU psych prof, cultural/critical lens on biohacking.",
+    "tags": ["biohacking", "psychology", "academic", "cultural-critique"],
+    "presences": [
+      { "platform": "substack", "handle": "tracydennistiwary", "url": "https://tracydennistiwary.substack.com", "role": "writer", "audienceSize": 10000, "audienceSizeRaw": "Est. 3k–10k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Brady Holmer",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "researcher", "newsletter-author"],
+    "bio": "Exercise physiology PhD running Physiologically Speaking. Covers supplements/longevity.",
+    "niche": "Exercise physiology PhD; covers supplements/longevity.",
+    "tags": ["exercise-physiology", "supplements", "longevity"],
+    "presences": [
+      { "platform": "substack", "handle": "physiologicallyspeaking", "url": "https://physiologicallyspeaking.com", "role": "writer", "audienceSize": 15000, "audienceSizeRaw": "Est. 5k–15k", "audienceConfidence": "medium", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Jasmine Sun",
+    "relationship": "target",
+    "classification": "journalist",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "journalist", "newsletter-author"],
+    "bio": "Substack writer on Silicon Valley culture; did NYT piece on Chinese peptides.",
+    "niche": "Silicon Valley culture writer; covered Chinese peptides for NYT.",
+    "tags": ["peptides", "journalism", "tech-culture"],
+    "presences": [
+      { "platform": "substack", "handle": null, "url": null, "role": "writer", "audienceSize": 15000, "audienceSizeRaw": "Est. 5k–15k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Journalist not advocate — different fit"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dylan Gemelli",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "podcaster"],
+    "niche": "Hormones, peptides, TRT, longevity, no-BS framing. Operates on the extreme edge of biohacking — covers SARMs, deep-market research chemicals, aggressive performance enhancement.",
+    "tags": ["peptides", "trt", "hormones", "sarms", "performance"],
+    "presences": [
+      { "platform": "youtube", "handle": "@dylangemellibiohacking", "url": "https://youtube.com/@DylanGemelliBiohacking", "role": "host", "audienceSize": 80000, "audienceSizeRaw": "Est. 30k–80k", "audienceConfidence": "medium", "isPrimary": true },
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": false }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Countess of Shopping",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "niche": "GLP-1 lifestyle, fashion/shopping for body changes.",
+    "tags": ["glp1", "lifestyle", "fashion", "female-focused"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": null, "role": "host", "audienceSize": 40000, "audienceSizeRaw": "Est. 10k–40k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Brad Stanfield",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "clinician"],
+    "bio": "Evidence-skeptical clinician YouTuber. 200k+ subs.",
+    "niche": "Evidence-skeptical takes on supplements/peptides.",
+    "tags": ["supplements", "peptides", "skeptic", "evidence-based"],
+    "presences": [
+      { "platform": "youtube", "handle": "@drbradstanfield", "url": "https://youtube.com/@DrBradStanfield", "role": "host", "audienceSize": 200000, "audienceSizeRaw": "200k+", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": ["Sells own supplement line (MicroVitamin, Sleep by Dr Brad)"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Daniel Pompa",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "clinician"],
+    "bio": "The Dr Pompa Podcast — physician-level metabolic science, cellular detox, biohacking.",
+    "niche": "Focuses on physician-level metabolic science, cellular detox, and biohacking. Highly credible guest roster of functional medicine doctors with zero reliance on traditional Big Pharma advertising.",
+    "tags": ["metabolic-science", "biohacking", "functional-medicine", "detox"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Robbie Harmon",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "Core Conversations — bridges psychological mindset and practical health outcomes.",
+    "niche": "Bridges the gap between psychological mindset and practical health outcomes. Accessible biohacking and non-pharmaceutical interventions for baseline metabolic health.",
+    "tags": ["biohacking", "mindset", "metabolic-health"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Kaitlin Borncamp",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "Feel Great with Kait — female wellness, metabolism, longevity.",
+    "niche": "Female wellness, metabolism, longevity tips. Actionable, non-clinical lifestyle interventions.",
+    "tags": ["female-focused", "wellness", "metabolism", "longevity"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Lisa Fischer",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "The Lisa Fischer Said Podcast — intermittent fasting, natural peptide alternatives to Ozempic, holistic hormone regulation, women over 40.",
+    "niche": "Intermittent fasting, natural peptide alternatives to Ozempic, holistic hormone regulation; targets metabolic needs of women over 40.",
+    "tags": ["fasting", "peptides", "hormones", "female-focused", "menopause"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": "https://podcasts.apple.com/be/podcast/peptides-performance-the-truth-about-glp-1-the/id1533444361", "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Freddie Kimmel",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "Beautifully Broken — explores longevity and wellness tech through chronic illness recovery.",
+    "niche": "Longevity and wellness technology through severe chronic illness recovery — energy frequency, light therapy, cellular repair.",
+    "tags": ["chronic-illness", "longevity", "wellness", "frequency", "light-therapy"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Marcus Antebi",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "goodsugar — plant-based, holistic perspective on biohacking.",
+    "niche": "Distinct plant-based, holistic perspective. Interviews longevity doctors while advocating against reliance on traditional medical-industrial complex.",
+    "tags": ["plant-based", "holistic", "biohacking", "longevity"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Cal",
+    "displayHandle": "The Great Unlearn",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "The Great Unlearn — psychology of deprogramming users from institutional health advice.",
+    "niche": "Psychology of deprogramming from traditional, institutional health advice; unconventional wellness paradigms and ancestral biohacking protocols.",
+    "tags": ["unconventional", "ancestral", "biohacking", "psychology"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Sam Tejada",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "founder"],
+    "bio": "A Healthy Point of View — high-level medical science meets med-spa business model.",
+    "niche": "Integrates high-level medical science with the commercial med-spa business model — IV therapy, peptide clinics, preventative longevity.",
+    "tags": ["med-spa", "iv-therapy", "peptides", "longevity"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Med-spa commercial angle"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Sonia Azad",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "The Shift — behind-the-scenes from biohacking founders and independent researchers.",
+    "niche": "Behind-the-scenes perspectives from biohacking founders and independent researchers; off-label longevity protocols and startup health innovations.",
+    "tags": ["biohacking", "longevity", "founders", "off-label"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Michael Kummer",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "blogger"],
+    "bio": "The Primal Shift — ancestral evolutionary living + modern biohacking + wearables.",
+    "niche": "Ancestral, evolutionary living concepts with modern biohacking and data-tracking wearables. Anti-processed-food, anti-pharmaceutical stance.",
+    "tags": ["ancestral", "biohacking", "wearables", "primal"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Trip Goolsby",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "clinician"],
+    "bio": "Co-host of Your Infinite Health — MD half of legal+medical dual-host duo on regenerative medicine, anti-aging peptides.",
+    "niche": "Regenerative medicine, anti-aging peptides, holistic biohacking from independent clinical perspective.",
+    "tags": ["regenerative", "peptides", "anti-aging", "biohacking"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "LeNae Goolsby",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster"],
+    "bio": "Co-host of Your Infinite Health — legal half of legal+medical dual-host duo.",
+    "niche": "Regenerative medicine, anti-aging peptides, holistic biohacking from independent clinical perspective.",
+    "tags": ["regenerative", "peptides", "anti-aging", "biohacking"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Greg Dennis",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "podcaster",
+    "roles": ["podcaster", "clinician"],
+    "bio": "Fit Rx Health + Wellness — challenges 'standard sick-care model'.",
+    "niche": "Explicitly challenges the standard sick-care model. Preventative anti-aging therapies, root-cause interventions.",
+    "tags": ["anti-aging", "preventative", "root-cause"],
+    "presences": [
+      { "platform": "podcast", "handle": null, "url": null, "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Ashwin Sharma",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author", "clinician"],
+    "bio": "MD running GLP-1 Digest — high-level B2B analysis for founders, clinic operators, investors.",
+    "niche": "B2B analysis for founders/clinic operators/investors navigating GLP-1 business strategy, supply chain, clinical trends.",
+    "tags": ["glp1", "b2b", "market-analysis", "business"],
+    "presences": [
+      { "platform": "substack", "handle": "glp1digest", "url": "https://www.glp1digest.com", "role": "writer", "audienceSize": 20000, "audienceSizeRaw": "1k–20k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Liz Plosser",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "journalist", "newsletter-author"],
+    "bio": "Best Case Scenario — former mainstream magazine editor on wellness, supplements, biohacking.",
+    "niche": "Former mainstream magazine editor providing curated advice on wellness, supplements, biohacking.",
+    "tags": ["wellness", "supplements", "biohacking", "editor"],
+    "presences": [
+      { "platform": "substack", "handle": null, "url": null, "role": "writer", "audienceSize": 20000, "audienceSizeRaw": "1k–20k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Jo Zayner",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "researcher", "newsletter-author"],
+    "bio": "Amateur Gods — DIY biotech and genetic biohacking pioneer.",
+    "niche": "Radical pioneer in DIY biotechnology and genetic biohacking. Self-experimentation, bypassing institutional medical gatekeepers.",
+    "tags": ["diy-biology", "genetic", "biohacking", "self-experimentation"],
+    "presences": [
+      { "platform": "substack", "handle": "amateurgods", "url": "http://amateurgods.substack.com", "role": "writer", "audienceSize": 20000, "audienceSizeRaw": "1k–20k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Anne-Sophie",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "substack-writer",
+    "roles": ["substack-writer", "newsletter-author"],
+    "bio": "The GLP1 Report — decodes market signals and business strategies in obesity medicine.",
+    "niche": "Decodes market signals, emerging metabolic indications, and business strategies driving the next wave of obesity medicine.",
+    "tags": ["glp1", "market-analysis", "business", "obesity"],
+    "presences": [
+      { "platform": "substack", "handle": "theglp1report", "url": "https://theglp1report.substack.com", "role": "writer", "audienceSize": 20000, "audienceSizeRaw": "1k–20k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Aggie Lal",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "bio": "TRAVEL IN HER SHOES — luxury lifestyle + biohacking for women.",
+    "niche": "Blends luxury lifestyle design with biohacking; teaches women to optimize biology for travel, sustained energy, independence.",
+    "tags": ["lifestyle", "biohacking", "female-focused", "travel"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UC8_L-xSXL3GO2k-FMqmXeZw", "role": "host", "audienceSize": 79900, "audienceSizeRaw": "~79.9K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Lucas Aoun",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "bio": "Ergogenic Health — advanced obscure physiological hacks and neuro-optimization.",
+    "niche": "Advanced, obscure physiological hacks and neuro-optimization. Performance compounds, mitochondrial enhancers.",
+    "tags": ["nootropics", "neuro-optimization", "performance", "mitochondrial"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UC4O8s5Eir3A0ULQ-0HOJr8Q", "role": "host", "audienceSize": 90600, "audienceSizeRaw": "~90.6K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Ryan Michael Ballow",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "bio": "Cortex Labs — hardcore nootropic stacking, hormonal optimization, brain performance.",
+    "niche": "Hardcore, unvarnished video content on nootropic stacking, hormonal optimization, brain performance.",
+    "tags": ["nootropics", "brain", "hormones", "performance"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UC7J168KE1v4YBr8H2noeMbQ", "role": "host", "audienceSize": 36900, "audienceSizeRaw": "~36.9K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Michael Duggal",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "bio": "TheNootropicReviewer — fiercely independent reviews of cognitive enhancers.",
+    "niche": "Comprehensive, independent reviews of cognitive enhancers, bio-hacks, lifestyle modifications for mental acuity.",
+    "tags": ["nootropics", "cognitive", "reviews", "biohacking"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UCb5oHt9yTBD1lJSa5rKlKfQ", "role": "host", "audienceSize": 86400, "audienceSizeRaw": "~86.4K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Ryan Russo",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "bio": "Bodybuilding gray-market self-experiments with SARMs, steroids, advanced research peptides.",
+    "niche": "Highly transparent, uncensored self-experiments with SARMs, steroids, advanced research peptides.",
+    "tags": ["sarms", "steroids", "peptides", "bodybuilding", "gray-market"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UCj8omp2FkfF-TCEK40Ek42A", "role": "host", "audienceSize": 95400, "audienceSizeRaw": "~95.4K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": ["Self-experimentation with research compounds"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Ben Angel",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "founder"],
+    "bio": "Frames biohacking through entrepreneurial success — overcomes chronic fatigue.",
+    "niche": "Biohacking through the lens of entrepreneurial success — physical optimization and peptide therapy to overcome chronic fatigue.",
+    "tags": ["biohacking", "entrepreneur", "fatigue", "peptides"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UCkVzMBNu49MbL7_dwCAgIGA", "role": "host", "audienceSize": 19100, "audienceSizeRaw": "~19.1K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Steven Ray Warren",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "niche": "Combines physical biohacking with psychological resilience — routines and mindset for sustained high-level performance.",
+    "tags": ["biohacking", "resilience", "performance", "mindset"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UCOSXLhovJBwN4CKrsz3HG6w", "role": "host", "audienceSize": 25300, "audienceSizeRaw": "~25.3K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Tony Huge",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "bio": "Tony Huge Biohacking — pushes absolute boundaries of human biology.",
+    "niche": "Pushes absolute boundaries of human biology — extreme, underground compounds, aggressively challenging regulatory boundaries.",
+    "tags": ["extreme", "underground", "biohacking", "regulatory"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/channel/UCjal_-V5v9W6v1uLiJclAQw", "role": "host", "audienceSize": 12100, "audienceSizeRaw": "~12.1K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": ["Extreme/regulatory-edge content"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Alex Tatem",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "clinician"],
+    "bio": "Licensed physician offering tier-list breakdowns of popular peptides.",
+    "niche": "Candid, tier-list style breakdowns of popular peptides (BPC-157, GH, GLP-1s) — separating clinical reality from internet hype.",
+    "tags": ["peptides", "clinical", "tier-list", "bpc-157", "glp1"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/watch?v=Z22HZD4vdPA", "role": "host", "audienceSize": 109000, "audienceSizeRaw": "~109K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Andrew Hiller",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber"],
+    "bio": "Critiques fitness industry's lack of transparency around steroids/peptides in CrossFit.",
+    "niche": "Openly and critically discusses pervasive, unspoken use of steroids and peptides in competitive spaces like CrossFit.",
+    "tags": ["fitness", "transparency", "steroids", "peptides", "crossfit"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/watch?v=Z22HZD4vdPA", "role": "host", "audienceSize": 70100, "audienceSizeRaw": "~70.1K", "audienceConfidence": "high", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Jones, DC",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "clinician"],
+    "bio": "Focuses on maximizing GLP-1 efficacy. Warns against liquid calories and insulin spikes.",
+    "niche": "Maximizing GLP-1 efficacy. Clinical protocols to avoid severe muscle loss with rapid weight drop. Warns against liquid calories and insulin spikes.",
+    "tags": ["glp1", "muscle-preservation", "clinical", "weight-loss"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/watch?v=1s0h8D8CN6k", "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Dr. Gerard Acloque Jr.",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "youtuber",
+    "roles": ["youtuber", "clinician"],
+    "bio": "Florida Concierge Medicine — bridges GLP-1s and healing peptides under concierge supervision.",
+    "niche": "Bridges GLP-1s and healing peptides — evidence-based reviews on safely stacking compounds under independent concierge medical supervision.",
+    "tags": ["glp1", "peptides", "stacking", "concierge", "clinical"],
+    "presences": [
+      { "platform": "youtube", "handle": null, "url": "https://www.youtube.com/watch?v=2ga0mKtYVlc", "role": "host", "audienceSize": 100000, "audienceSizeRaw": "10k–100k", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Concierge medicine commercial angle"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "DocRedbeard",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "clinician"],
+    "bio": "Physician active in r/FamilyMedicine on compounded GLP-1 sourcing during shortages.",
+    "niche": "Pragmatic, harm-reduction perspectives on patients sourcing compounded GLP-1s during shortages. Rejects pharmaceutical industry's PR war.",
+    "tags": ["glp1", "compounding", "harm-reduction", "physician"],
+    "presences": [
+      { "platform": "reddit", "handle": "docredbeard", "url": "https://www.reddit.com/r/FamilyMedicine/comments/1cc0xhy/compounded_tirzepatide/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "FyreWulff",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "clinician"],
+    "bio": "Pharmacy professional active in r/science on Tirzepatide vs Semaglutide.",
+    "niche": "Ground-level empirical data on differing efficacies of Tirzepatide vs Semaglutide.",
+    "tags": ["tirzepatide", "semaglutide", "pharmacy", "data"],
+    "presences": [
+      { "platform": "reddit", "handle": "fyrewulff", "url": "https://www.reddit.com/r/science/comments/1kwsslo/tirzepatide_as_compared_with_semaglutide_results/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "m4ary",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Open-source developer in r/QuantifiedSelf — built CLI tool to extract Zepp/Amazfit wearable data.",
+    "niche": "Released a custom Python CLI tool to extract raw, unfiltered health data (HRV, sleep, SpO2) directly from Zepp/Amazfit wearables.",
+    "tags": ["quantified-self", "wearables", "open-source", "hrv"],
+    "presences": [
+      { "platform": "reddit", "handle": "m4ary", "url": "https://www.reddit.com/r/QuantifiedSelf/new/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "pb7246",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Builder in r/QuantifiedSelf automating fitness tracker connections.",
+    "niche": "Software builder automating connection between fitness trackers (Apple Health, Hevy, RENPHO) — identifies hidden biological correlations like training-load HRV drops.",
+    "tags": ["quantified-self", "wearables", "hrv", "training-load"],
+    "presences": [
+      { "platform": "reddit", "handle": "pb7246", "url": "https://www.reddit.com/r/QuantifiedSelf/new/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Successful_Soil_5840",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Creator of 'Regimen' — pharmacokinetic modeling app for 40+ peptides, TRT, GLP-1s.",
+    "niche": "Built 'Regimen' — models pharmacokinetic blood levels of 40+ gray-market peptides, TRT, GLP-1s. Tracks peak/trough states.",
+    "tags": ["peptides", "pharmacokinetics", "trt", "glp1", "founder"],
+    "presences": [
+      { "platform": "reddit", "handle": "successful_soil_5840", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/1s8e1x3/weekly_lifestyle_data_and_analytics_app_thread/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Builds 'Regimen' app — direct competitor product"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "WrongTechnician",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Creator of 'Micros - Stack Tracker' — correlates qualitative feedback with peptide/micronutrient protocols.",
+    "niche": "Developed 'Micros - Stack Tracker' to correlate daily qualitative physiological feedback with specific peptide and micronutrient protocols.",
+    "tags": ["peptides", "stack-tracking", "supplements", "founder"],
+    "presences": [
+      { "platform": "reddit", "handle": "wrongtechnician", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/1s8e1x3/weekly_lifestyle_data_and_analytics_app_thread/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Builds 'Micros' app — adjacent competitor product"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "NeonGenesisBonsai",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Developer of 'Conjure' — habit + biological metric tracker integrating Whoop, Apple Watch.",
+    "niche": "Built 'Conjure' — comprehensive system for tracking esoteric habits and biological metrics; integrates Whoop, Apple Watch.",
+    "tags": ["wearables", "habit-tracking", "whoop", "founder"],
+    "presences": [
+      { "platform": "reddit", "handle": "neongenesisbonsai", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/w8oc92/what_apps_tools_services_wearables_are_you_using/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "PhotonShield",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor"],
+    "bio": "iOS Shortcuts specialist in r/QuantifiedSelf — automates nutrition/hydration/biological tracking.",
+    "niche": "Specialist in advanced iOS Shortcuts — fully automates nutrition, hydration, biological inputs.",
+    "tags": ["ios-shortcuts", "automation", "nutrition", "tracking"],
+    "presences": [
+      { "platform": "reddit", "handle": "photonshield", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/w8oc92/what_apps_tools_services_wearables_are_you_using/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Longevity_Biomarkers",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Creator of Longevity Biomarkers app — proprietary biological-age estimation.",
+    "niche": "Built 'Longevity Biomarkers' app — proprietary algorithms estimate biological age from accessible metrics.",
+    "tags": ["longevity", "biomarkers", "biological-age", "founder"],
+    "presences": [
+      { "platform": "reddit", "handle": "longevity_biomarkers", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/zq0832/what_tools_would_you_find_most_helpful_for/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Builds Longevity Biomarkers app"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "TheJmaster",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Creator of ActivityWatch — open-source cross-platform digital habit tracker.",
+    "niche": "Built ActivityWatch — robust open-source cross-platform tool for tracking digital habits and screen time. Optimizes mental well-being, sleep, focus.",
+    "tags": ["open-source", "screen-time", "digital-habits", "focus", "founder"],
+    "presences": [
+      { "platform": "reddit", "handle": "thejmaster", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/1s0hdvt/app_list/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Fun_Effective_836",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "Creator of athletedata.health — wearable consolidation infrastructure layer.",
+    "niche": "Built 'athletedata.health' — connects disparate wearables and consolidates fragmented biometric fitness data.",
+    "tags": ["wearables", "fitness", "consolidation", "founder"],
+    "presences": [
+      { "platform": "reddit", "handle": "fun_effective_836", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/1s0hdvt/app_list/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": ["Builds athletedata.health"],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "sarenica",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "founder"],
+    "bio": "AI developer tracking posture, eye strain, focus — correlates with Oura/Fitbit sleep metrics.",
+    "niche": "AI-built app tracking physical posture, eye strain, focus — correlates with internal sleep metrics from Oura and Fitbit.",
+    "tags": ["ai", "posture", "focus", "sleep", "wearables", "founder"],
+    "presences": [
+      { "platform": "reddit", "handle": "sarenica", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/1s0hdvt/app_list/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "Korgulls",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor"],
+    "bio": "Data analyst — builds dashboards calculating workout 'ROI'.",
+    "niche": "Custom dashboards calculating workout ROI using caloric efficiency, Zone 3+4 intensity, next-day HRV recovery.",
+    "tags": ["fitness", "analytics", "hrv", "dashboards"],
+    "presences": [
+      { "platform": "reddit", "handle": "korgulls", "url": "https://www.reddit.com/r/QuantifiedSelf/comments/1sfeg94/apple_fitness_workout_trainer_analysis/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  },
+  {
+    "name": "FrontierNeuro",
+    "relationship": "target",
+    "classification": "creator",
+    "primaryRole": "redditor",
+    "roles": ["redditor", "researcher"],
+    "bio": "r/FamilyMedicine — technical critic of peptide gray market.",
+    "niche": "Provides highly technical critical analyses of the peptide gray market — warns about lyophilized powder impurities, heavy metals, fake COAs.",
+    "tags": ["peptides", "gray-market", "quality-control", "harm-reduction"],
+    "presences": [
+      { "platform": "reddit", "handle": "frontierneuro", "url": "https://www.reddit.com/r/FamilyMedicine/comments/1s09ie8/does_anyone_know_anything_about_peptides/", "role": "commenter", "audienceSize": null, "audienceSizeRaw": "Active Contributor", "audienceConfidence": "low", "isPrimary": true }
+    ],
+    "conflicts": [],
+    "source": { "type": "people_md_import" }
+  }
+]

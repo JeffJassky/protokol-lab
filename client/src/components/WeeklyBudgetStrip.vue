@@ -96,19 +96,19 @@ const weekMacroBars = computed(() => {
   const w = weekTarget.value || {};
   const c = consumed.value || {};
   const macros = [
-    { key: 'cal', label: 'Cal (week)',     short: 'kcal', unit: ' kcal', color: 'var(--color-cal)',     current: r(c.calories), target: w.calories, todayValue: today.calories || 0, todayTarget: adj.calories || 0 },
-    { key: 'p',   label: 'Protein (week)', short: 'g',    unit: 'g',     color: 'var(--color-protein)', current: r(c.protein),  target: w.protein,  todayValue: today.protein  || 0, todayTarget: adj.protein  || 0 },
-    { key: 'f',   label: 'Fat (week)',     short: 'g',    unit: 'g',     color: 'var(--color-fat)',     current: r(c.fat),      target: w.fat,      todayValue: today.fat      || 0, todayTarget: adj.fat      || 0 },
-    { key: 'c',   label: 'Carbs (week)',   short: 'g',    unit: 'g',     color: 'var(--color-carbs)',   current: r(c.carbs),    target: w.carbs,    todayValue: today.carbs    || 0, todayTarget: adj.carbs    || 0 },
+    { key: 'cal', label: 'Calories',     short: 'kcal', unit: ' kcal', color: 'var(--color-cal)',     current: r(c.calories), target: w.calories, todayValue: today.calories || 0, todayTarget: adj.calories || 0 },
+    { key: 'p',   label: 'Protein', short: 'g',    unit: 'g',     color: 'var(--color-protein)', current: r(c.protein),  target: w.protein,  todayValue: today.protein  || 0, todayTarget: adj.protein  || 0 },
+    { key: 'f',   label: 'Fat',     short: 'g',    unit: 'g',     color: 'var(--color-fat)',     current: r(c.fat),      target: w.fat,      todayValue: today.fat      || 0, todayTarget: adj.fat      || 0 },
+    { key: 'c',   label: 'Carbs',   short: 'g',    unit: 'g',     color: 'var(--color-carbs)',   current: r(c.carbs),    target: w.carbs,    todayValue: today.carbs    || 0, todayTarget: adj.carbs    || 0 },
   ];
   return macros.map((m) => {
     let note = '';
     let noteTone = 'muted';
     if (m.todayTarget <= 0) {
-      note = `over by ${fmt(-m.todayTarget)}${m.short} this week`;
+      note = `over by ${fmt(-m.todayTarget)}${m.short}`;
       noteTone = 'over';
     } else if (m.todayValue > m.todayTarget) {
-      note = `over by ${fmt(m.todayValue - m.todayTarget)}${m.short} today`;
+      note = `over by ${fmt(m.todayValue - m.todayTarget)}${m.short}`;
       noteTone = 'over';
     } else {
       note = `${fmt(m.todayTarget - m.todayValue)}${m.short} left today`;
@@ -159,14 +159,69 @@ const targetLinePct = computed(() => {
       <div class="wb-stat">
         <span class="wb-stat-label">7-day budget</span>
         <span class="wb-stat-value">
-          {{ fmt(consumed.calories) }}<span class="wb-stat-tgt">
-            / {{ fmt(weekTarget.calories) }}</span>
+          {{ fmt(consumed.calories)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          }}<span class="wb-stat-tgt"> / {{ fmt(weekTarget.calories) }}</span>
         </span>
       </div>
       <div class="wb-stat right">
         <span class="wb-stat-label">{{ calDelta >= 0 ? 'Left' : 'Over' }}</span>
         <span class="wb-stat-value" :class="deltaClass(calDelta)">
-          {{ Math.abs(Math.round(calDelta || 0)).toLocaleString() }}<span class="wb-stat-unit"> kcal</span>
+          {{ Math.abs(Math.round(calDelta || 0)).toLocaleString()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          }}<span class="wb-stat-unit"> kcal</span>
         </span>
       </div>
       <span class="wb-caret">{{ expanded ? '▾' : '▸' }}</span>
@@ -180,7 +235,9 @@ const targetLinePct = computed(() => {
           class="wb-day"
           :class="{ 'is-today': day.isToday }"
         >
-          <div class="wb-day-label">{{ dayShortLabel(day.date, day.isToday) }}</div>
+          <div class="wb-day-label">
+            {{ dayShortLabel(day.date, day.isToday) }}
+          </div>
           <div class="wb-day-track">
             <div
               class="wb-day-fill"
@@ -200,7 +257,9 @@ const targetLinePct = computed(() => {
           <div
             class="wb-day-value"
             :class="{ over: day.calories > (targets.calories || 0) }"
-          >{{ day.calories ? fmt(day.calories) : '' }}</div>
+          >
+            {{ day.calories ? fmt(day.calories) : '' }}
+          </div>
         </div>
       </div>
 
@@ -234,7 +293,7 @@ const targetLinePct = computed(() => {
   align-items: flex-end;
   gap: var(--space-4);
   width: 100%;
-  padding: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   background: none;
   border: none;
   cursor: pointer;
@@ -245,6 +304,7 @@ const targetLinePct = computed(() => {
 .wb-stat.right { margin-left: auto; text-align: right; align-items: flex-end; }
 .wb-stat-label {
   font-size: var(--font-size-xs);
+  font-family: var(--font-display);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
@@ -278,7 +338,7 @@ const targetLinePct = computed(() => {
 }
 
 .wb-body {
-  padding: var(--space-1) var(--space-3) var(--space-3);
+  padding: var(--space-2) var(--space-5) var(--space-4);
   border-top: 1px solid var(--border);
 }
 
@@ -298,6 +358,7 @@ const targetLinePct = computed(() => {
 }
 .wb-day-label {
   font-size: var(--font-size-xs);
+  font-family: var(--font-display);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
@@ -310,7 +371,7 @@ const targetLinePct = computed(() => {
   position: relative;
   width: 100%;
   height: 44px;
-  background: var(--border);
+  background: var(--surface-raised);
   border-radius: var(--radius-small);
   overflow: hidden;
 }
@@ -318,8 +379,8 @@ const targetLinePct = computed(() => {
   position: absolute;
   left: 0;
   right: 0;
+  background: var(--border-strong);
   bottom: 0;
-  background: var(--color-cal);
   transition: height 0.25s;
 }
 .wb-day-over {

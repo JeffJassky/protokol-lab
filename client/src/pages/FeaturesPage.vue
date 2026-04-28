@@ -317,270 +317,382 @@ const platformRows = [
 <template>
   <MarketingLayout>
     <div class="features-root">
-
-    <!-- HEADER -->
-    <section class="page-head">
-      <div class="wrap">
-        <div class="eyebrow">Reference · every feature</div>
-        <h1>Every Protokol Lab feature<br /><span class="accent">for GLP-1 tracking.</span></h1>
-        <p class="lead">
-          A full tour of what the app does — dose half-life curves, weekly
-          rolling calorie budgets, agentic AI, symptoms, weight, and photos
-          for Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound,
-          and compounded peptides. Every card below is a real screen from the
-          app.
-        </p>
-      </div>
-    </section>
-
-    <!-- ===== FOOD & MEALS ================================================ -->
-    <section class="group">
-      <div class="wrap">
-        <div class="group-head">
-          <div class="eyebrow">01 · Food &amp; meals</div>
-          <h2>Logging, fast.</h2>
+      <!-- HEADER -->
+      <section class="page-head">
+        <div class="wrap">
+          <div class="eyebrow">Reference · every feature</div>
+          <h1>
+            Every Protokol Lab feature<br /><span class="accent"
+              >for GLP-1 tracking.</span
+            >
+          </h1>
+          <p class="lead">
+            A full tour of what the app does — dose half-life curves, weekly
+            rolling calorie budgets, agentic AI, symptoms, weight, and photos
+            for Tirzepatide, Semaglutide, Ozempic, Wegovy, Mounjaro, Zepbound,
+            and compounded peptides. Every card below is a real screen from the
+            app.
+          </p>
         </div>
+      </section>
 
-        <div class="card-grid">
-          <!-- Sortable food library -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Food library · sortable columns</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Every food in your log is a row. Click any column to sort.
-              Barcode scan, custom foods, recents, and favorites all live in
-              the same list.
-            </div>
-            <div class="mini">
-              <div class="food-tbl">
-                <div class="food-tbl-head">
-                  <span class="col-n">Name</span>
-                  <span class="col-k sorted">kcal ▼</span>
-                  <span class="col-n2">P</span>
-                  <span class="col-n2">F</span>
-                  <span class="col-n2">C</span>
-                </div>
-                <div v-for="r in sortFoodRows" :key="r.n" class="food-tbl-row">
-                  <span class="col-n">{{ r.n }}</span>
-                  <span class="col-k">{{ r.cal }}</span>
-                  <span class="col-n2">{{ r.pro }}</span>
-                  <span class="col-n2">{{ r.fat }}</span>
-                  <span class="col-n2">{{ r.carb }}</span>
-                </div>
-              </div>
-            </div>
+      <!-- ===== FOOD & MEALS ================================================ -->
+      <section class="group">
+        <div class="wrap">
+          <div class="group-head">
+            <div class="eyebrow">01 · Food &amp; meals</div>
+            <h2>Logging, fast.</h2>
           </div>
 
-          <!-- Saved meals -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Saved meals · one-tap relog</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Save any combo of foods as a named meal. Relog it whole on any
-              future day. The foods you actually eat stop taking two minutes.
-            </div>
-            <div class="mini">
-              <div v-for="m in savedMeals" :key="m.name" class="meal-row">
-                <div class="meal-info">
-                  <div class="meal-name">{{ m.name }}</div>
-                  <div class="meal-items">{{ m.items }}</div>
+          <div class="card-grid">
+            <!-- Sortable food library -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Food library · sortable columns</span>
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Every food in your log is a row. Click any column to sort.
+                Barcode scan, custom foods, recents, and favorites all live in
+                the same list.
+              </div>
+              <div class="mini">
+                <div class="food-tbl">
+                  <div class="food-tbl-head">
+                    <span class="col-n">Name</span>
+                    <span class="col-k sorted">kcal ▼</span>
+                    <span class="col-n2">P</span>
+                    <span class="col-n2">F</span>
+                    <span class="col-n2">C</span>
+                  </div>
+                  <div
+                    v-for="r in sortFoodRows"
+                    :key="r.n"
+                    class="food-tbl-row"
+                  >
+                    <span class="col-n">{{ r.n }}</span>
+                    <span class="col-k">{{ r.cal }}</span>
+                    <span class="col-n2">{{ r.pro }}</span>
+                    <span class="col-n2">{{ r.fat }}</span>
+                    <span class="col-n2">{{ r.carb }}</span>
+                  </div>
                 </div>
-                <div class="meal-kcal">{{ m.kcal }} <span class="dim">kcal</span></div>
-                <div class="meal-add">+</div>
               </div>
             </div>
-          </div>
 
-          <!-- Copy / move across dates -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Copy or move across dates</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Select entries, pick one or many dates, copy or move. Meal prep
-              Sunday, log the same lunch Mon–Fri in a single gesture.
-            </div>
-            <div class="mini">
-              <div class="copy-bar">
-                <span class="copy-src">3 entries from <b>Apr 14</b></span>
-                <span class="copy-act">→ copy to</span>
+            <!-- Saved meals -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Saved meals · one-tap relog</span>
+                <span class="card-tag">CORE</span>
               </div>
-              <div class="cal-mini">
-                <div class="cal-head">
-                  <span v-for="d in ['M','T','W','T','F','S','S']" :key="d">{{ d }}</span>
-                </div>
-                <div class="cal-rows">
-                  <div class="cal-row">
-                    <span v-for="d in [1,2,3,4,5,6,7]" :key="d" class="cal-cell">{{ d }}</span>
+              <div class="card-body">
+                Save any combo of foods as a named meal. Relog it whole on any
+                future day. The foods you actually eat stop taking two minutes.
+              </div>
+              <div class="mini">
+                <div v-for="m in savedMeals" :key="m.name" class="meal-row">
+                  <div class="meal-info">
+                    <div class="meal-name">{{ m.name }}</div>
+                    <div class="meal-items">{{ m.items }}</div>
                   </div>
-                  <div class="cal-row">
-                    <span v-for="d in [8,9,10,11,12,13,14]" :key="d" class="cal-cell" :class="{ src: d === 14 }">{{ d }}</span>
+                  <div class="meal-kcal">
+                    {{ m.kcal }} <span class="dim">kcal</span>
                   </div>
-                  <div class="cal-row">
-                    <span v-for="d in [15,16,17,18,19,20,21]" :key="d" class="cal-cell" :class="{ sel: [15,16,17,19].includes(d) }">{{ d }}</span>
-                  </div>
-                  <div class="cal-row">
-                    <span v-for="d in [22,23,24,25,26,27,28]" :key="d" class="cal-cell" :class="{ sel: [22,23].includes(d) }">{{ d }}</span>
-                  </div>
+                  <div class="meal-add">+</div>
                 </div>
               </div>
-              <div class="copy-ft">6 dates selected · apply</div>
             </div>
-          </div>
 
-          <!-- Consumed checkbox -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Plan ahead · tick off as eaten</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Every entry has a consumed checkbox. Plan your day the night
-              before, then check items off as you actually eat them. Budget
-              math only counts what's ticked.
-            </div>
-            <div class="mini">
-              <div v-for="r in consumedRows" :key="r.name" class="check-row">
-                <span class="check-box" :class="{ done: r.done }">
-                  <span v-if="r.done">✓</span>
-                </span>
-                <span class="check-name" :class="{ planned: !r.done }">{{ r.name }}</span>
-                <span class="check-plan" v-if="!r.done">planned · {{ r.plan }}</span>
-                <span class="check-kcal">{{ r.kcal }}</span>
+            <!-- Copy / move across dates -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Copy or move across dates</span>
+                <span class="card-tag">CORE</span>
               </div>
-              <div class="check-ft">
-                <span class="accent">940 kcal</span> counted &nbsp;·&nbsp;
-                <span class="dim">305 planned</span>
+              <div class="card-body">
+                Select entries, pick one or many dates, copy or move. Meal prep
+                Sunday, log the same lunch Mon–Fri in a single gesture.
               </div>
-            </div>
-          </div>
-
-          <!-- Day notes -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Day notes · free text per day</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Anything you want to remember about today, written in plain
-              English. Auto-saves. The note shows as a pin on the weight
-              chart and the log history, so you can reread it in context
-              weeks later.
-            </div>
-            <div class="mini notes-mini">
-              <div class="notes-col">
-                <div class="mini-eyebrow">Apr 22 · today</div>
-                <div class="notes-field">
-                  <div class="notes-text">Low appetite all day — skipped lunch, dose peak tomorrow.</div>
-                  <div class="notes-status"><span class="dot-live"></span>saved</div>
+              <div class="mini">
+                <div class="copy-bar">
+                  <span class="copy-src">3 entries from <b>Apr 14</b></span>
+                  <span class="copy-act">→ copy to</span>
                 </div>
-                <div class="mini-eyebrow" style="margin-top:10px">Recent</div>
-                <div class="notes-list">
-                  <div v-for="n in dayNotes" :key="n.d" class="notes-item">
-                    <span class="notes-pin">●</span>
-                    <span class="notes-date">Apr {{ n.d }}</span>
-                    <span class="notes-text-small">{{ n.text }}</span>
+                <div class="cal-mini">
+                  <div class="cal-head">
+                    <span
+                      v-for="d in ['M','T','W','T','F','S','S']"
+                      :key="d"
+                      >{{ d }}</span
+                    >
+                  </div>
+                  <div class="cal-rows">
+                    <div class="cal-row">
+                      <span
+                        v-for="d in [1,2,3,4,5,6,7]"
+                        :key="d"
+                        class="cal-cell"
+                        >{{ d }}</span
+                      >
+                    </div>
+                    <div class="cal-row">
+                      <span
+                        v-for="d in [8,9,10,11,12,13,14]"
+                        :key="d"
+                        class="cal-cell"
+                        :class="{ src: d === 14 }"
+                        >{{ d }}</span
+                      >
+                    </div>
+                    <div class="cal-row">
+                      <span
+                        v-for="d in [15,16,17,18,19,20,21]"
+                        :key="d"
+                        class="cal-cell"
+                        :class="{ sel: [15,16,17,19].includes(d) }"
+                        >{{ d }}</span
+                      >
+                    </div>
+                    <div class="cal-row">
+                      <span
+                        v-for="d in [22,23,24,25,26,27,28]"
+                        :key="d"
+                        class="cal-cell"
+                        :class="{ sel: [22,23].includes(d) }"
+                        >{{ d }}</span
+                      >
+                    </div>
                   </div>
                 </div>
+                <div class="copy-ft">6 dates selected · apply</div>
               </div>
-              <div class="notes-col">
-                <div class="mini-eyebrow">Notes appear on the chart</div>
-                <svg viewBox="0 0 320 140" class="block-svg">
-                  <line x1="14" x2="306" y1="40"  y2="40"  stroke="var(--border)" stroke-dasharray="1 3" />
-                  <line x1="14" x2="306" y1="80"  y2="80"  stroke="var(--border)" stroke-dasharray="1 3" />
-                  <line x1="14" x2="306" y1="120" y2="120" stroke="var(--border)" stroke-dasharray="1 3" />
-                  <path d="M 14 110 Q 60 95 100 88 T 180 72 T 260 58 T 306 48"
-                        fill="none" stroke="var(--primary)" stroke-width="2" />
-                  <g v-for="(n, i) in dayNotes" :key="n.d"
-                     :transform="`translate(${60 + i * 70}, ${90 - i * 12})`">
-                    <line x1="0" x2="0" y1="0" y2="20" stroke="var(--color-fat)" stroke-width="1" />
-                    <circle cx="0" cy="0" r="4" fill="var(--color-fat)" stroke="var(--bg)" stroke-width="1.5" />
-                  </g>
-                  <text x="14" y="135" class="svg-axis-dim">Apr 10</text>
-                  <text x="306" y="135" text-anchor="end" class="svg-axis-dim">Apr 22</text>
-                </svg>
-                <div class="notes-hint">Hover a pin to see the note inline.</div>
+            </div>
+
+            <!-- Consumed checkbox -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Plan ahead · tick off as eaten</span>
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Every entry has a consumed checkbox. Plan your day the night
+                before, then check items off as you actually eat them. Budget
+                math only counts what's ticked.
+              </div>
+              <div class="mini">
+                <div v-for="r in consumedRows" :key="r.name" class="check-row">
+                  <span class="check-box" :class="{ done: r.done }">
+                    <span v-if="r.done">✓</span>
+                  </span>
+                  <span
+                    class="check-name"
+                    :class="{ planned: !r.done }"
+                    >{{ r.name }}</span
+                  >
+                  <span class="check-plan" v-if="!r.done"
+                    >planned · {{ r.plan }}</span
+                  >
+                  <span class="check-kcal">{{ r.kcal }}</span>
+                </div>
+                <div class="check-ft">
+                  <span class="accent">940 kcal</span> counted &nbsp;·&nbsp;
+                  <span class="dim">305 planned</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Day notes -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title">Day notes · free text per day</span>
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Anything you want to remember about today, written in plain
+                English. Auto-saves. The note shows as a pin on the weight chart
+                and the log history, so you can reread it in context weeks
+                later.
+              </div>
+              <div class="mini notes-mini">
+                <div class="notes-col">
+                  <div class="mini-eyebrow">Apr 22 · today</div>
+                  <div class="notes-field">
+                    <div class="notes-text">
+                      Low appetite all day — skipped lunch, dose peak tomorrow.
+                    </div>
+                    <div class="notes-status">
+                      <span class="dot-live"></span>saved
+                    </div>
+                  </div>
+                  <div class="mini-eyebrow" style="margin-top:10px">Recent</div>
+                  <div class="notes-list">
+                    <div v-for="n in dayNotes" :key="n.d" class="notes-item">
+                      <span class="notes-pin">●</span>
+                      <span class="notes-date">Apr {{ n.d }}</span>
+                      <span class="notes-text-small">{{ n.text }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="notes-col">
+                  <div class="mini-eyebrow">Notes appear on the chart</div>
+                  <svg viewBox="0 0 320 140" class="block-svg">
+                    <line
+                      x1="14"
+                      x2="306"
+                      y1="40"
+                      y2="40"
+                      stroke="var(--border)"
+                      stroke-dasharray="1 3"
+                    />
+                    <line
+                      x1="14"
+                      x2="306"
+                      y1="80"
+                      y2="80"
+                      stroke="var(--border)"
+                      stroke-dasharray="1 3"
+                    />
+                    <line
+                      x1="14"
+                      x2="306"
+                      y1="120"
+                      y2="120"
+                      stroke="var(--border)"
+                      stroke-dasharray="1 3"
+                    />
+                    <path
+                      d="M 14 110 Q 60 95 100 88 T 180 72 T 260 58 T 306 48"
+                      fill="none"
+                      stroke="var(--primary)"
+                      stroke-width="2"
+                    />
+                    <g
+                      v-for="(n, i) in dayNotes"
+                      :key="n.d"
+                      :transform="`translate(${60 + i * 70}, ${90 - i * 12})`"
+                    >
+                      <line
+                        x1="0"
+                        x2="0"
+                        y1="0"
+                        y2="20"
+                        stroke="var(--color-fat)"
+                        stroke-width="1"
+                      />
+                      <circle
+                        cx="0"
+                        cy="0"
+                        r="4"
+                        fill="var(--color-fat)"
+                        stroke="var(--bg)"
+                        stroke-width="1.5"
+                      />
+                    </g>
+                    <text x="14" y="135" class="svg-axis-dim">Apr 10</text>
+                    <text
+                      x="306"
+                      y="135"
+                      text-anchor="end"
+                      class="svg-axis-dim"
+                    >
+                      Apr 22
+                    </text>
+                  </svg>
+                  <div class="notes-hint">
+                    Hover a pin to see the note inline.
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ===== TARGETS & PROGRESS ========================================== -->
-    <section class="group">
-      <div class="wrap">
-        <div class="group-head">
-          <div class="eyebrow">02 · Targets &amp; progress</div>
-          <h2>The numbers you're chasing.</h2>
-        </div>
+      <!-- ===== TARGETS & PROGRESS ========================================== -->
+      <section class="group">
+        <div class="wrap">
+          <div class="group-head">
+            <div class="eyebrow">02 · Targets &amp; progress</div>
+            <h2>The numbers you're chasing.</h2>
+          </div>
 
-        <div class="card-grid">
-          <!-- Week-aware macros -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Week-aware macros · today, in context</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Set daily targets once. The app keeps rolling 7-day totals so
-              a heavy Wednesday becomes a lighter Thursday. Every macro row
-              tells you exactly how much is left for today — your targets
-              don't rewrite themselves, but your plan for the day does.
-            </div>
-            <div class="mini">
-              <div v-for="(r, i) in [
+          <div class="card-grid">
+            <!-- Week-aware macros -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title"
+                  >Week-aware macros · today, in context</span
+                >
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Set daily targets once. The app keeps rolling 7-day totals so a
+                heavy Wednesday becomes a lighter Thursday. Every macro row
+                tells you exactly how much is left for today — your targets
+                don't rewrite themselves, but your plan for the day does.
+              </div>
+              <div class="mini">
+                <div
+                  v-for="(r, i) in [
                 { label: 'Calories', weekVal: 9480, weekMax: 10500, unit: 'kcal', pct: 90, kind: 'cal',  leftToday: 1020, overToday: false },
                 { label: 'Protein',  weekVal: 920,  weekMax: 1260,  unit: 'g',    pct: 73, kind: 'pro',  leftToday: 48,   overToday: false },
                 { label: 'Fat',      weekVal: 385,  weekMax: 455,   unit: 'g',    pct: 85, kind: 'fat',  leftToday: 10,   overToday: false },
                 { label: 'Carbs',    weekVal: 1560, weekMax: 1470,  unit: 'g',    pct: 100, kind: 'carb', leftToday: 90,   overToday: true  },
-              ]" :key="i" class="target-row week-row">
-                <div class="target-head">
-                  <span class="target-label">
-                    {{ r.label }} <span class="target-sub">(week)</span>
-                  </span>
-                  <span class="target-val">
-                    {{ r.weekVal.toLocaleString() }}<span class="dim"> / {{ r.weekMax.toLocaleString() }} {{ r.unit }}</span>
-                  </span>
-                </div>
-                <div class="target-track">
-                  <div class="target-fill" :class="`kind-${r.kind}`" :style="{ width: r.pct + '%' }"></div>
-                </div>
-                <div class="target-today" :class="{ over: r.overToday }">
-                  <template v-if="r.overToday">
-                    over by {{ r.leftToday }}{{ r.unit }} this week
-                  </template>
-                  <template v-else>
-                    {{ r.leftToday.toLocaleString() }}{{ r.unit }} left today
-                  </template>
-                </div>
-              </div>
-              <div class="target-auto tone-good">
-                ▸ On pace for your weekly target.
-              </div>
-            </div>
-          </div>
+              ]"
+                  :key="i"
+                  class="target-row week-row"
+                >
+                  <div class="target-head">
+                    <span class="target-label">
+                      {{ r.label }} <span class="target-sub">(week)</span>
+                    </span>
+                    <span class="target-val">
+                      {{ r.weekVal.toLocaleString()
 
-          <!-- Dashboard stat grid -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Progress at a glance · 8 numbers</span>
-              <span class="card-tag">CORE</span>
+                      }}<span class="dim">
+                        / {{ r.weekMax.toLocaleString() }} {{ r.unit }}</span
+                      >
+                    </span>
+                  </div>
+                  <div class="target-track">
+                    <div
+                      class="target-fill"
+                      :class="`kind-${r.kind}`"
+                      :style="{ width: r.pct + '%' }"
+                    ></div>
+                  </div>
+                  <div class="target-today" :class="{ over: r.overToday }">
+                    <template v-if="r.overToday">
+                      over by {{ r.leftToday }}{{ r.unit }} this week
+                    </template>
+                    <template v-else>
+                      {{ r.leftToday.toLocaleString() }}{{ r.unit }} left today
+                    </template>
+                  </div>
+                </div>
+                <div class="target-auto tone-good">
+                  ▸ On pace for your weekly target.
+                </div>
+              </div>
             </div>
-            <div class="card-body">
-              The whole story in one grid: current weight, total change,
-              BMI, percent change, weekly average, regression trend, distance
-              to goal, and ETA. No scrolling, no drilling in — just the
-              numbers that move week over week.
-            </div>
-            <div class="mini">
-              <div class="stat-grid">
-                <div v-for="s in [
+
+            <!-- Dashboard stat grid -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Progress at a glance · 8 numbers</span>
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                The whole story in one grid: current weight, total change, BMI,
+                percent change, weekly average, regression trend, distance to
+                goal, and ETA. No scrolling, no drilling in — just the numbers
+                that move week over week.
+              </div>
+              <div class="mini">
+                <div class="stat-grid">
+                  <div
+                    v-for="s in [
                   { label: 'Current',      val: '207.4',  unit: 'lbs' },
                   { label: 'Total Change', val: '-18.6',  unit: 'lbs',   tone: 'good' },
                   { label: 'BMI',          val: '28.4',   unit: '' },
@@ -589,621 +701,843 @@ const platformRows = [
                   { label: 'Trend',        val: '-1.30',  unit: 'lbs/wk', tone: 'good' },
                   { label: 'To Goal',      val: '22.4',   unit: 'lbs' },
                   { label: 'ETA',          val: '17',     unit: 'weeks',  tone: 'good' },
-                ]" :key="s.label" class="stat-cell">
-                  <div class="stat-cell-label">{{ s.label }}</div>
-                  <div class="stat-cell-value" :class="s.tone">
-                    {{ s.val }}<span class="stat-cell-unit" v-if="s.unit"> {{ s.unit }}</span>
+                ]"
+                    :key="s.label"
+                    class="stat-cell"
+                  >
+                    <div class="stat-cell-label">{{ s.label }}</div>
+                    <div class="stat-cell-value" :class="s.tone">
+                      {{ s.val
+
+                      }}<span class="stat-cell-unit" v-if="s.unit">
+                        {{ s.unit }}</span
+                      >
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ===== DASHBOARD ANALYSIS ========================================== -->
-    <section class="group">
-      <div class="wrap">
-        <div class="group-head">
-          <div class="eyebrow">03 · Dashboard analysis</div>
-          <h2>Every metric, on one chart.</h2>
-        </div>
+      <!-- ===== DASHBOARD ANALYSIS ========================================== -->
+      <section class="group">
+        <div class="wrap">
+          <div class="group-head">
+            <div class="eyebrow">03 · Dashboard analysis</div>
+            <h2>Every metric, on one chart.</h2>
+          </div>
 
-        <div class="card-grid">
-          <!-- Multi-series chart -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Multi-series chart · pick anything, compare everything</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Weight, waist, calories, protein, fat, carbs, nutrition score,
-              every active compound, every symptom — put any of them on the
-              same chart. Add or remove a series with one tap. Zoom from
-              30 days to five years. The regression line for weight draws
-              itself.
-            </div>
-            <div class="mini">
-              <div class="dash-toolbar">
-                <div class="dash-range">
-                  <button
-                    v-for="r in dashRanges"
-                    :key="r.label"
-                    :class="{ active: r.active }"
-                    type="button"
-                  >{{ r.label }}</button>
+          <div class="card-grid">
+            <!-- Multi-series chart -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title"
+                  >Multi-series chart · pick anything, compare everything</span
+                >
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Weight, waist, calories, protein, fat, carbs, nutrition score,
+                every active compound, every symptom — put any of them on the
+                same chart. Add or remove a series with one tap. Zoom from 30
+                days to five years. The regression line for weight draws itself.
+              </div>
+              <div class="mini">
+                <div class="dash-toolbar">
+                  <div class="dash-range">
+                    <button
+                      v-for="r in dashRanges"
+                      :key="r.label"
+                      :class="{ active: r.active }"
+                      type="button"
+                    >
+                      {{ r.label }}
+                    </button>
+                  </div>
+                </div>
+                <div class="dash-chips">
+                  <span
+                    v-for="chip in dashChips"
+                    :key="chip.label"
+                    class="dash-chip"
+                  >
+                    <span
+                      class="dash-chip-dot"
+                      :style="{ background: chip.color }"
+                    ></span>
+                    {{ chip.label }}
+                    <span class="dash-chip-x">×</span>
+                  </span>
+                  <span class="dash-chip dash-chip-add">+ Add</span>
+                </div>
+                <div class="dash-chart-wrap">
+                  <svg
+                    :viewBox="`0 0 ${dashChart.W} ${dashChart.H}`"
+                    class="block-svg"
+                  >
+                    <!-- grid -->
+                    <line
+                      v-for="(y, i) in dashChart.gridYs"
+                      :key="'g' + i"
+                      :x1="dashChart.pad.l"
+                      :x2="dashChart.right"
+                      :y1="y"
+                      :y2="y"
+                      stroke="var(--border)"
+                      stroke-width="1"
+                      stroke-dasharray="2 3"
+                      opacity="0.6"
+                    />
+                    <!-- PK fill + line (amber, dashed) -->
+                    <path
+                      :d="dashChart.pkArea"
+                      fill="var(--color-fat)"
+                      opacity="0.1"
+                    />
+                    <path
+                      :d="dashChart.pkPath"
+                      fill="none"
+                      stroke="var(--color-fat)"
+                      stroke-width="1.5"
+                      stroke-dasharray="4 3"
+                    />
+                    <!-- Calories (blue) -->
+                    <path
+                      :d="dashChart.calPath"
+                      fill="none"
+                      stroke="var(--color-cal)"
+                      stroke-width="1.25"
+                      opacity="0.75"
+                    />
+                    <!-- Weight trend regression (green dashed) -->
+                    <path
+                      :d="dashChart.trendPath"
+                      fill="none"
+                      stroke="var(--primary)"
+                      stroke-width="1.25"
+                      stroke-dasharray="6 4"
+                      opacity="0.55"
+                    />
+                    <!-- Weight line (green solid, primary series) -->
+                    <path
+                      :d="dashChart.weightPath"
+                      fill="none"
+                      stroke="var(--primary)"
+                      stroke-width="2"
+                    />
+                    <!-- Dose pills at top of chart area -->
+                    <g v-for="(d, i) in dashChart.doses" :key="'d' + i">
+                      <line
+                        :x1="d.x"
+                        :x2="d.x"
+                        :y1="dashChart.pad.t + 10"
+                        :y2="dashChart.padB"
+                        stroke="var(--color-fat)"
+                        stroke-width="1"
+                        stroke-dasharray="2 3"
+                        opacity="0.35"
+                      />
+                      <rect
+                        :x="d.x - 11"
+                        :y="dashChart.pad.t - 4"
+                        width="22"
+                        height="11"
+                        fill="var(--color-fat)"
+                      />
+                      <text
+                        :x="d.x"
+                        :y="dashChart.pad.t + 4"
+                        text-anchor="middle"
+                        class="dose-pill-text"
+                      >
+                        {{ d.mg }}mg
+                      </text>
+                    </g>
+                    <!-- Axis labels -->
+                    <text
+                      :x="dashChart.pad.l"
+                      :y="dashChart.H - 8"
+                      class="svg-axis-dim"
+                    >
+                      84d ago
+                    </text>
+                    <text
+                      :x="dashChart.right"
+                      :y="dashChart.H - 8"
+                      text-anchor="end"
+                      class="svg-axis-dim"
+                    >
+                      today
+                    </text>
+                    <text
+                      :x="dashChart.pad.l - 6"
+                      :y="dashChart.pad.t + 6"
+                      text-anchor="end"
+                      class="svg-axis-dim"
+                    >
+                      lbs
+                    </text>
+                    <text
+                      :x="dashChart.right + 4"
+                      :y="dashChart.pad.t + 6"
+                      class="svg-axis-dim"
+                    >
+                      mg
+                    </text>
+                  </svg>
+                </div>
+                <div class="dash-legend">
+                  <span
+                    >Trend ·
+                    <span class="accent"
+                      >{{ dashChart.slope }} lbs/wk</span
+                    ></span
+                  >
+                  <span class="dim">· regression across the full range</span>
                 </div>
               </div>
-              <div class="dash-chips">
-                <span
-                  v-for="chip in dashChips"
-                  :key="chip.label"
-                  class="dash-chip"
-                >
-                  <span class="dash-chip-dot" :style="{ background: chip.color }"></span>
-                  {{ chip.label }}
-                  <span class="dash-chip-x">×</span>
-                </span>
-                <span class="dash-chip dash-chip-add">+ Add</span>
+            </div>
+
+            <!-- Log history table -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title">Log history · one row per day</span>
+                <span class="card-tag">CORE</span>
               </div>
-              <div class="dash-chart-wrap">
-                <svg :viewBox="`0 0 ${dashChart.W} ${dashChart.H}`" class="block-svg">
-                  <!-- grid -->
-                  <line
-                    v-for="(y, i) in dashChart.gridYs"
-                    :key="'g' + i"
-                    :x1="dashChart.pad.l" :x2="dashChart.right"
-                    :y1="y" :y2="y"
-                    stroke="var(--border)" stroke-width="1"
-                    stroke-dasharray="2 3" opacity="0.6"
+              <div class="card-body">
+                Every day in one table — weight, waist, dose, calories, macros,
+                nutrition score — plus a dot for symptoms and a pencil for any
+                day you left a note. Tap a row to jump back to that day's full
+                log.
+              </div>
+              <div class="mini">
+                <table class="log-tbl">
+                  <thead>
+                    <tr>
+                      <th class="lt-date">Date</th>
+                      <th class="lt-num">Wgt</th>
+                      <th class="lt-num">Waist</th>
+                      <th class="lt-num">Tirzep</th>
+                      <th class="lt-num lt-cal">Kcal</th>
+                      <th class="lt-num lt-pro">Pro</th>
+                      <th class="lt-num lt-fat">Fat</th>
+                      <th class="lt-num lt-carb">Carbs</th>
+                      <th class="lt-num lt-score">Score</th>
+                      <th class="lt-ctr">Sym</th>
+                      <th class="lt-ctr">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="row in dashLogRows"
+                      :key="row.date"
+                      :class="{ today: row.today }"
+                    >
+                      <td class="lt-date">{{ row.date }}</td>
+                      <td class="lt-num">{{ row.wgt }}</td>
+                      <td class="lt-num">
+                        {{ row.waist != null ? row.waist + '&quot;' : '' }}
+                      </td>
+                      <td class="lt-num">
+                        <span
+                          v-if="row.dose"
+                          class="lt-dose"
+                          >{{ row.dose }}</span
+                        >
+                      </td>
+                      <td class="lt-num lt-cal">
+                        {{ row.cal.toLocaleString() }}
+                      </td>
+                      <td class="lt-num lt-pro">{{ row.pro }}g</td>
+                      <td class="lt-num lt-fat">{{ row.fat }}g</td>
+                      <td class="lt-num lt-carb">{{ row.carbs }}g</td>
+                      <td
+                        class="lt-num lt-score"
+                        :class="row.score >= 85 ? 'score-good' : row.score >= 60 ? 'score-ok' : 'score-bad'"
+                      >
+                        {{ row.score }}
+                      </td>
+                      <td class="lt-ctr">
+                        <span
+                          v-if="row.sym"
+                          class="lt-sym-dot"
+                          :class="row.sym"
+                        ></span>
+                      </td>
+                      <td class="lt-ctr">
+                        <svg
+                          v-if="row.note"
+                          viewBox="0 0 24 24"
+                          class="lt-note-icon"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
+                          />
+                          <path d="m15 5 4 4" />
+                        </svg>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Photos by angle + compare -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title"
+                  >Progress photos · timeline by angle, drag to compare</span
+                >
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Snap a front, side, and back shot whenever you can. The timeline
+                organizes them by angle so the strip stays readable as months
+                pile up. Tap any two shots and they drop into a before/after
+                slider — drag the divider to see what actually changed.
+              </div>
+              <div class="mini">
+                <div
+                  v-for="row in dashPhotoAngles"
+                  :key="row.label"
+                  class="photo-angle-row"
+                >
+                  <span class="photo-angle-label">{{ row.label }}</span>
+                  <div class="photo-angle-strip">
+                    <div
+                      v-for="shot in row.shots"
+                      :key="shot.m"
+                      class="photo-thumb"
+                      :class="{ sel: shot.sel }"
+                    >
+                      <span class="photo-thumb-m">{{ shot.m }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="photo-compare-hint">
+                  <span class="accent">▸ Pick a second photo to compare…</span>
+                  <span class="dim">Feb selected · Front</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== COMPOUNDS =================================================== -->
+      <section class="group">
+        <div class="wrap">
+          <div class="group-head">
+            <div class="eyebrow">04 · Compounds</div>
+            <h2>Half-life math, automated.</h2>
+          </div>
+
+          <div class="card-grid">
+            <!-- Library + custom -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Library + custom compounds</span>
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Common GLP-1s preloaded. Adding your own takes four fields —
+                name, half-life, interval, and kinetics shape. The curve draws
+                itself.
+              </div>
+              <div class="mini">
+                <div
+                  v-for="c in compounds"
+                  :key="c.name"
+                  class="compound-row"
+                  :class="{ active: c.active }"
+                >
+                  <span class="compound-name">{{ c.name }}</span>
+                  <span class="compound-meta">
+                    <span class="compound-shape">{{ c.shape }}</span>
+                    <span class="compound-t">t½ {{ c.t }}</span>
+                    <span class="compound-every">every {{ c.every }}</span>
+                  </span>
+                </div>
+                <div class="custom-form">
+                  <div class="mini-eyebrow">Add custom</div>
+                  <div class="form-line">
+                    <span class="form-field"
+                      ><span class="form-label">name</span
+                      ><span class="form-val">Tesofensine</span></span
+                    >
+                    <span class="form-field"
+                      ><span class="form-label">t½</span
+                      ><span class="form-val">9.0 d</span></span
+                    >
+                  </div>
+                  <div class="form-line">
+                    <span class="form-field"
+                      ><span class="form-label">interval</span
+                      ><span class="form-val">7 d</span></span
+                    >
+                    <span class="form-field"
+                      ><span class="form-label">shape</span
+                      ><span class="form-val">sub-q</span></span
+                    >
+                    <span class="form-submit">+ add</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Kinetics shapes -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title"
+                  >Kinetics shapes · bolus / sub-Q / depot</span
+                >
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Not every compound absorbs the same way. Pick the profile that
+                matches how yours hits — the curve adjusts. Sub-Q is the default
+                for self-injected peptides; depot for long-acting oil-based
+                weeklies; bolus for anything that peaks immediately.
+              </div>
+              <div class="mini kinetics-grid">
+                <div
+                  v-for="k in kineticsProfiles"
+                  :key="k.value"
+                  class="kinetics-cell"
+                  :class="{ 'is-default': k.isDefault }"
+                >
+                  <div class="kinetics-head">
+                    <span class="kinetics-label">{{ k.label }}</span>
+                    <span v-if="k.isDefault" class="kinetics-default"
+                      >DEFAULT</span
+                    >
+                  </div>
+                  <svg
+                    :viewBox="`0 0 ${k.W} ${k.H}`"
+                    class="block-svg kinetics-svg"
+                  >
+                    <path :d="k.area" fill="rgba(230,184,85,0.12)" />
+                    <path
+                      :d="k.path"
+                      fill="none"
+                      stroke="var(--color-fat)"
+                      stroke-width="1.5"
+                    />
+                  </svg>
+                  <div class="kinetics-blurb">{{ k.blurb }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stacked doses -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title"
+                  >Stacked doses · modeled correctly</span
+                >
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Run two compounds at once and the curves add up the way real
+                pharmacokinetics do — not a toy bar chart. Each dose decays at
+                its own half-life.
+              </div>
+              <div class="mini">
+                <div class="stack-legend">
+                  <span class="s-fat">━ Tirzepatide · t½ 5d</span>
+                  <span class="s-green">━ Semaglutide · t½ 7d</span>
+                </div>
+                <svg
+                  :viewBox="`0 0 ${stackedPK.W} ${stackedPK.H}`"
+                  class="block-svg"
+                >
+                  <path :d="stackedPK.aArea" fill="rgba(230,184,85,0.14)" />
+                  <path
+                    :d="stackedPK.pA"
+                    fill="none"
+                    stroke="var(--color-fat)"
+                    stroke-width="1.75"
                   />
-                  <!-- PK fill + line (amber, dashed) -->
-                  <path :d="dashChart.pkArea" fill="var(--color-fat)" opacity="0.1" />
-                  <path :d="dashChart.pkPath"
-                        fill="none" stroke="var(--color-fat)" stroke-width="1.5"
-                        stroke-dasharray="4 3" />
-                  <!-- Calories (blue) -->
-                  <path :d="dashChart.calPath"
-                        fill="none" stroke="var(--color-cal)" stroke-width="1.25"
-                        opacity="0.75" />
-                  <!-- Weight trend regression (green dashed) -->
-                  <path :d="dashChart.trendPath"
-                        fill="none" stroke="var(--primary)" stroke-width="1.25"
-                        stroke-dasharray="6 4" opacity="0.55" />
-                  <!-- Weight line (green solid, primary series) -->
-                  <path :d="dashChart.weightPath"
-                        fill="none" stroke="var(--primary)" stroke-width="2" />
-                  <!-- Dose pills at top of chart area -->
-                  <g v-for="(d, i) in dashChart.doses" :key="'d' + i">
-                    <line
-                      :x1="d.x" :x2="d.x"
-                      :y1="dashChart.pad.t + 10" :y2="dashChart.padB"
-                      stroke="var(--color-fat)" stroke-width="1"
-                      stroke-dasharray="2 3" opacity="0.35"
-                    />
-                    <rect
-                      :x="d.x - 11" :y="dashChart.pad.t - 4"
-                      width="22" height="11"
-                      fill="var(--color-fat)"
-                    />
-                    <text
-                      :x="d.x" :y="dashChart.pad.t + 4"
-                      text-anchor="middle" class="dose-pill-text"
-                    >{{ d.mg }}mg</text>
-                  </g>
-                  <!-- Axis labels -->
-                  <text :x="dashChart.pad.l" :y="dashChart.H - 8" class="svg-axis-dim">84d ago</text>
-                  <text :x="dashChart.right" :y="dashChart.H - 8" text-anchor="end" class="svg-axis-dim">today</text>
-                  <text :x="dashChart.pad.l - 6" :y="dashChart.pad.t + 6"
-                        text-anchor="end" class="svg-axis-dim">lbs</text>
-                  <text :x="dashChart.right + 4" :y="dashChart.pad.t + 6"
-                        class="svg-axis-dim">mg</text>
+                  <path
+                    :d="stackedPK.pB"
+                    fill="none"
+                    stroke="var(--primary)"
+                    stroke-width="1.5"
+                    stroke-dasharray="3 2"
+                  />
+                  <text :x="14" :y="stackedPK.H - 8" class="svg-axis-dim">
+                    -56d
+                  </text>
+                  <text
+                    :x="stackedPK.right"
+                    :y="stackedPK.H - 8"
+                    text-anchor="end"
+                    class="svg-axis-dim"
+                  >
+                    now
+                  </text>
                 </svg>
               </div>
-              <div class="dash-legend">
-                <span>Trend · <span class="accent">{{ dashChart.slope }} lbs/wk</span></span>
-                <span class="dim">· regression across the full range</span>
+            </div>
+
+            <!-- Push reminders -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title"
+                  >Push reminders · interval + one send-time</span
+                >
+                <span class="card-tag">CORE</span>
               </div>
-            </div>
-          </div>
-
-          <!-- Log history table -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Log history · one row per day</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Every day in one table — weight, waist, dose, calories, macros,
-              nutrition score — plus a dot for symptoms and a pencil for any
-              day you left a note. Tap a row to jump back to that day's full
-              log.
-            </div>
-            <div class="mini">
-              <table class="log-tbl">
-                <thead>
-                  <tr>
-                    <th class="lt-date">Date</th>
-                    <th class="lt-num">Wgt</th>
-                    <th class="lt-num">Waist</th>
-                    <th class="lt-num">Tirzep</th>
-                    <th class="lt-num lt-cal">Kcal</th>
-                    <th class="lt-num lt-pro">Pro</th>
-                    <th class="lt-num lt-fat">Fat</th>
-                    <th class="lt-num lt-carb">Carbs</th>
-                    <th class="lt-num lt-score">Score</th>
-                    <th class="lt-ctr">Sym</th>
-                    <th class="lt-ctr">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="row in dashLogRows"
-                    :key="row.date"
-                    :class="{ today: row.today }"
-                  >
-                    <td class="lt-date">{{ row.date }}</td>
-                    <td class="lt-num">{{ row.wgt }}</td>
-                    <td class="lt-num">{{ row.waist != null ? row.waist + '&quot;' : '' }}</td>
-                    <td class="lt-num">
-                      <span v-if="row.dose" class="lt-dose">{{ row.dose }}</span>
-                    </td>
-                    <td class="lt-num lt-cal">{{ row.cal.toLocaleString() }}</td>
-                    <td class="lt-num lt-pro">{{ row.pro }}g</td>
-                    <td class="lt-num lt-fat">{{ row.fat }}g</td>
-                    <td class="lt-num lt-carb">{{ row.carbs }}g</td>
-                    <td
-                      class="lt-num lt-score"
-                      :class="row.score >= 85 ? 'score-good' : row.score >= 60 ? 'score-ok' : 'score-bad'"
-                    >{{ row.score }}</td>
-                    <td class="lt-ctr">
-                      <span
-                        v-if="row.sym"
-                        class="lt-sym-dot"
-                        :class="row.sym"
-                      ></span>
-                    </td>
-                    <td class="lt-ctr">
-                      <svg
-                        v-if="row.note"
-                        viewBox="0 0 24 24" class="lt-note-icon"
-                        fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round"
-                      >
-                        <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                        <path d="m15 5 4 4" />
-                      </svg>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Photos by angle + compare -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Progress photos · timeline by angle, drag to compare</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Snap a front, side, and back shot whenever you can. The
-              timeline organizes them by angle so the strip stays readable
-              as months pile up. Tap any two shots and they drop into a
-              before/after slider — drag the divider to see what actually
-              changed.
-            </div>
-            <div class="mini">
-              <div
-                v-for="row in dashPhotoAngles"
-                :key="row.label"
-                class="photo-angle-row"
-              >
-                <span class="photo-angle-label">{{ row.label }}</span>
-                <div class="photo-angle-strip">
+              <div class="card-body">
+                Each compound has its own dose interval and a single reminder
+                time. The next dose day is computed from your last log plus the
+                interval — the push fires at your chosen hour on dose days only.
+                A separate daily tracking reminder nudges you in the evening if
+                you haven't logged anything yet.
+              </div>
+              <div class="mini">
+                <div class="sched-list">
                   <div
-                    v-for="shot in row.shots"
-                    :key="shot.m"
-                    class="photo-thumb"
-                    :class="{ sel: shot.sel }"
+                    v-for="s in schedule"
+                    :key="s.label"
+                    class="sched-row"
+                    :class="{ 'sched-track': s.kind === 'track' }"
                   >
-                    <span class="photo-thumb-m">{{ shot.m }}</span>
+                    <span
+                      class="sched-dot"
+                      :style="{ background: s.color }"
+                    ></span>
+                    <div class="sched-info">
+                      <div class="sched-label">{{ s.label }}</div>
+                      <div class="sched-cadence">{{ s.interval }}</div>
+                    </div>
+                    <div class="sched-timing">
+                      <div class="sched-time">{{ s.time }}</div>
+                      <div class="sched-next">{{ s.next }}</div>
+                    </div>
+                    <span class="sched-toggle" :class="{ on: s.on }">
+                      <span class="sched-toggle-thumb"></span>
+                    </span>
                   </div>
                 </div>
               </div>
-              <div class="photo-compare-hint">
-                <span class="accent">▸ Pick a second photo to compare…</span>
-                <span class="dim">Feb selected · Front</span>
+            </div>
+
+            <!-- Smart reminder -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title"
+                  >Smart daily reminder · skips if you already logged</span
+                >
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                The evening tracking reminder checks your log first. If the day
+                already has any entry — a weigh-in, a dose, a meal — the push
+                doesn't fire. No "did I do that already?" lookups at bedtime.
+              </div>
+              <div class="mini push-stack">
+                <div class="ios-push">
+                  <div class="ios-push-header">
+                    <span class="ios-push-icon" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <line x1="12" y1="3" x2="12" y2="7" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                        <line x1="3" y1="12" x2="7" y2="12" />
+                        <line x1="17" y1="12" x2="21" y2="12" />
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="1.8"
+                          fill="currentColor"
+                          stroke="none"
+                        />
+                      </svg>
+                    </span>
+                    <span class="ios-push-app">PROTOKOL LAB</span>
+                    <span class="ios-push-time">now</span>
+                  </div>
+                  <div class="ios-push-title">Tirzepatide due</div>
+                  <div class="ios-push-body">
+                    Tap to log. Expected dose: 4 mg.
+                  </div>
+                </div>
+                <div class="push-skip">
+                  <span class="skip-dot"></span>
+                  <span class="skip-body">
+                    <b>Daily tracking reminder skipped.</b>
+                    <span class="dim"
+                      >You already logged a dose at 6:42 AM.</span
+                    >
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ===== COMPOUNDS =================================================== -->
-    <section class="group">
-      <div class="wrap">
-        <div class="group-head">
-          <div class="eyebrow">04 · Compounds</div>
-          <h2>Half-life math, automated.</h2>
-        </div>
-
-        <div class="card-grid">
-          <!-- Library + custom -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Library + custom compounds</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Common GLP-1s preloaded. Adding your own takes four fields —
-              name, half-life, interval, and kinetics shape. The curve
-              draws itself.
-            </div>
-            <div class="mini">
-              <div v-for="c in compounds" :key="c.name" class="compound-row" :class="{ active: c.active }">
-                <span class="compound-name">{{ c.name }}</span>
-                <span class="compound-meta">
-                  <span class="compound-shape">{{ c.shape }}</span>
-                  <span class="compound-t">t½ {{ c.t }}</span>
-                  <span class="compound-every">every {{ c.every }}</span>
-                </span>
-              </div>
-              <div class="custom-form">
-                <div class="mini-eyebrow">Add custom</div>
-                <div class="form-line">
-                  <span class="form-field"><span class="form-label">name</span><span class="form-val">Tesofensine</span></span>
-                  <span class="form-field"><span class="form-label">t½</span><span class="form-val">9.0 d</span></span>
-                </div>
-                <div class="form-line">
-                  <span class="form-field"><span class="form-label">interval</span><span class="form-val">7 d</span></span>
-                  <span class="form-field"><span class="form-label">shape</span><span class="form-val">sub-q</span></span>
-                  <span class="form-submit">+ add</span>
-                </div>
-              </div>
-            </div>
+      <!-- ===== SYMPTOMS ==================================================== -->
+      <section class="group">
+        <div class="wrap">
+          <div class="group-head">
+            <div class="eyebrow">05 · Symptoms</div>
+            <h2>Three-second log. Patterns later.</h2>
           </div>
 
-          <!-- Kinetics shapes -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Kinetics shapes · bolus / sub-Q / depot</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Not every compound absorbs the same way. Pick the profile
-              that matches how yours hits — the curve adjusts. Sub-Q is
-              the default for self-injected peptides; depot for
-              long-acting oil-based weeklies; bolus for anything that
-              peaks immediately.
-            </div>
-            <div class="mini kinetics-grid">
-              <div
-                v-for="k in kineticsProfiles"
-                :key="k.value"
-                class="kinetics-cell"
-                :class="{ 'is-default': k.isDefault }"
-              >
-                <div class="kinetics-head">
-                  <span class="kinetics-label">{{ k.label }}</span>
-                  <span v-if="k.isDefault" class="kinetics-default">DEFAULT</span>
+          <div class="card-grid">
+            <!-- Symptom scale + custom -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">0–10 severity · add your own</span>
+                <span class="card-tag">CORE</span>
+              </div>
+              <div class="card-body">
+                Built-in symptoms cover the common GLP-1 side effects. Custom
+                symptoms are one field — anything you want to track lives in the
+                same log.
+              </div>
+              <div class="mini symptoms-pad">
+                <div
+                  v-for="s in symptomsList"
+                  :key="s.name"
+                  class="symptom-row"
+                >
+                  <span class="symptom-name">
+                    {{ s.name }}
+                    <span v-if="s.custom" class="custom-tag">CUSTOM</span>
+                  </span>
+                  <div class="symptom-dots">
+                    <div
+                      v-for="n in 11"
+                      :key="n"
+                      class="sym-dot"
+                      :class="{ active: (n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1) }"
+                      :style="((n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1)) ? { background: dotColor(n - 1), borderColor: dotColor(n - 1) } : {}"
+                    >
+                      {{ n - 1 }}
+                    </div>
+                  </div>
                 </div>
-                <svg :viewBox="`0 0 ${k.W} ${k.H}`" class="block-svg kinetics-svg">
-                  <path :d="k.area" fill="rgba(230,184,85,0.12)" />
+                <div class="sym-add">+ add symptom</div>
+              </div>
+            </div>
+
+            <!-- Correlation -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Correlation charts</span>
+                <span class="card-tag premium">PREMIUM</span>
+              </div>
+              <div class="card-body">
+                Put any two things on the same chart. Find out nausea peaks two
+                days after your shot, or that you sleep worse on high-carb days.
+                Patterns, not guesses.
+              </div>
+              <div class="mini">
+                <div class="corr-legend">
+                  <span class="corr-amber">━ Dose in system</span>
+                  <span class="corr-red">━ Nausea</span>
+                  <span class="corr-dim">r = 0.74</span>
+                </div>
+                <svg
+                  :viewBox="`0 0 ${correlation.W} ${correlation.H}`"
+                  class="block-svg"
+                >
+                  <line
+                    v-for="(y, i) in correlation.gridYs"
+                    :key="i"
+                    :x1="correlation.pad.l"
+                    :x2="correlation.right"
+                    :y1="y"
+                    :y2="y"
+                    stroke="var(--border)"
+                    stroke-dasharray="1 3"
+                  />
                   <path
-                    :d="k.path"
+                    :d="correlation.pkPath"
                     fill="none"
                     stroke="var(--color-fat)"
                     stroke-width="1.5"
                   />
+                  <path
+                    :d="correlation.nPath"
+                    fill="none"
+                    stroke="var(--color-carbs)"
+                    stroke-width="1.5"
+                    stroke-dasharray="3 2"
+                  />
                 </svg>
-                <div class="kinetics-blurb">{{ k.blurb }}</div>
+                <div class="corr-footer">
+                  -40d <span class="right">today</span>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <!-- Stacked doses -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Stacked doses · modeled correctly</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Run two compounds at once and the curves add up the way real
-              pharmacokinetics do — not a toy bar chart. Each dose decays
-              at its own half-life.
-            </div>
-            <div class="mini">
-              <div class="stack-legend">
-                <span class="s-fat">━ Tirzepatide · t½ 5d</span>
-                <span class="s-green">━ Semaglutide · t½ 7d</span>
-              </div>
-              <svg :viewBox="`0 0 ${stackedPK.W} ${stackedPK.H}`" class="block-svg">
-                <path :d="stackedPK.aArea" fill="rgba(230,184,85,0.14)" />
-                <path :d="stackedPK.pA" fill="none" stroke="var(--color-fat)" stroke-width="1.75" />
-                <path :d="stackedPK.pB" fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-dasharray="3 2" />
-                <text :x="14" :y="stackedPK.H - 8" class="svg-axis-dim">-56d</text>
-                <text :x="stackedPK.right" :y="stackedPK.H - 8" text-anchor="end" class="svg-axis-dim">now</text>
-              </svg>
-            </div>
+      <!-- ===== AI ========================================================== -->
+      <section class="group">
+        <div class="wrap">
+          <div class="group-head">
+            <div class="eyebrow">06 · AI</div>
+            <h2>Agentic. Not a chatbot.</h2>
           </div>
 
-          <!-- Push reminders -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Push reminders · interval + one send-time</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Each compound has its own dose interval and a single reminder
-              time. The next dose day is computed from your last log plus
-              the interval — the push fires at your chosen hour on dose
-              days only. A separate daily tracking reminder nudges you in
-              the evening if you haven't logged anything yet.
-            </div>
-            <div class="mini">
-              <div class="sched-list">
-                <div
-                  v-for="s in schedule"
-                  :key="s.label"
-                  class="sched-row"
-                  :class="{ 'sched-track': s.kind === 'track' }"
+          <div class="card-grid">
+            <!-- Agentic tool trail -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title"
+                  >Reads your data · uses tools · acts</span
                 >
-                  <span class="sched-dot" :style="{ background: s.color }"></span>
-                  <div class="sched-info">
-                    <div class="sched-label">{{ s.label }}</div>
-                    <div class="sched-cadence">{{ s.interval }}</div>
-                  </div>
-                  <div class="sched-timing">
-                    <div class="sched-time">{{ s.time }}</div>
-                    <div class="sched-next">{{ s.next }}</div>
-                  </div>
-                  <span class="sched-toggle" :class="{ on: s.on }">
-                    <span class="sched-toggle-thumb"></span>
-                  </span>
+                <span class="card-tag premium">PREMIUM</span>
+              </div>
+              <div class="card-body">
+                Ask it anything. It has tools for searching foods, creating
+                custom items, logging entries, pulling any stretch of your own
+                data, and searching the web. What it can't look up from your
+                log, it finds online — then writes the log for you.
+              </div>
+              <div class="mini aichat">
+                <div class="aichat-msg user">
+                  <div class="aichat-tag">You</div>
+                  <div>I just ate a Sweetgreen Kale Caesar at lunch.</div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Smart reminder -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Smart daily reminder · skips if you already logged</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              The evening tracking reminder checks your log first. If the
-              day already has any entry — a weigh-in, a dose, a meal — the
-              push doesn't fire. No "did I do that already?" lookups at
-              bedtime.
-            </div>
-            <div class="mini push-stack">
-              <div class="ios-push">
-                <div class="ios-push-header">
-                  <span class="ios-push-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-                      <circle cx="12" cy="12" r="9" />
-                      <line x1="12" y1="3" x2="12" y2="7" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                      <line x1="3" y1="12" x2="7" y2="12" />
-                      <line x1="17" y1="12" x2="21" y2="12" />
-                      <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
-                    </svg>
-                  </span>
-                  <span class="ios-push-app">PROTOKOL LAB</span>
-                  <span class="ios-push-time">now</span>
-                </div>
-                <div class="ios-push-title">Tirzepatide due</div>
-                <div class="ios-push-body">Tap to log. Expected dose: 4 mg.</div>
-              </div>
-              <div class="push-skip">
-                <span class="skip-dot"></span>
-                <span class="skip-body">
-                  <b>Daily tracking reminder skipped.</b>
-                  <span class="dim">You already logged a dose at 6:42 AM.</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== SYMPTOMS ==================================================== -->
-    <section class="group">
-      <div class="wrap">
-        <div class="group-head">
-          <div class="eyebrow">05 · Symptoms</div>
-          <h2>Three-second log. Patterns later.</h2>
-        </div>
-
-        <div class="card-grid">
-          <!-- Symptom scale + custom -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">0–10 severity · add your own</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Built-in symptoms cover the common GLP-1 side effects.
-              Custom symptoms are one field — anything you want to
-              track lives in the same log.
-            </div>
-            <div class="mini symptoms-pad">
-              <div v-for="s in symptomsList" :key="s.name" class="symptom-row">
-                <span class="symptom-name">
-                  {{ s.name }}
-                  <span v-if="s.custom" class="custom-tag">CUSTOM</span>
-                </span>
-                <div class="symptom-dots">
-                  <div v-for="n in 11" :key="n" class="sym-dot"
-                       :class="{ active: (n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1) }"
-                       :style="((n - 1) === 0 ? s.severity === 0 : s.severity >= (n - 1)) ? { background: dotColor(n - 1), borderColor: dotColor(n - 1) } : {}">
-                    {{ n - 1 }}
+                <div class="aichat-msg ai">
+                  <div class="aichat-tag">Protokol Lab</div>
+                  <ol class="trail">
+                    <li
+                      v-for="(t, i) in aiTrail"
+                      :key="i"
+                      class="trail-item"
+                      :class="t.kind"
+                    >
+                      <span class="trail-icon">{{ t.icon }}</span>
+                      <span class="trail-text">{{ t.text }}</span>
+                    </li>
+                  </ol>
+                  <div class="ai-final">
+                    Logged. You're at <b>1,240 cal</b>, 340 to go for the day.
+                    Protein's at 92g — you'll want another shake before bed to
+                    hit 180.
                   </div>
                 </div>
               </div>
-              <div class="sym-add">+ add symptom</div>
             </div>
-          </div>
 
-          <!-- Correlation -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Correlation charts</span>
-              <span class="card-tag premium">PREMIUM</span>
-            </div>
-            <div class="card-body">
-              Put any two things on the same chart. Find out nausea peaks
-              two days after your shot, or that you sleep worse on
-              high-carb days. Patterns, not guesses.
-            </div>
-            <div class="mini">
-              <div class="corr-legend">
-                <span class="corr-amber">━ Dose in system</span>
-                <span class="corr-red">━ Nausea</span>
-                <span class="corr-dim">r = 0.74</span>
+            <!-- Multi-thread -->
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Multi-thread · history · rename</span>
+                <span class="card-tag premium">PREMIUM</span>
               </div>
-              <svg :viewBox="`0 0 ${correlation.W} ${correlation.H}`" class="block-svg">
-                <line v-for="(y, i) in correlation.gridYs" :key="i"
-                      :x1="correlation.pad.l" :x2="correlation.right"
-                      :y1="y" :y2="y"
-                      stroke="var(--border)" stroke-dasharray="1 3" />
-                <path :d="correlation.pkPath" fill="none" stroke="var(--color-fat)" stroke-width="1.5" />
-                <path :d="correlation.nPath" fill="none" stroke="var(--color-carbs)" stroke-width="1.5" stroke-dasharray="3 2" />
-              </svg>
-              <div class="corr-footer">-40d <span class="right">today</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== AI ========================================================== -->
-    <section class="group">
-      <div class="wrap">
-        <div class="group-head">
-          <div class="eyebrow">06 · AI</div>
-          <h2>Agentic. Not a chatbot.</h2>
-        </div>
-
-        <div class="card-grid">
-          <!-- Agentic tool trail -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Reads your data · uses tools · acts</span>
-              <span class="card-tag premium">PREMIUM</span>
-            </div>
-            <div class="card-body">
-              Ask it anything. It has tools for searching foods, creating
-              custom items, logging entries, pulling any stretch of your
-              own data, and searching the web. What it can't look up from
-              your log, it finds online — then writes the log for you.
-            </div>
-            <div class="mini aichat">
-              <div class="aichat-msg user">
-                <div class="aichat-tag">You</div>
-                <div>I just ate a Sweetgreen Kale Caesar at lunch.</div>
+              <div class="card-body">
+                Every conversation is its own thread. Keep "Nausea tolerance"
+                separate from "Dose escalation plan." Rename, delete, resume any
+                thread at any time.
               </div>
-              <div class="aichat-msg ai">
-                <div class="aichat-tag">Protokol Lab</div>
-                <ol class="trail">
-                  <li v-for="(t, i) in aiTrail" :key="i" class="trail-item" :class="t.kind">
-                    <span class="trail-icon">{{ t.icon }}</span>
-                    <span class="trail-text">{{ t.text }}</span>
-                  </li>
-                </ol>
-                <div class="ai-final">
-                  Logged. You're at <b>1,240 cal</b>, 340 to go for the day.
-                  Protein's at 92g — you'll want another shake before bed to
-                  hit 180.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Multi-thread -->
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Multi-thread · history · rename</span>
-              <span class="card-tag premium">PREMIUM</span>
-            </div>
-            <div class="card-body">
-              Every conversation is its own thread. Keep "Nausea
-              tolerance" separate from "Dose escalation plan." Rename,
-              delete, resume any thread at any time.
-            </div>
-            <div class="mini">
-              <div class="thread-list">
-                <div v-for="t in threads" :key="t.name" class="thread-row" :class="{ active: t.active }">
-                  <span class="thread-name">{{ t.name }}</span>
-                  <span class="thread-when">{{ t.when }}</span>
-                </div>
-                <div class="thread-row new">
-                  <span class="thread-name">+ new thread</span>
+              <div class="mini">
+                <div class="thread-list">
+                  <div
+                    v-for="t in threads"
+                    :key="t.name"
+                    class="thread-row"
+                    :class="{ active: t.active }"
+                  >
+                    <span class="thread-name">{{ t.name }}</span>
+                    <span class="thread-when">{{ t.when }}</span>
+                  </div>
+                  <div class="thread-row new">
+                    <span class="thread-name">+ new thread</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ===== PLATFORM ==================================================== -->
-    <section class="group">
-      <div class="wrap">
-        <div class="group-head">
-          <div class="eyebrow">07 · Platform</div>
-          <h2>Your data, your device, your call.</h2>
-        </div>
+      <!-- ===== PLATFORM ==================================================== -->
+      <section class="group">
+        <div class="wrap">
+          <div class="group-head">
+            <div class="eyebrow">07 · Platform</div>
+            <h2>Your data, your device, your call.</h2>
+          </div>
 
-        <div class="card-grid">
-          <!-- Installable PWA · push · export -->
-          <div class="card wide">
-            <div class="card-head">
-              <span class="card-title">Installable PWA · push · export</span>
-              <span class="card-tag">CORE</span>
-            </div>
-            <div class="card-body">
-              Installs to your home screen on iOS, Android, and desktop.
-              Push reminders deliver through your phone's lock screen.
-              Your whole history exports as JSON or CSV whenever you want —
-              no paywall, no support ticket.
-            </div>
-            <div class="mini">
-              <div class="status-grid">
-                <div v-for="r in platformRows" :key="r.k" class="status-row">
-                  <span class="status-dot" :class="{ ok: r.ok }"></span>
-                  <span class="status-k">{{ r.k }}</span>
-                  <span class="status-v">{{ r.v }}</span>
-                </div>
+          <div class="card-grid">
+            <!-- Installable PWA · push · export -->
+            <div class="card wide">
+              <div class="card-head">
+                <span class="card-title">Installable PWA · push · export</span>
+                <span class="card-tag">CORE</span>
               </div>
-              <div class="export-bar">
-                <span class="export-file">protokol-lab-export-2026-04-22.json</span>
-                <span class="export-btn">↓ download</span>
+              <div class="card-body">
+                Installs to your home screen on iOS, Android, and desktop. Push
+                reminders deliver through your phone's lock screen. Your whole
+                history exports as JSON or CSV whenever you want — no paywall,
+                no support ticket.
+              </div>
+              <div class="mini">
+                <div class="status-grid">
+                  <div v-for="r in platformRows" :key="r.k" class="status-row">
+                    <span class="status-dot" :class="{ ok: r.ok }"></span>
+                    <span class="status-k">{{ r.k }}</span>
+                    <span class="status-v">{{ r.v }}</span>
+                  </div>
+                </div>
+                <div class="export-bar">
+                  <span class="export-file"
+                    >protokol-lab-export-2026-04-22.json</span
+                  >
+                  <span class="export-btn">↓ download</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ===== FINAL CTA =================================================== -->
-    <section class="final-cta">
-      <div class="wrap">
-        <h2>That's the tour.<br /><span class="accent">Start tracking.</span></h2>
-        <p>Free to start. Premium unlocks the AI and correlation charts from $6.58/mo (billed annually).</p>
-        <div class="cta-buttons">
-          <button class="btn-primary big" :disabled="demoStarting" @click="tryDemo">
-            {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
-          </button>
-          <button class="btn-secondary big" @click="goRegister">Sign up free</button>
+      <!-- ===== FINAL CTA =================================================== -->
+      <section class="final-cta">
+        <div class="wrap">
+          <h2>
+            That's the tour.<br /><span class="accent">Start tracking.</span>
+          </h2>
+          <p>
+            Free to start. Premium unlocks the AI and correlation charts from
+            $6.58/mo (billed annually).
+          </p>
+          <div class="cta-buttons">
+            <button
+              class="btn-primary big"
+              :disabled="demoStarting"
+              @click="tryDemo"
+            >
+              {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
+            </button>
+            <button class="btn-secondary big" @click="goRegister">
+              Sign up free
+            </button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
     </div>
   </MarketingLayout>
 </template>

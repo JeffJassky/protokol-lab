@@ -60,9 +60,11 @@ async function handleGoogleCredential(credential) {
 </script>
 
 <template>
-  <div class="login-page">
-    <div class="login-card">
-      <BrandWordmark class="auth-brand" :size="24" />
+  <div class="auth-page">
+    <div class="auth-card">
+      <router-link to="/" class="auth-brand-link" aria-label="Home">
+        <BrandWordmark class="auth-brand" :size="24" />
+      </router-link>
       <p class="subtitle">Track your nutrition and weight</p>
       <GoogleSignInButton
         text="signin_with"
@@ -97,14 +99,14 @@ async function handleGoogleCredential(credential) {
 </template>
 
 <style scoped>
-.login-page {
+.auth-page {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   background: var(--bg);
 }
-.login-card {
+.auth-card {
   width: 100%;
   max-width: 380px;
   background: var(--surface);
@@ -114,12 +116,12 @@ async function handleGoogleCredential(credential) {
 }
 
 @media (max-width: 768px) {
-  .login-page {
+  .auth-page {
     padding: 0;
     align-items: stretch;
     min-height: 100dvh;
   }
-  .login-card {
+  .auth-card {
     max-width: none;
     border: none;
     border-radius: 0;
@@ -131,7 +133,7 @@ async function handleGoogleCredential(credential) {
     flex: 1;
   }
 }
-.login-card h1 {
+.auth-card h1 {
   font-size: var(--font-size-xl);
   text-align: center;
   margin-bottom: var(--space-1);

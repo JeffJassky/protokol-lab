@@ -399,12 +399,14 @@ const aiTrail = [
             whole history.
           </p>
           <div class="hero-ctas">
-            <button class="btn-primary" :disabled="demoStarting" @click="tryDemo">
+            <button
+              class="btn-primary"
+              :disabled="demoStarting"
+              @click="tryDemo"
+            >
               {{ demoStarting ? 'Loading…' : "Try the demo →" }}
             </button>
-            <button class="btn-secondary" @click="goRegister">
-              Sign up
-            </button>
+            <button class="btn-secondary" @click="goRegister">Sign up</button>
             <button class="btn-tertiary" @click="goLogin">Sign in</button>
           </div>
           <div class="hero-meta">
@@ -413,6 +415,24 @@ const aiTrail = [
             </div>
             <div class="hero-meta-row">
               Free to start · Premium from ${{ premiumPlan.pricing.yearlyEffectiveMonthlyUsd
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -781,6 +801,24 @@ const aiTrail = [
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                           }}<span class="rolling-tgt">
                             / {{ rolling.weekTgt }}</span
                           >
@@ -790,6 +828,24 @@ const aiTrail = [
                         <div class="mini-eyebrow">left</div>
                         <div class="rolling-left">
                           {{ rolling.leftAbs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -887,34 +943,32 @@ const aiTrail = [
               An assistant that<br /><span class="accent">does the work.</span>
             </h2>
             <p class="lead">
-              Not a chatbot. Snap a photo of your plate or just tell it what
-              you ate — the AI identifies the food, checks your library,
-              searches common nutrition databases, falls back to a web
-              search, and writes the entry into your day. It also knows
-              every dose and symptom you've logged, so its advice is
-              grounded in your data, not generic GLP-1 talking points.
+              Not a chatbot. Snap a photo of your plate or just tell it what you
+              ate — the AI identifies the food, checks your library, searches
+              common nutrition databases, falls back to a web search, and writes
+              the entry into your day. It also knows every dose and symptom
+              you've logged, so its advice is grounded in your data, not generic
+              GLP-1 talking points.
             </p>
           </div>
           <div class="feat-row">
             <div class="feat-text">
               <h3 class="feat-head">
-                Show it. Tell it.<br /><span class="accent"
-                  >It logs it.</span
-                >
+                Show it. Tell it.<br /><span class="accent">It logs it.</span>
               </h3>
               <p class="feat-body">
                 Most trackers give you a chat window and call it AI. This one
-                actually does things. Snap a meal photo or describe what you
-                ate — it identifies the items, looks them up across your
-                library and common nutrition databases, falls back to a web
-                search if it has to, and writes the entries into today's log.
-                Then it tells you what you've got left to hit your targets.
+                actually does things. Snap a meal photo or describe what you ate
+                — it identifies the items, looks them up across your library and
+                common nutrition databases, falls back to a web search if it has
+                to, and writes the entries into today's log. Then it tells you
+                what you've got left to hit your targets.
               </p>
               <ul class="feat-bullets">
                 <li>
                   <span>
-                    <b>Show it your plate</b> · photo → identification →
-                    macros → log entry, end to end
+                    <b>Show it your plate</b> · photo → identification → macros
+                    → log entry, end to end
                   </span>
                 </li>
                 <li>
@@ -926,37 +980,26 @@ const aiTrail = [
                 <li>
                   <span>
                     <b>Knows your context</b> · every food, dose, weigh-in,
-                    symptom, and note is available — every answer is grounded
-                    in your data
+                    symptom, and note is available — every answer is grounded in
+                    your data
                   </span>
                 </li>
                 <li>
                   <span>
-                    <b>Hits your numbers</b> · "340 kcal and 80g protein to
-                    go" — and a list of foods from your library that get you
-                    there
+                    <b>Hits your numbers</b> · "340 kcal and 80g protein to go"
+                    — and a list of foods from your library that get you there
                   </span>
                 </li>
                 <li>
                   <span>
-                    <b>Reads symptoms with doses</b> · why the nausea is
-                    hitting on day 2, why your hunger comes back day 4
+                    <b>Reads symptoms with doses</b> · why the nausea is hitting
+                    on day 2, why your hunger comes back day 4
                   </span>
                 </li>
               </ul>
             </div>
             <div class="feat-visual">
               <div class="hero-terminal">
-                <div class="term-titlebar">
-                  <div class="term-dots">
-                    <span class="term-dot"></span><span class="term-dot"></span
-                    ><span class="term-dot"></span>
-                  </div>
-                  <span class="term-title">ai · tool trail</span>
-                  <span class="term-badge"
-                    ><span class="dot-live"></span>LIVE</span
-                  >
-                </div>
                 <div class="term-body" style="padding: 0;">
                   <div class="aichat">
                     <div class="aichat-msg user">
@@ -964,7 +1007,7 @@ const aiTrail = [
                       <div>I just ate a Sweetgreen Kale Caesar at lunch.</div>
                     </div>
                     <div class="aichat-msg ai">
-                      <div class="aichat-tag">Protokol Lab</div>
+                      <div class="aichat-tag">AI Coach</div>
                       <ol class="trail">
                         <li
                           v-for="(t, i) in aiTrail"
@@ -1274,6 +1317,24 @@ const aiTrail = [
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                 }}<span class="per"> / month</span>
               </div>
               <div class="price-desc">
@@ -1300,6 +1361,24 @@ const aiTrail = [
               <div class="price-kind">Unlimited</div>
               <div class="price-amount">
                 ${{ monthlyDisplay(unlimitedPlan)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1340,10 +1419,16 @@ const aiTrail = [
             actually working for you.
           </p>
           <div class="end-ctas">
-            <button class="btn-primary big" :disabled="demoStarting" @click="tryDemo">
+            <button
+              class="btn-primary big"
+              :disabled="demoStarting"
+              @click="tryDemo"
+            >
               {{ demoStarting ? 'Loading…' : 'Try the demo →' }}
             </button>
-            <button class="btn-secondary big" @click="goRegister">Sign up free</button>
+            <button class="btn-secondary big" @click="goRegister">
+              Sign up free
+            </button>
           </div>
         </div>
       </section>
@@ -1789,8 +1874,8 @@ section.hero { padding-top: 72px; padding-bottom: 96px; }
   border: 1px solid var(--border);
 }
 .fg-cell {
-  padding: 28px; border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  padding: 28px; border-right: 1px solid var(--bg);
+  border-bottom: 1px solid var(--bg);
   background: var(--surface);
   display: flex; flex-direction: column; gap: 14px;
   min-height: 260px;

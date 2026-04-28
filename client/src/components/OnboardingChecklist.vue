@@ -178,7 +178,7 @@ const visible = computed(() => {
                 >
                   {{ pushStore.loading ? 'Enabling…' : 'Enable reminders' }}
                 </button>
-                <router-link to="/settings" class="oc-skip"
+                <router-link to="/profile/settings/notifications" class="oc-skip"
                   >Manage later in Settings</router-link
                 >
               </div>

@@ -1,7 +1,8 @@
 import { api } from './index.js';
 
 // Starts a Stripe Checkout session and sends the browser to Stripe-hosted
-// payment flow. On success Stripe redirects back to /account?checkout=success.
+// payment flow. On success Stripe redirects back to
+// /profile/settings/account/subscription?checkout=success.
 export async function startCheckout(planId, interval) {
   const { url } = await api.post('/api/stripe/create-checkout-session', {
     planId,

@@ -78,7 +78,9 @@ async function handleGoogleCredential(credential) {
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <BrandWordmark class="auth-brand" :size="24" />
+      <router-link to="/" class="auth-brand-link" aria-label="Home">
+        <BrandWordmark class="auth-brand" :size="24" />
+      </router-link>
       <h1>Create your account</h1>
       <p v-if="intendedPlan" class="subtitle trial-subtitle">
         Start your <strong>14-day free trial</strong> of

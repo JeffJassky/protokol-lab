@@ -15,6 +15,7 @@
   "dependencies": {
     "@agendajs/mongo-backend": "^4.0.1",
     "@aws-sdk/client-s3": "^3.1035.0",
+    "@jeffjassky/marketing-admin": "file:../marketing",
     "@aws-sdk/s3-request-presigner": "^3.1035.0",
     "@google/genai": "^1.50.1",
     "@sendgrid/mail": "^8.1.6",

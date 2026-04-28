@@ -535,7 +535,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- TOP ROW: Nutrition (half) + stacked Weight/Dose (half)       -->
     <!-- =========================================================== -->
-    <div v-if="foodlogStore.summary" class="meal-card nutrition-card">
+    <div v-if="foodlogStore.summary" id="nutrition" class="meal-card nutrition-card">
       <div class="meal-header"><h3>Nutrition</h3></div>
       <DailySummary :summary="foodlogStore.summary" />
     </div>
@@ -543,7 +543,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- ROLLING 7-DAY BUDGET                                         -->
     <!-- =========================================================== -->
-    <div class="weekly-wrap">
+    <div id="weekly" class="weekly-wrap">
       <WeeklyBudgetStrip v-if="planLimits.hasFeature('rolling7DayTargets')" />
       <button
         v-else-if="rolling7DayUpgradeTier"
@@ -564,7 +564,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- BODY METRICS + COMPOUNDS                                      -->
     <!-- =========================================================== -->
-    <div class="meal-card compact">
+    <div id="body" class="meal-card compact">
       <div class="body-metrics">
         <div class="metric-col" v-tooltip="'Log your weight'">
           <div class="metric-label">Weight</div>
@@ -633,7 +633,7 @@ function onNoteBlur() {
       </div>
     </div>
 
-    <div v-if="enabledCompounds.length" class="meal-card compact compounds-card">
+    <div v-if="enabledCompounds.length" id="compounds" class="meal-card compact compounds-card">
       <div
         v-for="compound in enabledCompounds"
         :key="compound._id"
@@ -693,7 +693,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- FOOD LOG                                                     -->
     <!-- =========================================================== -->
-    <div class="meal-card food-card">
+    <div id="food" class="meal-card food-card">
       <div class="meal-header">
         <h3>Food</h3>
       </div>
@@ -990,7 +990,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- SYMPTOMS                                                     -->
     <!-- =========================================================== -->
-    <div class="meal-card">
+    <div id="symptoms" class="meal-card">
       <div class="meal-header">
         <h3>
           Symptoms
@@ -1094,7 +1094,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- DAY NOTE                                                     -->
     <!-- =========================================================== -->
-    <div class="meal-card">
+    <div id="notes" class="meal-card">
       <div class="meal-header">
         <h3>Journal Notes</h3>
         <span v-if="notesStore.saving" class="card-sub">saving...</span>
@@ -1115,7 +1115,9 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- PHOTO LOG                                                    -->
     <!-- =========================================================== -->
-    <PhotoCaptureCard :date="date" />
+    <div id="photos">
+      <PhotoCaptureCard :date="date" />
+    </div>
 
     <DatePickerModal
       :open="pickerOpen"
@@ -1162,7 +1164,7 @@ function onNoteBlur() {
   flex-direction: column;
   gap: var(--space-3);
 }
-.meal-card.compact { padding: var(--space-3) var(--space-4); }
+.meal-card.compact { padding: var(--space-4) var(--space-5); }
 .meal-card.compact .meal-header { margin-bottom: var(--space-1); }
 .body-metrics {
   display: flex;

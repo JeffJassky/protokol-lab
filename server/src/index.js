@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { runStartupBackup } from './services/backup.js';
 import { initPush } from './services/push.js';
 import { startScheduler, stopScheduler } from './services/scheduler.js';
+import { startMarketingAdmin, stopMarketingAdmin } from './services/marketingAdmin.js';
 import { logger, childLogger, errContext } from './lib/logger.js';
 
 const log = childLogger('boot');
@@ -47,6 +48,8 @@ const shutdown = async (signal) => {
     }
     log.debug('stopping scheduler');
     await stopScheduler();
+    log.debug('stopping marketing admin');
+    await stopMarketingAdmin();
     log.debug('disconnecting mongo');
     await mongoose.disconnect();
     log.info('shutdown complete');
@@ -80,6 +83,7 @@ try {
   runStartupBackup();
   initPush();
   await startScheduler();
+  await startMarketingAdmin();
 
   const app = createApp();
   server = app.listen(PORT, () => {

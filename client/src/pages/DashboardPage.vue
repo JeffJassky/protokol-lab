@@ -70,6 +70,17 @@ function applyChartFont() {
   if (family) ChartJS.defaults.font.family = family;
 }
 let themeObserver = null;
+
+// Mobile breakpoint drives chart-axis behavior: on mobile we hide y-axis
+// tick columns and draw first/last value labels inline (see
+// endpointLabelsPlugin) to recover plot width.
+const isMobile = ref(false);
+let mobileMql = null;
+function syncMobile() {
+  if (typeof window === 'undefined') return;
+  isMobile.value = window.matchMedia('(max-width: 768px)').matches;
+}
+
 onMounted(() => {
   applyChartFont();
   themeObserver = new MutationObserver(() => {
@@ -77,8 +88,17 @@ onMounted(() => {
     applyChartFont();
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
+
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    mobileMql = window.matchMedia('(max-width: 768px)');
+    syncMobile();
+    mobileMql.addEventListener('change', syncMobile);
+  }
 });
-onUnmounted(() => { themeObserver?.disconnect(); });
+onUnmounted(() => {
+  themeObserver?.disconnect();
+  mobileMql?.removeEventListener('change', syncMobile);
+});
 
 // ---- Series definitions -------------------------------------------------
 
@@ -316,6 +336,60 @@ function onChartMouseLeave() {
   hoveredNote.value = null;
 }
 
+// On mobile, the y-axis tick columns (left=weight, right=calories) are
+// hidden to recover plot width. This plugin replaces them with a single
+// pill at the first and last point of each axis-bearing series so users
+// still get an absolute reference at the start + end of the visible range.
+const endpointLabelsPlugin = {
+  id: 'endpointLabels',
+  afterDatasetsDraw(chart) {
+    if (!isMobile.value) return;
+
+    // Only the series whose y-axis we hid get inline endpoint labels.
+    // Other series (waist, dosage, symptoms) already have their own
+    // datapoint annotations.
+    const SERIES = [
+      { label: 'Weight', unit: ' lbs', fmt: (v) => `${v} lbs` },
+      { label: 'Calories', unit: ' kcal', fmt: (v) => `${Math.round(v).toLocaleString()} kcal` },
+    ];
+
+    for (const s of SERIES) {
+      const idx = chart.data.datasets.findIndex((d) => d?.label === s.label);
+      if (idx === -1) return;
+      const meta = chart.getDatasetMeta(idx);
+      const ds = chart.data.datasets[idx];
+      if (!meta?.data?.length) continue;
+
+      // First non-null and last non-null point — skip nulls so a series
+      // with leading/trailing gaps still gets meaningful endpoints.
+      let firstI = -1;
+      let lastI = -1;
+      for (let i = 0; i < ds.data.length; i += 1) {
+        if (ds.data[i]?.y != null) {
+          if (firstI === -1) firstI = i;
+          lastI = i;
+        }
+      }
+      if (firstI === -1) continue;
+
+      const color = ds.borderColor || ds.backgroundColor || '#999';
+      const firstPt = meta.data[firstI];
+      const lastPt = meta.data[lastI];
+      if (!firstPt || !lastPt) continue;
+
+      // Anchor pills at the chart edges so they never clip when the line
+      // hugs the start/end of the range. Vertical position tracks each
+      // endpoint so the label visually attaches to the line.
+      const left = chart.chartArea.left + 24;
+      const right = chart.chartArea.right - 24;
+      drawPill(chart.ctx, s.fmt(ds.data[firstI].y), left, firstPt.y, color, false, 0);
+      if (lastI !== firstI) {
+        drawPill(chart.ctx, s.fmt(ds.data[lastI].y), right, lastPt.y, color, false, 0);
+      }
+    }
+  },
+};
+
 function drawPill(ctx, label, x, y, color, showTick, tickBottom) {
   ctx.save();
   const monoFamily = cssVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace');
@@ -404,7 +478,7 @@ onMounted(async () => {
   ]);
 
   if (!settingsStore.settings) {
-    router.push('/settings');
+    router.push('/profile');
   }
 });
 
@@ -649,6 +723,13 @@ const chartOptions = computed(() => {
         type: 'time',
         time: { unit: 'day', tooltipFormat: 'MMM d, yyyy' },
         grid: { display: false },
+        ticks: {
+          // Cap tick density so the x-axis doesn't read as a wall of dates.
+          // Mobile is tighter (4) since labels are rotated and plot width is
+          // already constrained.
+          maxTicksLimit: isMobile.value ? 4 : 8,
+          autoSkipPadding: 16,
+        },
       },
     },
     plugins: {
@@ -661,12 +742,18 @@ const chartOptions = computed(() => {
     },
   };
 
-  // Left axis: weight (visible only when weight is active).
+  const monoFamily = cssVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace');
+
+  // Left axis: weight (visible only when weight is active). On mobile, hide
+  // the tick column + title; endpointLabelsPlugin draws first/last values
+  // inline to free up horizontal plot width.
   if (usedAxes.has('y')) {
     opts.scales.y = {
       position: 'left',
-      title: { display: true, text: 'lbs', color: cssVar('--chart-axis', '#9ca3af') },
-      grid: { color: cssVar('--chart-grid', '#f3f4f6') },
+      title: { display: !isMobile.value, text: 'lbs', color: cssVar('--chart-axis', '#9ca3af') },
+      ticks: { display: !isMobile.value, font: { family: monoFamily }, maxTicksLimit: 6 },
+      grid: { color: cssVar('--chart-grid', '#f3f4f6'), drawTicks: !isMobile.value },
+      border: { display: !isMobile.value },
     };
   }
 
@@ -674,8 +761,14 @@ const chartOptions = computed(() => {
   if (usedAxes.has('yCal')) {
     opts.scales.yCal = {
       position: 'right',
-      title: { display: activeSeries.has('calories'), text: 'Calories', color: cssVar('--color-cal', '#3b82f6') },
-      grid: { drawOnChartArea: false },
+      title: {
+        display: !isMobile.value && activeSeries.has('calories'),
+        text: 'Calories',
+        color: cssVar('--color-cal', '#3b82f6'),
+      },
+      ticks: { display: !isMobile.value, font: { family: monoFamily }, maxTicksLimit: 6 },
+      grid: { drawOnChartArea: false, drawTicks: !isMobile.value },
+      border: { display: !isMobile.value },
       min: 0,
     };
     if (tdee.value && activeSeries.has('calories')) {
@@ -714,7 +807,11 @@ const hasAnyData = computed(() => chartDataClean.value.datasets.length > 0);
 // logged doesn't collide on a single `dose` field.
 const tableCompounds = computed(() => compoundsStore.enabled);
 
-const logTableRows = computed(() => {
+const LOG_INITIAL = 7;
+const LOG_STEP = 15;
+const logRowLimit = ref(LOG_INITIAL);
+
+const allLogRows = computed(() => {
   const byDate = new Map();
   const ensure = (dateStr) => {
     if (!byDate.has(dateStr)) byDate.set(dateStr, {
@@ -755,8 +852,14 @@ const logTableRows = computed(() => {
     ensure(n.date).note = n.text;
   }
 
-  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
+  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
 });
+
+const logTableRows = computed(() => allLogRows.value.slice(0, logRowLimit.value));
+const hasMoreLogRows = computed(() => allLogRows.value.length > logRowLimit.value);
+function showMoreLogRows() {
+  logRowLimit.value += LOG_STEP;
+}
 
 
 function formatDate(dateStr) {
@@ -793,6 +896,26 @@ const etaToGoal = computed(() => {
   }
   return { label, good: true };
 });
+
+// Color helpers for the stat cards. Direction-sensitive stats (Total Change,
+// % Change, Weekly Avg, Trend) compare to the user's goal direction so green
+// = toward goal regardless of whether they're losing or gaining.
+function goalDirectionClass(value) {
+  if (value == null) return '';
+  const toGoal = weightStore.stats?.toGoal;
+  if (toGoal == null || Math.abs(Number(toGoal)) < 0.1) return '';
+  if (Math.abs(value) < 0.05) return '';
+  const needLoss = Number(toGoal) > 0;
+  const moving = value < 0 ? 'lose' : 'gain';
+  return (needLoss && moving === 'lose') || (!needLoss && moving === 'gain')
+    ? 'green'
+    : 'red';
+}
+function bmiClass(bmi) {
+  const n = Number(bmi);
+  if (!Number.isFinite(n)) return '';
+  return n >= 18.5 && n < 25 ? 'green' : 'red';
+}
 </script>
 
 <template>
@@ -808,49 +931,101 @@ const etaToGoal = computed(() => {
     <div v-if="weightStore.stats" class="stats-grid">
       <div class="stat-card">
         <span class="stat-label">Current</span>
-        <span class="stat-value">{{ weightStore.stats.currentWeight }} lbs</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">Total Change</span>
-        <span class="stat-value" :class="weightStore.stats.totalChange < 0 ? 'green' : 'red'">
-          {{ weightStore.stats.totalChange > 0 ? '+' : '' }}{{ weightStore.stats.totalChange }} lbs
-        </span>
+        <span class="stat-value"
+          >{{ weightStore.stats.currentWeight }} lbs</span
+        >
       </div>
       <div class="stat-card">
         <span class="stat-label">BMI</span>
-        <span class="stat-value">{{ weightStore.stats.currentBMI }}</span>
+        <span
+          class="stat-value"
+          :class="bmiClass(weightStore.stats.currentBMI)"
+          >{{ weightStore.stats.currentBMI }}</span
+        >
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Total Change</span>
+        <span
+          class="stat-value"
+          :class="goalDirectionClass(weightStore.stats.totalChange)"
+        >
+          {{ weightStore.stats.totalChange > 0 ? '+' : ''
+
+
+
+
+
+
+
+
+
+
+
+          }}{{ weightStore.stats.totalChange }} lbs
+        </span>
       </div>
       <div class="stat-card">
         <span class="stat-label">% Change</span>
-        <span class="stat-value">{{ weightStore.stats.percentChange }}%</span>
+        <span
+          class="stat-value"
+          :class="goalDirectionClass(weightStore.stats.percentChange)"
+          >{{ weightStore.stats.percentChange }}%</span
+        >
       </div>
       <div class="stat-card">
         <span class="stat-label">Weekly Avg</span>
-        <span class="stat-value">{{ weightStore.stats.weeklyAvg }} lbs/wk</span>
-      </div>
-      <div v-if="weightStore.stats.trendLbsPerWeek != null" class="stat-card">
-        <span class="stat-label" v-tooltip="'Best-fit slope across all weigh-ins (linear regression)'">Trend</span>
         <span
           class="stat-value"
-          :class="weightStore.stats.trendLbsPerWeek < 0 ? 'green' : weightStore.stats.trendLbsPerWeek > 0 ? 'red' : ''"
+          :class="goalDirectionClass(weightStore.stats.weeklyAvg)"
+          >{{ weightStore.stats.weeklyAvg }} lbs/wk</span
         >
-          {{ weightStore.stats.trendLbsPerWeek > 0 ? '+' : '' }}{{ weightStore.stats.trendLbsPerWeek }} lbs/wk
+      </div>
+      <div v-if="weightStore.stats.trendLbsPerWeek != null" class="stat-card">
+        <span
+          class="stat-label"
+          v-tooltip="'Best-fit slope across all weigh-ins (linear regression)'"
+          >Trend</span
+        >
+        <span
+          class="stat-value"
+          :class="goalDirectionClass(weightStore.stats.trendLbsPerWeek)"
+        >
+          {{ weightStore.stats.trendLbsPerWeek > 0 ? '+' : ''
+
+
+
+
+
+
+
+
+
+
+
+          }}{{ weightStore.stats.trendLbsPerWeek }} lbs/wk
+        </span>
+      </div>
+      <div v-if="etaToGoal" class="stat-card">
+        <span
+          class="stat-label"
+          v-tooltip="'Estimated time to goal at current trend'"
+          >ETA</span
+        >
+        <span class="stat-value" :class="etaToGoal.good ? 'green' : ''">
+          {{ etaToGoal.label }}
         </span>
       </div>
       <div v-if="weightStore.stats.toGoal != null" class="stat-card">
         <span class="stat-label">To Goal</span>
         <span class="stat-value">{{ weightStore.stats.toGoal }} lbs</span>
       </div>
-      <div v-if="etaToGoal" class="stat-card">
-        <span class="stat-label" v-tooltip="'Estimated time to goal at current trend'">ETA</span>
-        <span class="stat-value" :class="etaToGoal.good ? 'green' : ''">
-          {{ etaToGoal.label }}
-        </span>
-      </div>
     </div>
 
     <!-- Rolling 7-day budget -->
-    <div v-if="planLimits.hasFeature('rolling7DayTargets')" class="card weekly-card">
+    <div
+      v-if="planLimits.hasFeature('rolling7DayTargets')"
+      class="card weekly-card"
+    >
       <WeeklyBudgetStrip :default-expanded="true" />
     </div>
     <button
@@ -912,7 +1087,11 @@ const etaToGoal = computed(() => {
                   clickable
                 />
               </div>
-              <div v-for="[cat, items] in seriesByCategory" :key="cat" class="pop-group">
+              <div
+                v-for="[cat, items] in seriesByCategory"
+                :key="cat"
+                class="pop-group"
+              >
                 <div class="pop-cat">{{ cat }}</div>
                 <label
                   v-for="s in items"
@@ -939,14 +1118,21 @@ const etaToGoal = computed(() => {
         @mousemove="onChartMouseMove"
         @mouseleave="onChartMouseLeave"
       >
-        <Line v-if="hasAnyData" :data="chartDataClean" :options="chartOptions" :plugins="[pillLabelsPlugin, noteIconsPlugin]" />
+        <Line
+          v-if="hasAnyData"
+          :data="chartDataClean"
+          :options="chartOptions"
+          :plugins="[pillLabelsPlugin, noteIconsPlugin, endpointLabelsPlugin]"
+        />
         <p v-else class="empty">Select a series above to view data.</p>
         <div
           v-if="hoveredNote"
           class="popover note-popover note-chart-popover"
           :style="{ left: hoveredNote.x + 'px', top: hoveredNote.y + 'px' }"
         >
-          <div class="note-pop-title">Note · {{ formatDate(hoveredNote.date) }}</div>
+          <div class="note-pop-title">
+            Note · {{ formatDate(hoveredNote.date) }}
+          </div>
           <div class="note-pop-text">{{ hoveredNote.text }}</div>
         </div>
       </div>
@@ -959,101 +1145,153 @@ const etaToGoal = computed(() => {
     <div class="card">
       <h3>Log History</h3>
       <div class="table-wrap">
-      <table v-if="logTableRows.length" class="log-table">
-        <thead>
-          <tr>
-            <th class="lt-date">Date</th>
-            <th class="lt-num">Weight</th>
-            <th class="lt-num">Waist</th>
-            <th v-for="c in tableCompounds" :key="c._id" class="lt-num" :style="{ color: c.color || '' }">{{ c.name }}</th>
-            <th class="lt-num lt-cal">Kcal</th>
-            <th class="lt-num lt-pro">Pro</th>
-            <th class="lt-num lt-fat">Fat</th>
-            <th class="lt-num lt-carb">Carbs</th>
-            <th class="lt-num lt-score">Score</th>
-            <th class="lt-sym">Symptoms</th>
-            <th class="lt-note">Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in logTableRows" :key="row.date" class="lt-row" @click="router.push(`/?date=${row.date}`)">
-            <td class="lt-date">{{ formatDate(row.date) }}</td>
-            <td class="lt-num">{{ row.weight != null ? `${row.weight} lb` : '' }}</td>
-            <td class="lt-num">{{ row.waist != null ? `${row.waist}"` : '' }}</td>
-            <td v-for="c in tableCompounds" :key="c._id" class="lt-num lt-dose">
-              <span
-                v-if="row.doses[c._id] != null"
-                class="dose-tag"
-                :style="{ background: c.color || 'var(--border)', color: contrastText(c.color) }"
-              >{{ row.doses[c._id] }}{{ c.doseUnit }}</span>
-            </td>
-            <td class="lt-num lt-cal">{{ row.cal != null ? row.cal.toLocaleString() : '' }}</td>
-            <td class="lt-num lt-pro">{{ row.protein != null ? `${row.protein}g` : '' }}</td>
-            <td class="lt-num lt-fat">{{ row.fat != null ? `${row.fat}g` : '' }}</td>
-            <td class="lt-num lt-carb">{{ row.carbs != null ? `${row.carbs}g` : '' }}</td>
-            <td class="lt-num lt-score" :class="row.score != null ? (row.score >= 85 ? 'score-good' : row.score >= 60 ? 'score-ok' : 'score-bad') : ''">{{ row.score != null ? row.score : '' }}</td>
-            <td class="lt-sym">
-              <VDropdown
-                v-if="symptomsForDate(row.date).length"
-                :triggers="['hover', 'focus']"
-                :popper-triggers="['hover']"
-                :delay="{ show: 100, hide: 100 }"
-                placement="left"
-                :distance="8"
+        <table v-if="logTableRows.length" class="log-table">
+          <thead>
+            <tr>
+              <th class="lt-date"></th>
+              <th class="lt-num">Weight</th>
+              <th class="lt-num">Waist</th>
+              <th
+                v-for="c in tableCompounds"
+                :key="c._id"
+                class="lt-num"
+                :style="{ color: c.color || '' }"
+              >
+                {{ c.name }}
+              </th>
+              <th class="lt-num lt-cal">Kcal</th>
+              <th class="lt-num lt-pro">Pro</th>
+              <th class="lt-num lt-fat">Fat</th>
+              <th class="lt-num lt-carb">Carbs</th>
+              <th class="lt-num lt-score">Score</th>
+              <th class="lt-sym">Symptoms</th>
+              <th class="lt-note">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in logTableRows"
+              :key="row.date"
+              class="lt-row"
+              @click="router.push(`/?date=${row.date}`)"
+            >
+              <td class="lt-date">{{ formatDate(row.date) }}</td>
+              <td class="lt-num">
+                {{ row.weight != null ? `${row.weight} lb` : '' }}
+              </td>
+              <td class="lt-num">
+                {{ row.waist != null ? `${row.waist}"` : '' }}
+              </td>
+              <td
+                v-for="c in tableCompounds"
+                :key="c._id"
+                class="lt-num lt-dose"
               >
                 <span
-                  class="sym-dot"
-                  :style="{ background: severityColor(symptomsForDate(row.date)[0].severity) }"
-                />
-                <template #popper>
-                  <div class="popover sym-popover">
-                    <div class="sym-pop-title">Symptoms · {{ formatDate(row.date) }}</div>
-                    <ul class="sym-pop-list">
-                      <li v-for="s in symptomsForDate(row.date)" :key="s.symptomId">
-                        <span class="sym-pop-sev" :style="{ color: severityColor(s.severity) }">{{ s.severity }}</span>
-                        <span class="sym-pop-name">{{ s.name }}</span>
-                      </li>
-                    </ul>
-                  </div>
-                </template>
-              </VDropdown>
-            </td>
-            <td class="lt-note">
-              <VDropdown
-                v-if="row.note"
-                :triggers="['hover', 'focus']"
-                :popper-triggers="['hover']"
-                :delay="{ show: 100, hide: 100 }"
-                placement="left"
-                :distance="8"
+                  v-if="row.doses[c._id] != null"
+                  class="dose-tag"
+                  :style="{ background: c.color || 'var(--border)', color: contrastText(c.color) }"
+                  >{{ row.doses[c._id] }}{{ c.doseUnit }}</span
+                >
+              </td>
+              <td class="lt-num lt-cal">
+                {{ row.cal != null ? row.cal.toLocaleString() : '' }}
+              </td>
+              <td class="lt-num lt-pro">
+                {{ row.protein != null ? `${row.protein}g` : '' }}
+              </td>
+              <td class="lt-num lt-fat">
+                {{ row.fat != null ? `${row.fat}g` : '' }}
+              </td>
+              <td class="lt-num lt-carb">
+                {{ row.carbs != null ? `${row.carbs}g` : '' }}
+              </td>
+              <td
+                class="lt-num lt-score"
+                :class="row.score != null ? (row.score >= 85 ? 'score-good' : row.score >= 60 ? 'score-ok' : 'score-bad') : ''"
               >
-                <span class="note-icon" @click.stop>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-label="Note"
-                  >
-                    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                    <path d="m15 5 4 4" />
-                  </svg>
-                </span>
-                <template #popper>
-                  <div class="popover note-popover">
-                    <div class="note-pop-title">Note · {{ formatDate(row.date) }}</div>
-                    <div class="note-pop-text">{{ row.note }}</div>
-                  </div>
-                </template>
-              </VDropdown>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else class="empty">No entries yet.</p>
+                {{ row.score != null ? row.score : '' }}
+              </td>
+              <td class="lt-sym">
+                <VDropdown
+                  v-if="symptomsForDate(row.date).length"
+                  :triggers="['hover', 'focus']"
+                  :popper-triggers="['hover']"
+                  :delay="{ show: 100, hide: 100 }"
+                  placement="left"
+                  :distance="8"
+                >
+                  <span
+                    class="sym-dot"
+                    :style="{ background: severityColor(symptomsForDate(row.date)[0].severity) }"
+                  />
+                  <template #popper>
+                    <div class="popover sym-popover">
+                      <div class="sym-pop-title">
+                        Symptoms · {{ formatDate(row.date) }}
+                      </div>
+                      <ul class="sym-pop-list">
+                        <li
+                          v-for="s in symptomsForDate(row.date)"
+                          :key="s.symptomId"
+                        >
+                          <span
+                            class="sym-pop-sev"
+                            :style="{ color: severityColor(s.severity) }"
+                            >{{ s.severity }}</span
+                          >
+                          <span class="sym-pop-name">{{ s.name }}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </template>
+                </VDropdown>
+              </td>
+              <td class="lt-note">
+                <VDropdown
+                  v-if="row.note"
+                  :triggers="['hover', 'focus']"
+                  :popper-triggers="['hover']"
+                  :delay="{ show: 100, hide: 100 }"
+                  placement="left"
+                  :distance="8"
+                >
+                  <span class="note-icon" @click.stop>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-label="Note"
+                    >
+                      <path
+                        d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
+                      />
+                      <path d="m15 5 4 4" />
+                    </svg>
+                  </span>
+                  <template #popper>
+                    <div class="popover note-popover">
+                      <div class="note-pop-title">
+                        Note · {{ formatDate(row.date) }}
+                      </div>
+                      <div class="note-pop-text">{{ row.note }}</div>
+                    </div>
+                  </template>
+                </VDropdown>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="empty">No entries yet.</p>
+      </div>
+      <div v-if="hasMoreLogRows" class="log-more-wrap">
+        <button type="button" class="log-more-btn" @click="showMoreLogRows">
+          Show more
+        </button>
       </div>
     </div>
   </div>
@@ -1070,7 +1308,10 @@ const etaToGoal = computed(() => {
   margin-bottom: var(--space-4);
 }
 .card h3 { font-size: var(--font-size-m); margin-bottom: var(--space-3); }
-.weekly-card { padding: 0; overflow: hidden; }
+/* Wrapper deliberately renders no padding — the inner WeeklyBudgetStrip
+   header/body provide their own. The mobile global .card rule otherwise
+   bumps padding to var(--space-5), which would nest with the inner padding. */
+.weekly-card { padding: 0 !important; overflow: hidden; }
 .weekly-upsell {
   display: flex;
   flex-direction: column;
@@ -1119,21 +1360,23 @@ const etaToGoal = computed(() => {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-medium);
-  padding: var(--space-3);
-  text-align: center;
+  padding: var(--space-3) var(--space-4);
 }
 .stat-label {
   display: block;
+  font-family: var(--font-display);
   font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wider);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-weight: var(--font-weight-bold);
-  margin-bottom: var(--space-1);
 }
 .stat-value {
+  display: block;
+  font-family: var(--font-display);
   font-size: var(--font-size-l);
   font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
   color: var(--text);
   white-space: nowrap;
 }
@@ -1153,6 +1396,7 @@ const etaToGoal = computed(() => {
   background: var(--bg);
   padding: 2px;
   gap: 2px;
+  font-family: var(--font-display);
 }
 .range-buttons button {
   padding: 0.25rem 0.65rem;
@@ -1178,6 +1422,7 @@ const etaToGoal = computed(() => {
   gap: var(--space-1);
   margin-bottom: var(--space-3);
   position: relative;
+  font-family: var(--font-display);
 }
 .chip {
   display: inline-flex;
@@ -1186,7 +1431,7 @@ const etaToGoal = computed(() => {
   padding: var(--space-1) var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-small);
-  background: var(--border);
+  background: var(--surface-raised);
   cursor: pointer;
   font-size: var(--font-size-xs);
   color: var(--text);
@@ -1287,7 +1532,32 @@ const etaToGoal = computed(() => {
   z-index: 20;
 }
 
-.table-wrap { position: relative; }
+.table-wrap {
+  position: relative;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrap .log-table { min-width: max-content; }
+.log-more-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-3);
+}
+.log-more-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-s);
+  padding: var(--space-2) var(--space-4);
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+.log-more-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
 .note-icon {
   display: inline-flex;
   align-items: center;
@@ -1323,7 +1593,7 @@ const etaToGoal = computed(() => {
 .log-table tbody tr:last-child td { border-bottom: none; }
 .lt-row { cursor: pointer; }
 .lt-row:hover td { background: var(--bg); }
-.log-table td.lt-date { text-align: left; white-space: nowrap; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: var(--tracking-wide); font-weight: var(--font-weight-medium); }
+.log-table td.lt-date { text-align: left; white-space: nowrap; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: var(--tracking-wide); font-weight: var(--font-weight-medium); font-family: var(--font-display); }
 .lt-num { text-align: right; white-space: nowrap; }
 .dose-tag {
   display: inline-block;

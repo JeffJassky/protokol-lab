@@ -28,6 +28,7 @@ import testHelperRoutes from './routes/testHelpers.js';
 import { requireAuth, requireAuthUser, requireRealProfile } from './middleware/requireAuth.js';
 import { requireAdmin } from './middleware/requireAdmin.js';
 import { logger, httpLogger, childLogger, errContext } from './lib/logger.js';
+import { getMarketingAdmin } from './services/marketingAdmin.js';
 
 // Build the Express app without starting the HTTP listener, connecting to
 // Mongo, or booting the scheduler. Tests import this to run routes against
@@ -148,6 +149,14 @@ export function createApp({ serveClient = true } = {}) {
   app.use('/api/support', requireAuth, requireAuthUser, supportRoutes);
   app.use('/api/admin/support', requireAuth, requireAuthUser, requireAdmin, adminSupportRoutes);
   app.use('/api/admin', requireAuth, requireAuthUser, requireAdmin, adminRoutes);
+
+  // Marketing admin suite — mounted at /admin/marketing. Owns its own
+  // Mongo connection, Express subtree, and Vue SPA. Auth chain matches
+  // the rest of the admin surface (cookie/JWT → user → admin).
+  const marketing = getMarketingAdmin();
+  if (marketing) {
+    app.use('/admin/marketing', marketing.router);
+  }
 
   if (serveClient) {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -28,7 +28,9 @@ async function handleSubmit() {
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <BrandWordmark class="auth-brand" :size="24" />
+      <router-link to="/" class="auth-brand-link" aria-label="Home">
+        <BrandWordmark class="auth-brand" :size="24" />
+      </router-link>
       <h1>Reset your password</h1>
 
       <template v-if="!submitted">

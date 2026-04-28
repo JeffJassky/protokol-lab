@@ -1,44 +1,54 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useDemoStore } from '../stores/demo.js';
-import LandingPage from '../pages/LandingPage.vue';
-import FeaturesPage from '../pages/FeaturesPage.vue';
-import PricingPage from '../pages/PricingPage.vue';
-import AiPage from '../pages/AiPage.vue';
-import CompoundsPage from '../pages/CompoundsPage.vue';
-import FaqPage from '../pages/FaqPage.vue';
-import AboutPage from '../pages/AboutPage.vue';
-import TermsPage from '../pages/TermsPage.vue';
-import PrivacyPage from '../pages/PrivacyPage.vue';
-import MedicalAdvisoryPage from '../pages/MedicalAdvisoryPage.vue';
-import BlogIndexPage from '../pages/BlogIndexPage.vue';
-import TirzepatideHalfLifePage from '../pages/blog/TirzepatideHalfLifePage.vue';
-import WeeklyCalorieBudgetPage from '../pages/blog/WeeklyCalorieBudgetPage.vue';
-import Glp1NauseaTimelinePage from '../pages/blog/Glp1NauseaTimelinePage.vue';
-import OzempicVsWegovyPage from '../pages/blog/OzempicVsWegovyPage.vue';
-import ManagingSideEffectsPage from '../pages/blog/ManagingSideEffectsPage.vue';
-import AdhdNutritionTrackerPage from '../pages/blog/AdhdNutritionTrackerPage.vue';
-import CompareIndexPage from '../pages/CompareIndexPage.vue';
-import ComparisonPage from '../pages/ComparisonPage.vue';
-import LoginPage from '../pages/LoginPage.vue';
-import RegisterPage from '../pages/RegisterPage.vue';
-import StartPage from '../pages/StartPage.vue';
-import ForgotPasswordPage from '../pages/ForgotPasswordPage.vue';
-import ResetPasswordPage from '../pages/ResetPasswordPage.vue';
-import DashboardPage from '../pages/DashboardPage.vue';
-import SettingsPage from '../pages/SettingsPage.vue';
-import LogPage from '../pages/LogPage.vue';
-import WelcomePage from '../pages/WelcomePage.vue';
-import FoodSearchPage from '../pages/FoodSearchPage.vue';
-import AdminDashboardPage from '../pages/AdminDashboardPage.vue';
-import AdminUsersPage from '../pages/AdminUsersPage.vue';
-import AdminUserDetailPage from '../pages/AdminUserDetailPage.vue';
-import SupportPage from '../pages/SupportPage.vue';
-import SupportTicketDetailPage from '../pages/SupportTicketDetailPage.vue';
-import FeatureRequestDetailPage from '../pages/FeatureRequestDetailPage.vue';
-import AdminSupportPage from '../pages/AdminSupportPage.vue';
-import AdminSupportTicketPage from '../pages/AdminSupportTicketPage.vue';
-import AdminFeatureRequestPage from '../pages/AdminFeatureRequestPage.vue';
+
+// Route components are lazy-loaded so each page ships in its own chunk.
+// Marketing pages don't pull Chart.js; the login flow doesn't pull the
+// dashboard. Vite's prerender step (puppeteer) waits on networkidle, so
+// the dynamic imports resolve before HTML is snapshotted.
+const LandingPage = () => import('../pages/LandingPage.vue');
+const FeaturesPage = () => import('../pages/FeaturesPage.vue');
+const PricingPage = () => import('../pages/PricingPage.vue');
+const AiPage = () => import('../pages/AiPage.vue');
+const CompoundsPage = () => import('../pages/CompoundsPage.vue');
+const FaqPage = () => import('../pages/FaqPage.vue');
+const AboutPage = () => import('../pages/AboutPage.vue');
+const TermsPage = () => import('../pages/TermsPage.vue');
+const PrivacyPage = () => import('../pages/PrivacyPage.vue');
+const MedicalAdvisoryPage = () => import('../pages/MedicalAdvisoryPage.vue');
+const BlogIndexPage = () => import('../pages/BlogIndexPage.vue');
+const TirzepatideHalfLifePage = () => import('../pages/blog/TirzepatideHalfLifePage.vue');
+const WeeklyCalorieBudgetPage = () => import('../pages/blog/WeeklyCalorieBudgetPage.vue');
+const Glp1NauseaTimelinePage = () => import('../pages/blog/Glp1NauseaTimelinePage.vue');
+const OzempicVsWegovyPage = () => import('../pages/blog/OzempicVsWegovyPage.vue');
+const ManagingSideEffectsPage = () => import('../pages/blog/ManagingSideEffectsPage.vue');
+const AdhdNutritionTrackerPage = () => import('../pages/blog/AdhdNutritionTrackerPage.vue');
+const CompareIndexPage = () => import('../pages/CompareIndexPage.vue');
+const ComparisonPage = () => import('../pages/ComparisonPage.vue');
+const LoginPage = () => import('../pages/LoginPage.vue');
+const RegisterPage = () => import('../pages/RegisterPage.vue');
+const StartPage = () => import('../pages/StartPage.vue');
+const ForgotPasswordPage = () => import('../pages/ForgotPasswordPage.vue');
+const ResetPasswordPage = () => import('../pages/ResetPasswordPage.vue');
+const DashboardPage = () => import('../pages/DashboardPage.vue');
+const ProfilePage = () => import('../pages/ProfilePage.vue');
+const NotificationsPage = () => import('../pages/settings/NotificationsPage.vue');
+const SettingsCompoundsPage = () => import('../pages/settings/CompoundsPage.vue');
+const AppearancePage = () => import('../pages/settings/AppearancePage.vue');
+const AccountPage = () => import('../pages/settings/AccountPage.vue');
+const SubscriptionPage = () => import('../pages/settings/SubscriptionPage.vue');
+const LogPage = () => import('../pages/LogPage.vue');
+const WelcomePage = () => import('../pages/WelcomePage.vue');
+const FoodSearchPage = () => import('../pages/FoodSearchPage.vue');
+const AdminDashboardPage = () => import('../pages/AdminDashboardPage.vue');
+const AdminUsersPage = () => import('../pages/AdminUsersPage.vue');
+const AdminUserDetailPage = () => import('../pages/AdminUserDetailPage.vue');
+const SupportPage = () => import('../pages/SupportPage.vue');
+const SupportTicketDetailPage = () => import('../pages/SupportTicketDetailPage.vue');
+const FeatureRequestDetailPage = () => import('../pages/FeatureRequestDetailPage.vue');
+const AdminSupportPage = () => import('../pages/AdminSupportPage.vue');
+const AdminSupportTicketPage = () => import('../pages/AdminSupportTicketPage.vue');
+const AdminFeatureRequestPage = () => import('../pages/AdminFeatureRequestPage.vue');
 
 const routes = [
   { path: '/', name: 'landing', component: LandingPage, meta: { public: true, marketing: true } },
@@ -71,7 +81,20 @@ const routes = [
   { path: '/welcome', name: 'welcome', component: WelcomePage, meta: { requiresAuth: true, hideAppChrome: true } },
   { path: '/log', name: 'log', component: LogPage, meta: { requiresAuth: true } },
   { path: '/dashboard', name: 'dashboard', component: DashboardPage, meta: { requiresAuth: true } },
-  { path: '/settings', name: 'settings', component: SettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile', name: 'profile', component: ProfilePage, meta: { requiresAuth: true } },
+  // Settings hub was inlined into the Profile page (sub-page list at the bottom).
+  // Keep the URL alive as a redirect so any deep links land on Profile.
+  { path: '/profile/settings', redirect: '/profile' },
+  { path: '/profile/settings/notifications', name: 'profile-settings-notifications', component: NotificationsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/compounds', name: 'profile-settings-compounds', component: SettingsCompoundsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/appearance', name: 'profile-settings-appearance', component: AppearancePage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/account', name: 'profile-settings-account', component: AccountPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/account/subscription', name: 'profile-settings-subscription', component: SubscriptionPage, meta: { requiresAuth: true } },
+  // Old routes — redirect bookmarks + in-flight Stripe redirects to the new locations.
+  // /account is the legacy Stripe success/cancel URL (preserved while existing
+  // checkout/portal sessions complete) — query string passes through.
+  { path: '/settings', redirect: (to) => ({ path: '/profile/settings', query: to.query }) },
+  { path: '/account', redirect: (to) => ({ path: '/profile/settings/account/subscription', query: to.query }) },
   { path: '/food/search', name: 'foodsearch', component: FoodSearchPage, meta: { requiresAuth: true } },
   { path: '/admin', name: 'admin', component: AdminDashboardPage, meta: { requiresAuth: true, requiresAdmin: true } },
   { path: '/admin/users', name: 'admin-users', component: AdminUsersPage, meta: { requiresAuth: true, requiresAdmin: true } },
@@ -143,9 +166,9 @@ router.beforeEach(async (to) => {
   if (to.meta.guest && auth.user && to.name !== 'reset-password') {
     // A plan param means the user was on the marketing flow (clicked "Start
     // trial" from a bookmark, shared link, or a second tab). Forward them to
-    // Settings where the upgrade UI is — carrying the intent, not dropping it.
+    // the subscription page where the upgrade UI is — carrying the intent.
     if (to.query.plan) {
-      return { path: '/settings', query: to.query };
+      return { path: '/profile/settings/account/subscription', query: to.query };
     }
     return { name: 'log' };
   }
@@ -157,6 +180,19 @@ router.beforeEach(async (to) => {
   if (to.name === 'landing' && auth.user) {
     return { name: 'log' };
   }
+});
+
+// Swap the viewport meta per route. App routes lock zoom so the authed UI
+// feels like a native mobile app; marketing routes keep pinch-zoom for
+// accessibility and SEO.
+const APP_VIEWPORT =
+  'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+const MARKETING_VIEWPORT =
+  'width=device-width, initial-scale=1.0, viewport-fit=cover';
+router.afterEach((to) => {
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) return;
+  meta.setAttribute('content', to.meta?.marketing ? MARKETING_VIEWPORT : APP_VIEWPORT);
 });
 
 export default router;

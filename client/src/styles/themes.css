@@ -23,7 +23,7 @@
    */
   --font-display:
     "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-body: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-body: "System", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --font-weight-light: 400;
@@ -73,7 +73,7 @@
   --radius-small: 0px;
   --radius-medium: 0px;
   --radius-large: 0px;
-  --radius-pill: 999px;
+  --radius-pill: 0px;
 
   /* ---- Macro accents (same hue in both themes) ----------------------- */
   --color-cal: var(--text);
@@ -105,7 +105,7 @@
   --surface: #ffffff;
   --surface-alt: #eef3ee;
   --surface-raised: #e4ecdf;
-  --border: #cfdccd;
+  --border: transparent;
   --border-strong: #b6c8b3;
   --border-soft: #e0ebdd;
 
@@ -157,10 +157,10 @@
 /* ---- Dark theme — terminal / reticle ------------------------------- */
 html[data-theme="dark"] {
   --bg: var(--palette-slate-950); /* #05080a */
-  --surface: var(--palette-slate-900); /* #0a0f12 */
-  --surface-alt: var(--palette-slate-850); /* #0d1318 */
-  --surface-raised: var(--palette-slate-800); /* #111a20 */
-  --border: var(--palette-slate-700); /* #1a2630 */
+  --surface: var(--palette-slate-850); /* #0a0f12 */
+  --surface-alt: var(--palette-slate-800); /* #0d1318 */
+  --surface-raised: var(--palette-slate-700); /* #111a20 */
+  --border: transparent; /* #1a2630 */
   --border-strong: var(--palette-slate-600); /* #24333e */
   --border-soft: #0f1920;
 

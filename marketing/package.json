@@ -1,0 +1,46 @@
+{
+  "name": "@jeffjassky/marketing-admin",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Mountable Vue+Express suite of AI marketing tools (influencer CRM, Reddit engagement). Drops into any Express host at /admin/marketing.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src/index.js",
+    "src/config.js",
+    "src/server",
+    "src/shared",
+    "src/contacts",
+    "src/modules",
+    "src/ui-dist"
+  ],
+  "scripts": {
+    "build:ui": "vite build --config src/ui/vite.config.js",
+    "dev:ui": "vite --config src/ui/vite.config.js",
+    "test:smoke": "node test/smoke.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.119",
+    "cheerio": "^1.0.0",
+    "express": "^5.1.0",
+    "mongoose": "^9.3.3",
+    "rss-parser": "^3.13.0",
+    "youtube-transcript": "^1.2.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tanstack/vue-table": "^8.20.5",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "mongodb-memory-server": "^11.0.1",
+    "pinia": "^2.3.0",
+    "vite": "^6.0.7",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

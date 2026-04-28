@@ -48,14 +48,72 @@ watch(() => auth.user, (u) => {
         <BrandLockup class="brand-desktop" :size="16" :show-icon="false" />
       </router-link>
       <div class="nav-links">
-        <router-link to="/log">Log</router-link>
-        <router-link to="/dashboard">Dashboard</router-link>
+        <router-link to="/log" class="nav-link">
+          <svg
+            class="nav-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+            <path d="m15 5 4 4" />
+          </svg>
+          <span class="nav-label">Log</span>
+        </router-link>
+        <router-link to="/dashboard" class="nav-link">
+          <svg
+            class="nav-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="7" height="9" x="3" y="3" rx="1" />
+            <rect width="7" height="5" x="14" y="3" rx="1" />
+            <rect width="7" height="9" x="14" y="12" rx="1" />
+            <rect width="7" height="5" x="3" y="16" rx="1" />
+          </svg>
+          <span class="nav-label">Dashboard</span>
+        </router-link>
         <!-- Settings + Support are tied to a real account (subscription,
              tickets) — hide in anon demo where they'd 403 on first fetch.
              Authed-in-toggle still sees them; the underlying account is real. -->
-        <router-link v-if="auth.user" to="/settings">Settings</router-link>
-        <router-link v-if="auth.user" to="/support">Support</router-link>
-        <router-link v-if="auth.user?.isAdmin" to="/admin" class="admin-link"
+        <router-link v-if="auth.user" to="/profile" class="nav-link">
+          <svg
+            class="nav-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span class="nav-label">Profile</span>
+        </router-link>
+        <router-link
+          v-if="auth.user"
+          to="/support"
+          class="nav-link nav-link-support"
+          >Support</router-link
+        >
+        <router-link
+          v-if="auth.user?.isAdmin"
+          to="/admin"
+          class="nav-link admin-link"
           >Admin</router-link
         >
         <button
@@ -129,6 +187,8 @@ watch(() => auth.user, (u) => {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .top-nav {
   display: flex;
@@ -138,6 +198,9 @@ watch(() => auth.user, (u) => {
   height: 56px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  font-family: var(--font-display);
+  text-transform: capitalize;
+  font-weight: var(--font-weight-bold);
   flex: none;
 }
 .brand {
@@ -160,6 +223,8 @@ watch(() => auth.user, (u) => {
   border-radius: var(--radius-small);
   transition: background var(--transition-base), color var(--transition-base);
 }
+/* Desktop: hide stacked icons, render text only. */
+.nav-icon { display: none; }
 .nav-links a:hover {
   background: var(--bg);
   color: var(--text);
@@ -268,6 +333,7 @@ watch(() => auth.user, (u) => {
     z-index: 80;
     height: auto;
     padding: 0;
+    background: var(--bg);
     border-top: 1px solid var(--border);
     border-bottom: none;
     padding-bottom: env(safe-area-inset-bottom, 0);
@@ -281,13 +347,27 @@ watch(() => auth.user, (u) => {
   .nav-links a {
     flex: 1;
     text-align: center;
-    padding: 12px 4px;
+    padding: 8px 4px;
     border-radius: 0;
-    font-size: 11px;
-    letter-spacing: 0.04em;
+    font-size: 10px;
+    letter-spacing: 0.03em;
   }
+  /* iOS-style stacked icon + label for primary nav items. */
+  .nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .nav-icon {
+    display: block;
+    width: 22px;
+    height: 22px;
+  }
+  .nav-label { display: block; line-height: 1; }
   .nav-links a.router-link-exact-active {
-    background: transparent;
+    background: var(--surface);
     color: var(--primary);
     box-shadow: inset 0 2px 0 var(--primary);
   }
@@ -295,6 +375,8 @@ watch(() => auth.user, (u) => {
     border: none;
     margin-left: 0;
   }
+  /* Bottom bar holds 4 slots on mobile; Support stays desktop-only. */
+  .nav-link-support { display: none; }
   .theme-toggle {
     flex: 0 0 auto;
     margin-left: 0;

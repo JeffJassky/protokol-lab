@@ -44,12 +44,37 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   <div class="macro-bar">
     <div class="macro-header">
       <span class="macro-label">{{ label }}</span>
-      <span class="macro-values"><span class="macro-current">{{ Math.round(current).toLocaleString() }}</span><span class="macro-budget"> / {{ Math.round(target).toLocaleString() }}{{ unit }}</span><template v-if="note"><span class="macro-sep"> · </span><span class="macro-note" :class="`note-${noteTone}`">{{ note }}</span></template></span>
+      <span class="macro-values"
+        ><span
+          class="macro-current"
+          >{{ Math.round(current).toLocaleString() }}</span
+        ><span class="macro-budget">
+          / {{ Math.round(target).toLocaleString() }}{{ unit }}</span
+        ><template v-if="note"
+          ><span class="macro-sep"> · </span
+          ><span
+            class="macro-note"
+            :class="`note-${noteTone}`"
+            >{{ note }}</span
+          ></template
+        ></span
+      >
     </div>
     <div class="bar-track">
-      <div class="bar-fill" :style="{ width: normalWidth + '%', background: color }" />
-      <div v-if="overWidth > 0" class="bar-over" :style="{ left: normalWidth + '%', width: overWidth + '%' }" />
-      <div v-if="showTargetLine" class="target-line" :style="{ left: targetLinePct + '%' }" />
+      <div
+        class="bar-fill"
+        :style="{ width: normalWidth + '%', background: color }"
+      />
+      <div
+        v-if="overWidth > 0"
+        class="bar-over"
+        :style="{ left: normalWidth + '%', width: overWidth + '%' }"
+      />
+      <div
+        v-if="showTargetLine"
+        class="target-line"
+        :style="{ left: targetLinePct + '%' }"
+      />
     </div>
   </div>
 </template>
@@ -80,6 +105,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 }
 .macro-label {
   font-size: var(--font-size-xs);
+  font-family: var(--font-display);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wider);
   color: var(--text-secondary);
@@ -96,7 +122,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 .bar-track {
   position: relative;
   height: 8px;
-  background: var(--border);
+  background: var(--surface-raised);
   border-radius: var(--radius-small);
   overflow: hidden;
 }
