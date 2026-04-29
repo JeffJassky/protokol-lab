@@ -81,12 +81,8 @@ function fmtDateTime(v) {
   <div class="admin-page">
     <header class="page-header">
       <div>
-        <h1>Admin · Users</h1>
+        <h1>Users</h1>
         <p class="subtitle">{{ total }} total</p>
-      </div>
-      <div class="header-controls">
-        <router-link to="/admin/support" class="link-button">Support →</router-link>
-        <router-link to="/admin" class="link-button">← Overview</router-link>
       </div>
     </header>
 

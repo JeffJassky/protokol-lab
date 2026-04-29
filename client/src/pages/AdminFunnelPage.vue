@@ -42,7 +42,7 @@ function stepLabel(name) {
   <div class="admin-page">
     <header class="page-header">
       <div>
-        <h1>Admin · Funnel</h1>
+        <h1>Funnel</h1>
         <p class="subtitle">
           Self-hosted conversion analytics. Sourced from FunnelEvent rows
           emitted by the server (demo_*) and the /api/track beacon
@@ -60,8 +60,6 @@ function stepLabel(name) {
             <option :value="365">1 year</option>
           </select>
         </label>
-        <router-link to="/admin" class="link-button">← Usage</router-link>
-        <router-link to="/admin/users" class="link-button">Users →</router-link>
       </div>
     </header>
 

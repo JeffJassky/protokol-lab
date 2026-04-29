@@ -32,6 +32,8 @@ import { requireAdmin } from './middleware/requireAdmin.js';
 import { ensureAnonId } from './middleware/anonId.js';
 import { logger, httpLogger, childLogger, errContext } from './lib/logger.js';
 import { getMarketingAdmin } from './services/marketingAdmin.js';
+import { getAgenda } from './services/scheduler.js';
+import { createExpressMiddleware as createAgendashMiddleware } from 'agendash';
 
 // Build the Express app without starting the HTTP listener, connecting to
 // Mongo, or booting the scheduler. Tests import this to run routes against
@@ -177,6 +179,28 @@ export function createApp({ serveClient = true } = {}) {
   if (marketing) {
     app.use('/admin/marketing', marketing.router);
   }
+
+  // Agendash dashboard for the Agenda scheduler — admin-gated, iframed by
+  // the Vue admin shell. Agenda boots after createApp() runs, so we lazy-
+  // resolve the instance per-request and cache the resulting router on
+  // first hit. Returns 503 if a request lands before the scheduler is up
+  // (only really possible during startup or if the scheduler failed to
+  // initialize — Mongo not connected, etc).
+  let agendashRouter = null;
+  app.use(
+    '/admin/agendash',
+    requireAuth,
+    requireAuthUser,
+    requireAdmin,
+    (req, res, next) => {
+      if (!agendashRouter) {
+        const agenda = getAgenda();
+        if (!agenda) return res.status(503).send('Scheduler not running');
+        agendashRouter = createAgendashMiddleware({ agenda });
+      }
+      return agendashRouter(req, res, next);
+    },
+  );
 
   if (serveClient) {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -265,6 +265,13 @@ export async function runDemoCleanup() {
   return { anonDeleted, authedDeleted };
 }
 
+// Read-only handle to the running agenda instance. Returns null until
+// startScheduler() has finished — admin tools (Agendash) lazy-resolve so
+// they don't blow up during boot.
+export function getAgenda() {
+  return agenda;
+}
+
 export async function startScheduler() {
   if (agenda) {
     log.debug('scheduler: already started');

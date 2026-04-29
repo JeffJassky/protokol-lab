@@ -133,13 +133,10 @@ onMounted(() => { loadTickets(); loadFeatures(); });
   <div class="admin-page">
     <header class="page-header">
       <div>
-        <h1>Admin · Support</h1>
+        <h1>Support</h1>
         <p class="subtitle">
           {{ ticketCounts.open || 0 }} open · {{ ticketCounts.in_progress || 0 }} in progress · {{ ticketCounts.closed || 0 }} closed
         </p>
-      </div>
-      <div class="header-controls">
-        <router-link to="/admin" class="link-button">← Overview</router-link>
       </div>
     </header>
 

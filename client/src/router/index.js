@@ -40,10 +40,14 @@ const SubscriptionPage = () => import('../pages/settings/SubscriptionPage.vue');
 const LogPage = () => import('../pages/LogPage.vue');
 const WelcomePage = () => import('../pages/WelcomePage.vue');
 const FoodSearchPage = () => import('../pages/FoodSearchPage.vue');
-const AdminDashboardPage = () => import('../pages/AdminDashboardPage.vue');
+const AdminLayout = () => import('../components/AdminLayout.vue');
+const AdminOverviewPage = () => import('../pages/AdminOverviewPage.vue');
+const AdminLlmUsagePage = () => import('../pages/AdminLlmUsagePage.vue');
 const AdminUsersPage = () => import('../pages/AdminUsersPage.vue');
 const AdminUserDetailPage = () => import('../pages/AdminUserDetailPage.vue');
 const AdminFunnelPage = () => import('../pages/AdminFunnelPage.vue');
+const AdminMarketingEmbedPage = () => import('../pages/AdminMarketingEmbedPage.vue');
+const AdminJobsPage = () => import('../pages/AdminJobsPage.vue');
 const SupportPage = () => import('../pages/SupportPage.vue');
 const SupportTicketDetailPage = () => import('../pages/SupportTicketDetailPage.vue');
 const FeatureRequestDetailPage = () => import('../pages/FeatureRequestDetailPage.vue');
@@ -97,16 +101,31 @@ const routes = [
   { path: '/settings', redirect: (to) => ({ path: '/profile/settings', query: to.query }) },
   { path: '/account', redirect: (to) => ({ path: '/profile/settings/account/subscription', query: to.query }) },
   { path: '/food/search', name: 'foodsearch', component: FoodSearchPage, meta: { requiresAuth: true } },
-  { path: '/admin', name: 'admin', component: AdminDashboardPage, meta: { requiresAuth: true, requiresAdmin: true } },
-  { path: '/admin/funnel', name: 'admin-funnel', component: AdminFunnelPage, meta: { requiresAuth: true, requiresAdmin: true } },
-  { path: '/admin/users', name: 'admin-users', component: AdminUsersPage, meta: { requiresAuth: true, requiresAdmin: true } },
-  { path: '/admin/users/:id', name: 'admin-user-detail', component: AdminUserDetailPage, meta: { requiresAuth: true, requiresAdmin: true } },
   { path: '/support', name: 'support', component: SupportPage, meta: { requiresAuth: true } },
   { path: '/support/tickets/:id', name: 'support-ticket', component: SupportTicketDetailPage, meta: { requiresAuth: true } },
   { path: '/support/features/:id', name: 'support-feature', component: FeatureRequestDetailPage, meta: { requiresAuth: true } },
-  { path: '/admin/support', name: 'admin-support', component: AdminSupportPage, meta: { requiresAuth: true, requiresAdmin: true } },
-  { path: '/admin/support/tickets/:id', name: 'admin-support-ticket', component: AdminSupportTicketPage, meta: { requiresAuth: true, requiresAdmin: true } },
-  { path: '/admin/support/features/:id', name: 'admin-support-feature', component: AdminFeatureRequestPage, meta: { requiresAuth: true, requiresAdmin: true } },
+  // Admin surface — AdminLayout owns the chrome (sidebar nav, theme toggle,
+  // mobile drawer). hideAppChrome bypasses AppLayout so we don't double-wrap.
+  // Vue Router 4 merges parent + child meta, so children inherit the auth
+  // and admin flags. Embedded iframe pages set adminFullBleed so AdminLayout
+  // gives them an unpadded, full-height pane.
+  {
+    path: '/admin',
+    component: AdminLayout,
+    meta: { requiresAuth: true, requiresAdmin: true, hideAppChrome: true },
+    children: [
+      { path: '', name: 'admin', component: AdminOverviewPage },
+      { path: 'llm-usage', name: 'admin-llm-usage', component: AdminLlmUsagePage },
+      { path: 'funnel', name: 'admin-funnel', component: AdminFunnelPage },
+      { path: 'users', name: 'admin-users', component: AdminUsersPage },
+      { path: 'users/:id', name: 'admin-user-detail', component: AdminUserDetailPage },
+      { path: 'support', name: 'admin-support', component: AdminSupportPage },
+      { path: 'support/tickets/:id', name: 'admin-support-ticket', component: AdminSupportTicketPage },
+      { path: 'support/features/:id', name: 'admin-support-feature', component: AdminFeatureRequestPage },
+      { path: 'marketing-embed', name: 'admin-marketing-embed', component: AdminMarketingEmbedPage, meta: { adminFullBleed: true } },
+      { path: 'jobs', name: 'admin-jobs', component: AdminJobsPage, meta: { adminFullBleed: true } },
+    ],
+  },
   // Old top-level paths — redirect bookmarks so they still land somewhere useful.
   { path: '/weight', redirect: '/dashboard' },
   { path: '/meals', redirect: '/food/search?tab=meals' },

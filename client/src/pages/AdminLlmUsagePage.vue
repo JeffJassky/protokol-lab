@@ -41,7 +41,7 @@ function fmtDate(v) {
   <div class="admin-page">
     <header class="page-header">
       <div>
-        <h1>Admin · Usage</h1>
+        <h1>LLM Usage</h1>
         <p class="subtitle">AI chat cost + token consumption</p>
       </div>
       <div class="header-controls">
@@ -55,9 +55,6 @@ function fmtDate(v) {
             <option :value="365">1 year</option>
           </select>
         </label>
-        <router-link to="/admin/funnel" class="link-button">Funnel →</router-link>
-        <router-link to="/admin/users" class="link-button">Users →</router-link>
-        <router-link to="/admin/support" class="link-button">Support →</router-link>
       </div>
     </header>
 
