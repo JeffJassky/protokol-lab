@@ -10,6 +10,11 @@ const JobSchema = new mongoose.Schema(
       default: 'queued',
       index: true,
     },
+    // Env tag: workers only claim jobs matching their own env. Prevents
+    // a shared-DB setup (local + prod hitting the same Mongo) from one
+    // worker grabbing the other's jobs. Default 'default' for back-compat
+    // with rows written before this field existed.
+    env: { type: String, default: 'default', index: true },
     payload: mongoose.Schema.Types.Mixed,
     result: mongoose.Schema.Types.Mixed,
     error: String,
@@ -48,7 +53,7 @@ const JobSchema = new mongoose.Schema(
   { timestamps: true, collection: undefined }
 );
 
-JobSchema.index({ status: 1, lockedBy: 1, type: 1 });
+JobSchema.index({ status: 1, lockedBy: 1, env: 1, type: 1 });
 
 export function buildJobModel(conn, prefix) {
   return defineModel(conn, prefix, 'MarketingJob', JobSchema, 'jobs');

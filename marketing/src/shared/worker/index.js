@@ -17,7 +17,12 @@ export function buildWorker({ registry, models, config, logger }) {
   // before ctx is fully assembled). runJob reads the latest value via
   // this mutable ref so handlers see the complete ctx.
   const ctxRef = { current: null };
-  const instanceId = `worker-${randomUUID().slice(0, 8)}`;
+  // Env tag for this worker instance. We only enqueue jobs with this
+  // env, and we only claim queued jobs with this env. Lets local + prod
+  // share a Mongo cluster without one stealing the other's jobs.
+  // 'default' = back-compat for installs that don't set env explicitly.
+  const env = config.env || 'default';
+  const instanceId = `worker-${env}-${randomUUID().slice(0, 8)}`;
   let running = false;
   let active = 0;
   let timer = null;
@@ -30,7 +35,7 @@ export function buildWorker({ registry, models, config, logger }) {
     if (running) return;
     running = true;
     logger.info?.(
-      { concurrency: config.worker.concurrency, handlers: registry.list(), instanceId },
+      { concurrency: config.worker.concurrency, handlers: registry.list(), instanceId, env },
       '[marketing-admin] worker started'
     );
     schedule();
@@ -55,10 +60,11 @@ export function buildWorker({ registry, models, config, logger }) {
   async function tick() {
     if (!running) return;
     try {
-      // Stale-lock recovery
+      // Stale-lock recovery (only for OUR env's jobs).
       await models.Job.updateMany(
         {
           status: 'running',
+          env,
           lockedAt: { $lt: new Date(Date.now() - STALE_LOCK_MS) },
         },
         { $set: { status: 'queued', lockedBy: null, lockedAt: null } }
@@ -66,7 +72,10 @@ export function buildWorker({ registry, models, config, logger }) {
 
       while (running && active < config.worker.concurrency) {
         const job = await models.Job.findOneAndUpdate(
-          { status: 'queued', lockedBy: null },
+          // Only claim jobs tagged for our env. 'default' jobs (rows
+          // written before this field existed) will only be claimed by
+          // a 'default'-env worker — explicit envs never see them.
+          { status: 'queued', lockedBy: null, env },
           {
             $set: {
               status: 'running',
@@ -130,6 +139,7 @@ export function buildWorker({ registry, models, config, logger }) {
       contactId,
       listId,
       opportunityId,
+      env, // tag with our env so only matching workers claim it
       status: 'queued',
       budget: budget || { capUsd: config.budget.defaultPerJobUsd, spentUsd: 0 },
     });

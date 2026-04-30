@@ -38,11 +38,20 @@ async function dismiss() {
   router.push({ name: 'reddit-feed' });
 }
 
+async function passIt() {
+  await api.redditEngagement.pass(route.params.id);
+  router.push({ name: 'reddit-feed' });
+}
+
+async function saveIt() {
+  await api.redditEngagement.save(route.params.id);
+  router.push({ name: 'reddit-feed' });
+}
+
 async function markPosted() {
-  const url = prompt('Reddit comment URL:');
-  if (!url) return;
+  const url = prompt('Reddit comment URL (optional):') || '';
   await api.redditEngagement.markPosted(route.params.id, url);
-  load();
+  router.push({ name: 'reddit-feed' });
 }
 
 async function linkAuthor() {
@@ -63,12 +72,15 @@ function openOnReddit() {
         <h1 class="page-title">r/{{ opp.subreddit }} — {{ opp.title }}</h1>
         <p class="page-sub">
           <span class="pill">{{ opp.status }}</span>
-          <span v-if="opp.triage?.fit" class="pill" style="margin-left:6px">fit: {{ opp.triage.fit }}</span>
+          <span v-if="opp.decision && opp.decision !== 'pending'" class="pill" style="margin-left:6px;background:#444">{{ opp.decision }}</span>
+          <span v-if="opp.triage?.bucket" class="pill" style="margin-left:6px">{{ opp.triage.bucket }}</span>
           <span style="margin-left:6px;color:var(--text-dim);font-size:12px">u/{{ opp.authorUsername }} · score {{ opp.postScore }} · {{ opp.postCommentCount }} comments</span>
         </p>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" @click="openOnReddit">Open on Reddit</button>
+        <button class="btn" @click="passIt" v-if="opp.decision === 'pending'">Pass</button>
+        <button class="btn" @click="saveIt" v-if="opp.decision === 'pending'">Save for later</button>
         <button class="btn danger" @click="dismiss">Dismiss</button>
       </div>
     </div>
@@ -82,10 +94,8 @@ function openOnReddit() {
     <div v-if="opp.triage" class="card">
       <h3 style="margin:0 0 8px;font-size:14px">Triage</h3>
       <dl class="kv">
-        <dt>Fit</dt><dd>{{ opp.triage.fit }}</dd>
-        <dt>Value angle</dt><dd>{{ opp.triage.valueAngle }}</dd>
-        <dt>Reasoning</dt><dd>{{ opp.triage.reasoning }}</dd>
-        <dt>Risks</dt><dd>{{ (opp.triage.risks || []).join('; ') || '—' }}</dd>
+        <dt>Bucket</dt><dd>{{ opp.triage.bucket }}</dd>
+        <dt>Because</dt><dd>{{ opp.triage.because || '—' }}</dd>
       </dl>
     </div>
 
@@ -114,9 +124,6 @@ function openOnReddit() {
     <div v-if="opp.postedCommentUrl" class="card">
       <h3 style="margin:0 0 8px;font-size:14px">Posted</h3>
       <p style="margin:0;font-size:13px"><a :href="opp.postedCommentUrl" target="_blank" rel="noopener">{{ opp.postedCommentUrl }}</a></p>
-      <p v-if="opp.postPerformance?.lastCheckedAt" style="margin:6px 0 0;font-size:12px;color:var(--text-dim)">
-        Last checked: {{ new Date(opp.postPerformance.lastCheckedAt).toLocaleString() }} · score {{ opp.postPerformance.score ?? '—' }} · replies {{ opp.postPerformance.replyCount ?? '—' }}
-      </p>
     </div>
   </div>
 </template>

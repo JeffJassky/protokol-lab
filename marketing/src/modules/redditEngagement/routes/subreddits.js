@@ -28,7 +28,7 @@ export function buildSubredditsRoutes(ctx) {
 
   router.patch('/:id', async (req, res, next) => {
     try {
-      const sub = await MonitoredSubreddit.findByIdAndUpdate(req.params.id, sanitize(req.body), { new: true });
+      const sub = await MonitoredSubreddit.findByIdAndUpdate(req.params.id, sanitize(req.body), { returnDocument: 'after' });
       if (!sub) return res.status(404).json({ error: 'not_found' });
       res.json(sub);
     } catch (err) { next(err); }

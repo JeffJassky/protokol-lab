@@ -70,13 +70,15 @@ const VoiceProfileSchema = new mongoose.Schema(
   {
     active: { type: Boolean, default: false },
     voiceDescription: String,
+    // Slim, cheap, ~150-token version used by triage (Haiku). Full
+    // voiceDescription is only sent to the draft step. Cuts triage cost
+    // ~3-5x by not shipping the entire persona block on every classify.
+    triageCard: String,
     expertiseTags: [String],
     doNotMention: [String],
-    selfPromoPolicy: {
-      type: String,
-      enum: ['never', 'when-asked', 'soft-link-when-relevant'],
-      default: 'never',
-    },
+    // selfPromoPolicy removed 2026-04-30 — bucket-based classification
+    // (DIRECT_ASK / INDIRECT_PROBLEM / TOPIC_ADJACENT / SKIP) drives
+    // whether/how to mention the product per-post. See plans/reddit-classification.md.
     signatureSnippet: String,
     redditPresenceId: mongoose.Schema.Types.ObjectId,
     xPresenceId: mongoose.Schema.Types.ObjectId,
@@ -193,7 +195,8 @@ const ContactSchema = new mongoose.Schema(
 
     source: ContactSourceSchema,
     listIds: [{ type: mongoose.Schema.Types.ObjectId, index: true }],
-    customFields: mongoose.Schema.Types.Mixed,
+    // `customFields` removed — `modules: Mixed` already covers per-module
+    // namespaced extension and was the only field actually used.
 
     lastResearchedAt: Date,
   },

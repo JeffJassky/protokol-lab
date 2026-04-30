@@ -30,6 +30,17 @@ envs:
 - key: SUPPORT_ADMIN_EMAIL
   scope: RUN_AND_BUILD_TIME
   value: jeff@jeffjassky.com
+- key: MARKETING_ENV
+  scope: RUN_AND_BUILD_TIME
+  value: production
+# Temporary kill switch — prod worker shouldn't run until the bucket-
+# classification refactor lands on prod. Without env-filter awareness
+# (only added 2026-04-30), prod grabs local-tagged jobs, fails them on
+# Alpine (no Claude Code binary), and corrupts the queue. Remove this
+# line once new code is deployed.
+- key: MARKETING_WORKER_ENABLED
+  scope: RUN_AND_BUILD_TIME
+  value: "false"
 - key: TRUST_PROXY
   scope: RUN_AND_BUILD_TIME
   value: "1"

@@ -2,8 +2,30 @@
 // uses WebFetch + reddit_comment_tree to ground the reply (avoid
 // duplicating something already said in the thread; pull a citation if
 // claiming a fact). Writes draft.body on the opportunity.
+//
+// Bucket-driven framing (per plans/reddit-classification.md):
+//   DIRECT_ASK       — recommend the app naturally; that's literally the ask.
+//   INDIRECT_PROBLEM — substance-first answer, app as a footnote/PS line.
+//   TOPIC_ADJACENT   — useful comment, NO app mention; build credibility.
+//   SKIP             — should never reach the drafter (triage tombstones).
 
 export const DRAFT_REPLY_PROMPT_KEY = 'redditEngagement.draftReply';
+
+const APP_NAME = 'Protokol Lab';
+const APP_URL = 'https://protokollab.com';
+
+// Per-bucket framing instructions injected into the system prompt.
+// Centralized so triage→draft semantics stay aligned.
+const BUCKET_INSTRUCTIONS = {
+  DIRECT_ASK: `BUCKET = DIRECT_ASK
+The user is explicitly asking for an app/tracker/MFP-alternative. Recommend ${APP_NAME} (${APP_URL}) naturally and concisely. One link, in-context. Lead with the substantive answer to what they actually asked, THEN make the recommendation. Don't pitch — describe what it does in one or two specific terms relevant to their ask. Other tools can be mentioned for honesty, but ${APP_NAME} should be present.`,
+
+  INDIRECT_PROBLEM: `BUCKET = INDIRECT_PROBLEM
+The user has a problem ${APP_NAME} solves but didn't ask for an app. Lead with substance — actually answer their problem with lived experience, math, or a concrete suggestion. Then, ONLY if natural and relevant, drop a one-line footnote like "I've been building a tool around this exact problem if you want to check it out: ${APP_URL}" or similar. The footnote is optional — if it doesn't fit, omit it. Substance first, app as PS.`,
+
+  TOPIC_ADJACENT: `BUCKET = TOPIC_ADJACENT
+On-topic for the niche but NOT about a problem the app solves. Be helpful, share lived experience, contribute to the discussion. **DO NOT mention ${APP_NAME}, the URL, or any app/tool the persona builds.** This is pure community-credibility. Add value, build profile recognition.`,
+};
 
 const DEFAULT_BODY = `You are drafting a Reddit reply for the persona below. The goal is a GENUINE, VALUABLE comment that reads like a knowledgeable peer responding — not marketing.
 
@@ -11,15 +33,17 @@ HARD RULES:
 - 60–180 words. Reddit-formatted markdown (line breaks, occasional bold). No headings.
 - Open with the substantive answer. No "Great question!", no "Hope this helps!".
 - If you make any factual claim, ground it (cite a paper, a guideline, your own experience). Otherwise it reads as confident slop.
-- Honor selfPromoPolicy. If "never": no mentions of products, sites, or affiliations. If "soft-link-when-relevant": ONE link, only if directly answers OP's need.
-- Honor do-not-mention list.
+- Honor do-not-mention list (in persona).
 - If the thread already contains a thoughtful answer making the same point you'd make, DO NOT POST. End your reply with: NO_REPLY: <reason>
 - Use reddit_comment_tree at most once if you want to check existing replies. Use WebFetch if you need to verify a citation. Otherwise: just write.
+
+BUCKET-SPECIFIC INSTRUCTIONS:
+{{bucketInstructions}}
 
 PERSONA:
 {{voiceContext}}
 
-TRIAGE NOTES (what the triage agent thought we'd add):
+TRIAGE RATIONALE (why this bucket):
 {{triageContext}}
 
 THE THREAD:
@@ -39,11 +63,12 @@ export function registerDraftReplyPrompt(promptRegistry) {
     key: DRAFT_REPLY_PROMPT_KEY,
     module: 'redditEngagement',
     title: 'Reddit Reply Draft System Prompt',
-    description: 'System prompt for composing a Reddit reply draft. Voice-aware, multi-turn (can use WebFetch + reddit_comment_tree). Outputs the reply body verbatim or NO_REPLY:...',
+    description: 'Bucket-aware drafter. Branches on DIRECT_ASK / INDIRECT_PROBLEM / TOPIC_ADJACENT to decide whether and how to mention the product.',
     defaultBody: DEFAULT_BODY,
     variables: [
+      { name: 'bucketInstructions', description: 'Bucket-specific framing rules (built from triage.bucket).' },
       { name: 'voiceContext', description: 'Persona voice block' },
-      { name: 'triageContext', description: 'fit + valueAngle + risks from triage' },
+      { name: 'triageContext', description: 'bucket + because from triage' },
       { name: 'subreddit', description: '' },
       { name: 'postUrl', description: '' },
       { name: 'title', description: '' },
@@ -62,11 +87,17 @@ export function registerDraftReplyJob(registry) {
     if (!sub) throw new Error(`subreddit ${opp.subredditId} not found`);
     const voice = await ctx.models.Contact.findById(sub.voiceContactId).lean();
 
+    // Voice context — full description for drafter (Sonnet). Excludes
+    // selfPromoPolicy (removed). Mentions/recommendations are bucket-driven.
     const voiceContext = voice
-      ? `Name: ${voice.name}\nVoice: ${voice.voiceProfile?.voiceDescription || '(none)'}\nExpertise: ${(voice.voiceProfile?.expertiseTags || []).join(', ')}\nDo NOT mention: ${(voice.voiceProfile?.doNotMention || []).join(', ')}\nSelf-promo policy: ${voice.voiceProfile?.selfPromoPolicy || 'never'}\nSignature: ${voice.voiceProfile?.signatureSnippet || '(none)'}`
+      ? `Name: ${voice.name}\nVoice: ${voice.voiceProfile?.voiceDescription || '(none)'}\nExpertise: ${(voice.voiceProfile?.expertiseTags || []).join(', ')}\nDo NOT mention: ${(voice.voiceProfile?.doNotMention || []).join(', ')}\nSignature: ${voice.voiceProfile?.signatureSnippet || '(none)'}`
       : '(no voice profile configured)';
+
+    const bucket = opp.triage?.bucket;
+    const bucketInstructions = BUCKET_INSTRUCTIONS[bucket]
+      || '(no bucket set — default to substance-first, no app mention)';
     const triageContext = opp.triage
-      ? `fit=${opp.triage.fit}; valueAngle=${opp.triage.valueAngle}; risks=${(opp.triage.risks || []).join('; ')}`
+      ? `bucket=${bucket}; because=${opp.triage.because || ''}`
       : '(no triage yet)';
 
     const allowed = new Set();
@@ -76,6 +107,7 @@ export function registerDraftReplyJob(registry) {
     const result = await ctx.agent.runWithTools({
       promptKey: DRAFT_REPLY_PROMPT_KEY,
       context: {
+        bucketInstructions,
         voiceContext,
         triageContext,
         subreddit: opp.subreddit,
@@ -98,17 +130,18 @@ export function registerDraftReplyJob(registry) {
 
     const body = (result.text || '').trim();
     if (body.startsWith('NO_REPLY')) {
+      // Drafter decided not to reply (e.g. someone already said the same
+      // thing). Tombstone so the row doesn't resurface.
       opp.status = 'low-fit-archived';
-      opp.reviewerNotes = body;
+      opp.decision = 'dismissed';
+      opp.decidedAt = new Date();
+      opp.decisionNote = body;
       await opp.save();
       return { posted: false, reason: 'agent_declined', costUsd: result.costUsd };
     }
 
     opp.draft = {
       body,
-      voiceContactIdAtDraft: sub.voiceContactId,
-      model: ctx.config.models.draft,
-      costUsd: result.costUsd,
       generatedAt: new Date(),
     };
     opp.status = 'drafted';

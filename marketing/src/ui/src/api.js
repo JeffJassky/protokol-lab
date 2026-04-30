@@ -79,11 +79,12 @@ export const api = {
     triage: (id) => request('POST', `/reddit-engagement/opportunities/${id}/triage`),
     draft: (id, steeringNote) =>
       request('POST', `/reddit-engagement/opportunities/${id}/draft`, { steeringNote }),
+    pass: (id, note) => request('POST', `/reddit-engagement/opportunities/${id}/pass`, { note }),
+    save: (id, note) => request('POST', `/reddit-engagement/opportunities/${id}/save`, { note }),
+    unpass: (id) => request('POST', `/reddit-engagement/opportunities/${id}/unpass`),
     dismiss: (id) => request('POST', `/reddit-engagement/opportunities/${id}/dismiss`),
     markPosted: (id, commentUrl) =>
       request('POST', `/reddit-engagement/opportunities/${id}/mark-posted`, { commentUrl }),
-    refreshPerformance: (id) =>
-      request('POST', `/reddit-engagement/opportunities/${id}/refresh-performance`),
     linkAuthorToContact: (id, contactId) =>
       request('POST', `/reddit-engagement/opportunities/${id}/link-author-to-contact`, { contactId }),
 

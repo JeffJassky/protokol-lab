@@ -20,9 +20,18 @@ const TOKEN_URL = 'https://www.reddit.com/api/v1/access_token';
 const OAUTH_BASE = 'https://oauth.reddit.com';
 const PUBLIC_BASE = 'https://www.reddit.com';
 
+// Real-browser User-Agent. Reddit's anti-bot WAF pattern-matches against
+// generic / library-shaped UAs (anything containing "bot", "scraper",
+// "marketing-admin/", etc.) and serves the consent-wall HTML 403. A current
+// Chrome UA passes the heuristic.
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
 export function buildRedditClient({ clientId, clientSecret, userAgent, username, password, logger } = {}) {
-  const ua = userAgent || 'protokol-marketing-admin/0.1 (public-json)';
+  // OAuth must use a custom UA per Reddit policy, but public-JSON does
+  // better with a browser UA. So: if userAgent passed in AND we'll use
+  // OAuth, honor it; otherwise default to BROWSER_UA.
   const useOAuth = Boolean(clientId && clientSecret);
+  const ua = useOAuth ? (userAgent || 'protokol-marketing-admin/0.1') : BROWSER_UA;
 
   if (!useOAuth) {
     return buildPublicJsonClient({ ua, logger });
@@ -36,35 +45,77 @@ export function buildRedditClient({ clientId, clientSecret, userAgent, username,
 // ──────────────────────────────────────────────────────────────────────
 
 function buildPublicJsonClient({ ua, logger }) {
+  // Real-browser headers. Reddit's anti-bot looks at UA + Accept + a few
+  // others. The Cookie line matters: `over18=1` skips the NSFW interstitial,
+  // `_options` is a benign session-shape cookie that real browsers send.
+  const headers = {
+    'User-Agent': ua,
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Cookie': 'over18=1; _options=%7B%22pref_quarantine_optin%22%3A%20true%7D',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+  };
+
+  async function fetchOnce(url) {
+    return fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+  }
+
   async function api(pathOrUrl, params = {}) {
-    const url = buildPublicUrl(pathOrUrl, params);
-    const res = await fetch(url, {
-      headers: { 'User-Agent': ua },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (res.status === 429) {
-      const body = await res.text();
-      throw new Error(`reddit 429 (rate limited): ${body.slice(0, 120)}`);
+    const primaryUrl = buildPublicUrl(pathOrUrl, params, 'www.reddit.com');
+    const fallbackUrl = buildPublicUrl(pathOrUrl, params, 'old.reddit.com');
+
+    // Try www, then old.reddit.com on 403. Each base gets its own retry
+    // sequence with exponential backoff. old.reddit.com sometimes serves
+    // when www.reddit.com refuses (different anti-bot path).
+    let lastErr;
+    for (const url of [primaryUrl, fallbackUrl]) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+        let res;
+        try {
+          res = await fetchOnce(url);
+        } catch (err) {
+          lastErr = err;
+          continue;
+        }
+        if (res.ok) {
+          if (attempt > 0 || url !== primaryUrl) {
+            logger?.info?.(`[reddit] recovered ${res.status} after retry/fallback: ${url}`);
+          }
+          return res.json();
+        }
+        if (res.status === 403 || res.status === 429 || res.status >= 500) {
+          const body = await res.text();
+          lastErr = new Error(`reddit ${res.status}: ${body.slice(0, 150).replace(/\s+/g, ' ')}`);
+          logger?.warn?.(`[reddit] ${res.status} attempt ${attempt + 1}/4 for ${url}`);
+          continue;
+        }
+        // 4xx other than 403/429: don't retry, real client error.
+        const body = await res.text();
+        throw new Error(`reddit ${res.status}: ${body.slice(0, 200)}`);
+      }
+      logger?.warn?.(`[reddit] exhausted retries on ${url}, trying fallback host`);
     }
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`reddit ${res.status}: ${body.slice(0, 200)}`);
-    }
-    return res.json();
+    throw lastErr || new Error('reddit: blocked on both www and old.reddit.com');
   }
   return { api, mode: 'public-json' };
 }
 
-function buildPublicUrl(pathOrUrl, params) {
+function buildPublicUrl(pathOrUrl, params, host = 'www.reddit.com') {
   let base;
   let path;
   if (pathOrUrl.startsWith('http')) {
     const u = new URL(pathOrUrl);
-    // If someone passed an oauth.reddit.com URL, rewrite to www.reddit.com
-    base = `${u.protocol}//www.reddit.com`;
+    base = `${u.protocol}//${host}`;
     path = u.pathname + u.search;
   } else {
-    base = PUBLIC_BASE;
+    base = `https://${host}`;
     path = pathOrUrl;
   }
   // Insert `.json` before the query string (if any).

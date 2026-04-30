@@ -25,6 +25,10 @@ export function buildConfig(input = {}) {
     collectionPrefix: input.collectionPrefix ?? 'marketing_',
     basePath,
     requireAuth: input.requireAuth,
+    // Worker-env namespace. Workers only claim jobs tagged with this
+    // env and tag enqueued jobs with this env. Lets local + prod share
+    // a Mongo cluster without stealing each other's jobs.
+    env: input.env || process.env.MARKETING_ENV || 'default',
 
     youtubeApiKey: input.youtubeApiKey || null,
     reddit: input.reddit || null,

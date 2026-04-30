@@ -7,19 +7,35 @@ export function buildOpportunitiesRoutes(ctx) {
   router.get('/', async (req, res, next) => {
     try {
       const filter = {};
+      // Default the feed to actionable items: decision='pending' unless
+      // the caller asks otherwise. Prevents tombstoned/passed/replied items
+      // from cluttering the list.
+      if (req.query.decision != null) {
+        // Empty string = "any decision" (escape hatch). Otherwise CSV.
+        if (req.query.decision !== '') {
+          filter.decision = { $in: String(req.query.decision).split(',') };
+        }
+      } else {
+        filter.decision = 'pending';
+      }
       if (req.query.status) filter.status = { $in: String(req.query.status).split(',') };
-      if (req.query.fit) filter['triage.fit'] = { $in: String(req.query.fit).split(',') };
+      if (req.query.bucket) filter['triage.bucket'] = { $in: String(req.query.bucket).split(',') };
       if (req.query.subreddit) filter.subreddit = req.query.subreddit;
       if (req.query.subredditId) filter.subredditId = req.query.subredditId;
       if (req.query.authorContactId) filter.authorContactId = req.query.authorContactId;
       const limit = Math.min(Number(req.query.limit) || 50, 200);
       const offset = Number(req.query.offset) || 0;
 
-      const [opportunities, total] = await Promise.all([
+      const [opportunities, total, counts] = await Promise.all([
         EngagementOpportunity.find(filter).sort({ postedAt: -1 }).skip(offset).limit(limit).lean(),
         EngagementOpportunity.countDocuments(filter),
+        // Counters for the feed header so the user can trust nothing is lost.
+        EngagementOpportunity.aggregate([
+          { $group: { _id: '$decision', n: { $sum: 1 } } },
+        ]),
       ]);
-      res.json({ opportunities, total, limit, offset });
+      const decisionCounts = Object.fromEntries(counts.map((c) => [c._id || 'pending', c.n]));
+      res.json({ opportunities, total, limit, offset, decisionCounts });
     } catch (err) { next(err); }
   });
 
@@ -33,12 +49,12 @@ export function buildOpportunitiesRoutes(ctx) {
 
   router.patch('/:id', async (req, res, next) => {
     try {
-      const allowed = ['reviewerNotes', 'status'];
+      const allowed = ['status', 'decisionNote'];
       const update = {};
       for (const k of allowed) if (req.body && k in req.body) update[k] = req.body[k];
       // Allow draft.body edits too — lets the user tweak the AI-composed reply
       if (req.body?.draftBody !== undefined) update['draft.body'] = req.body.draftBody;
-      const opp = await EngagementOpportunity.findByIdAndUpdate(req.params.id, update, { new: true });
+      const opp = await EngagementOpportunity.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
       if (!opp) return res.status(404).json({ error: 'not_found' });
       res.json(opp);
     } catch (err) { next(err); }
@@ -69,12 +85,50 @@ export function buildOpportunitiesRoutes(ctx) {
     } catch (err) { next(err); }
   });
 
+  // User-decision endpoints. All set `decision` so the row stops appearing
+  // in the default feed query AND so future scans hit a tombstone.
+  router.post('/:id/pass', async (req, res, next) => {
+    try {
+      const opp = await EngagementOpportunity.findByIdAndUpdate(
+        req.params.id,
+        { decision: 'passed', decidedAt: new Date(), decisionNote: req.body?.note || null },
+        { returnDocument: 'after' }
+      );
+      if (!opp) return res.status(404).json({ error: 'not_found' });
+      res.json(opp);
+    } catch (err) { next(err); }
+  });
+
+  router.post('/:id/save', async (req, res, next) => {
+    try {
+      const opp = await EngagementOpportunity.findByIdAndUpdate(
+        req.params.id,
+        { decision: 'saved', decidedAt: new Date(), decisionNote: req.body?.note || null },
+        { returnDocument: 'after' }
+      );
+      if (!opp) return res.status(404).json({ error: 'not_found' });
+      res.json(opp);
+    } catch (err) { next(err); }
+  });
+
+  router.post('/:id/unpass', async (req, res, next) => {
+    try {
+      const opp = await EngagementOpportunity.findByIdAndUpdate(
+        req.params.id,
+        { decision: 'pending', decidedAt: null, decisionNote: null },
+        { returnDocument: 'after' }
+      );
+      if (!opp) return res.status(404).json({ error: 'not_found' });
+      res.json(opp);
+    } catch (err) { next(err); }
+  });
+
   router.post('/:id/dismiss', async (req, res, next) => {
     try {
       const opp = await EngagementOpportunity.findByIdAndUpdate(
         req.params.id,
-        { status: 'dismissed' },
-        { new: true }
+        { decision: 'dismissed', decidedAt: new Date(), status: 'low-fit-archived' },
+        { returnDocument: 'after' }
       );
       if (!opp) return res.status(404).json({ error: 'not_found' });
       res.json(opp);
@@ -88,26 +142,14 @@ export function buildOpportunitiesRoutes(ctx) {
         req.params.id,
         {
           status: 'posted',
+          decision: 'replied',
+          decidedAt: new Date(),
           postedAtUs: new Date(),
           postedCommentUrl: commentUrl || null,
-          postedCommentId: commentUrl ? extractCommentId(commentUrl) : null,
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!opp) return res.status(404).json({ error: 'not_found' });
-      res.json(opp);
-    } catch (err) { next(err); }
-  });
-
-  router.post('/:id/refresh-performance', async (req, res, next) => {
-    try {
-      const opp = await EngagementOpportunity.findById(req.params.id);
-      if (!opp) return res.status(404).json({ error: 'not_found' });
-      if (!opp.postedCommentId) return res.json(opp);
-      // Phase 9 wires this to the Reddit comment endpoint; for now just stamp
-      opp.postPerformance = opp.postPerformance || {};
-      opp.postPerformance.lastCheckedAt = new Date();
-      await opp.save();
       res.json(opp);
     } catch (err) { next(err); }
   });
@@ -142,9 +184,4 @@ export function buildOpportunitiesRoutes(ctx) {
   });
 
   return router;
-}
-
-function extractCommentId(url) {
-  const m = url.match(/\/comments\/[^/]+\/[^/]+\/([a-z0-9]+)/);
-  return m ? m[1] : null;
 }

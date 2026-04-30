@@ -20,6 +20,7 @@ export function registerScanJob(registry) {
 
     let postsScanned = 0;
     let candidatesIdentified = 0;
+    const newOppIds = []; // collected for one batch triage job at the end
     try {
       const feed = await tool.execute({ subreddit: sub.subreddit, sort: 'new', limit: 50 });
       if (feed.error) throw new Error(`feed_error: ${feed.error}`);
@@ -31,6 +32,21 @@ export function registerScanJob(registry) {
       const minScore = rules.minPostScore ?? 1;
       const keywords = (rules.keywords || []).map((k) => k.toLowerCase());
       const excludeKeywords = (rules.excludeKeywords || []).map((k) => k.toLowerCase());
+
+      // Cost-saving prefilter defaults. Each can be overridden per-sub in
+      // scanRules.prefilter. Goal: kill obvious dead ends BEFORE we pay
+      // Haiku to triage them. Pre-change observation: ~50% of triages
+      // returned `low` or `no` and were money on the floor.
+      const pf = rules.prefilter || {};
+      const prefilterMinKeywordMatches = pf.minKeywordMatches ?? 2;       // require ≥2 keyword hits to be worth a triage
+      const prefilterMaxComments = pf.maxComments ?? 60;                  // saturated threads = adding noise
+      const prefilterMinScore = pf.minScore ?? minScore;                  // can be stricter than the recording threshold
+      const prefilterTitleBlocklist = (pf.titleBlocklist || [
+        'source?', 'where to buy', 'vendor rec', 'best vendor', 'sourcing',
+        'cheapest', 'discount code', 'coupon', 'deal',
+        'insurance', 'goodrx', 'pa denial', 'prior auth',
+        'rx', 'script', 'prescription help',
+      ]).map((s) => s.toLowerCase());
 
       for (const post of posts) {
         const ageMs = Date.now() - new Date(post.createdAt).getTime();
@@ -44,32 +60,25 @@ export function registerScanJob(registry) {
         if (keywords.length > 0 && matchedKeywords.length === 0) continue;
 
         if (rules.fitnessFilters?.mustBeQuestion && !post.title.includes('?')) continue;
-        if (
-          rules.fitnessFilters?.avoidAlreadyAnsweredCount != null &&
-          (post.numComments || 0) > rules.fitnessFilters.avoidAlreadyAnsweredCount
-        ) {
-          continue;
-        }
 
-        // Resolve / create author Contact
-        let authorContactId = null;
-        if (post.author && post.author !== '[deleted]') {
-          const handle = String(post.author).toLowerCase();
-          let existing = await ctx.models.Contact.findOne({
-            presences: { $elemMatch: { platform: 'reddit', handle } },
-          });
-          if (!existing) {
-            existing = await ctx.models.Contact.create({
-              name: post.author,
-              relationship: 'unknown',
-              presences: [{ platform: 'reddit', handle, url: `https://reddit.com/user/${post.author}` }],
-              source: { type: 'reddit_engagement_link', importedAt: new Date(), note: `from sub ${sub.subreddit}` },
-            });
-          }
-          authorContactId = existing._id;
-        }
+        // Cost-saving prefilter: don't even RECORD an opportunity (and
+        // therefore don't pay to triage it) if it fails these gates.
+        // These are tunable per-sub via scanRules.prefilter.
+        const titleLower = (post.title || '').toLowerCase();
+        if (prefilterTitleBlocklist.some((s) => titleLower.includes(s))) continue;
+        if ((post.score || 0) < prefilterMinScore) continue;
+        if ((post.numComments || 0) > prefilterMaxComments) continue;
+        if (matchedKeywords.length < prefilterMinKeywordMatches) continue;
 
-        // Upsert opportunity (subredditId+postId unique)
+        // NOTE: we do NOT create a Contact for the post author. That used
+        // to happen here and polluted the CRM with thousands of random
+        // reddit users. We just store the username string. Users can
+        // manually link an author → Contact via /opportunities/:id/link-author-to-contact
+        // when there's actually a relationship worth tracking.
+
+        // Upsert opportunity (subredditId+postId unique). Re-scans hit
+        // existing rows (including tombstoned ones via decision='passed'/
+        // 'dismissed'/'replied') and skip re-triage.
         const opp = await ctx.models.EngagementOpportunity.findOneAndUpdate(
           { subredditId: sub._id, postId: post.id },
           {
@@ -81,27 +90,40 @@ export function registerScanJob(registry) {
               title: post.title,
               postExcerpt: post.selftextExcerpt,
               authorUsername: post.author,
-              authorContactId,
               postedAt: new Date(post.createdAt),
               postScore: post.score,
               postCommentCount: post.numComments,
               matchedKeywords,
               status: 'new',
+              decision: 'pending',
             },
           },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
         if (opp.createdAt && Date.now() - opp.createdAt.getTime() < 5_000) {
           candidatesIdentified++;
-          // Auto-enqueue triage for the newly-created opportunity. Triage
-          // (Haiku) decides fit and, if medium/high, chains into draftReply
-          // (Sonnet). Existing opportunities (re-seen on a later scan) are
-          // skipped — they were triaged on first sight.
-          await ctx.worker.enqueue({
-            type: 'redditEngagement.triageOpportunity',
-            opportunityId: opp._id,
-          });
+          // Collect id for the batch triage. We enqueue ONE batch job at
+          // the end of the scan rather than N per-opp jobs — voice card
+          // is sent once per call instead of N times = ~50% token savings.
+          newOppIds.push(opp._id);
+        } else if (opp.status === 'new') {
+          // Already in DB but never got triaged (e.g. earlier triage job
+          // failed because handler wasn't registered, or worker crashed).
+          // Include in this scan's batch so the backlog clears naturally.
+          newOppIds.push(opp._id);
         }
+      }
+
+      // Enqueue ONE batch triage job covering all newly-created opps.
+      // Voice card sent once per batch instead of N times = ~50% token
+      // savings vs per-opp triage. Chunked at 25 to bound prompt size.
+      const BATCH_SIZE = 25;
+      for (let i = 0; i < newOppIds.length; i += BATCH_SIZE) {
+        const batch = newOppIds.slice(i, i + BATCH_SIZE);
+        await ctx.worker.enqueue({
+          type: 'redditEngagement.triageBatch',
+          payload: { opportunityIds: batch.map((id) => String(id)) },
+        });
       }
 
       sub.lastScanAt = new Date();
@@ -137,10 +159,13 @@ export function registerScanScheduler(scheduler, models) {
   scheduler.register({
     name: 'redditEngagement.scan',
     async check() {
-      const subs = await models.MonitoredSubreddit.find({ active: true }).lean();
+      // Scheduler only picks up subs the user has explicitly opted into
+      // auto-scanning. Default mode is manual: user hits /scan-now when
+      // they have time to handle the resulting opportunity queue.
+      const subs = await models.MonitoredSubreddit.find({ active: true, autoScanEnabled: true }).lean();
       const due = [];
       for (const s of subs) {
-        const intervalMs = (s.scanIntervalMinutes || 30) * 60 * 1000;
+        const intervalMs = (s.scanIntervalMinutes || 1440) * 60 * 1000; // daily default
         if (!s.lastScanAt || Date.now() - new Date(s.lastScanAt).getTime() >= intervalMs) {
           due.push({
             type: 'redditEngagement.scanSubreddit',

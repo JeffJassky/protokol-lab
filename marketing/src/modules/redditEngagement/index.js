@@ -6,7 +6,7 @@ import { buildMonitoredSubredditModel } from './models/MonitoredSubreddit.js';
 import { buildEngagementOpportunityModel } from './models/EngagementOpportunity.js';
 import { buildEngagementRunModel } from './models/EngagementRun.js';
 import { registerScanJob, registerScanScheduler } from './jobs/scan.js';
-import { registerTriagePrompt, registerTriageJob } from './jobs/triage.js';
+import { registerTriagePrompt, registerTriageJob, registerTriageBatchPrompt, registerTriageBatchJob } from './jobs/triage.js';
 import { registerDraftReplyPrompt, registerDraftReplyJob } from './jobs/draftReply.js';
 import { buildSubredditsRoutes } from './routes/subreddits.js';
 import { buildOpportunitiesRoutes } from './routes/opportunities.js';
@@ -26,12 +26,19 @@ export function setupRedditEngagement(ctx) {
 
   // Prompts
   registerTriagePrompt(ctx.prompts);
+  registerTriageBatchPrompt(ctx.prompts);
   registerDraftReplyPrompt(ctx.prompts);
 
   // Job handlers
   registerScanJob(ctx.worker.registry);
   registerTriageJob(ctx.worker.registry);
+  registerTriageBatchJob(ctx.worker.registry);
   registerDraftReplyJob(ctx.worker.registry);
+
+  // Boot marker — proves the new code path executed at startup. If you
+  // don't see this line in your dev server logs after a restart, the
+  // process is running stale code (HMR partial-reload or didn't restart).
+  console.log('[redditEngagement] booted — bucket-classification + telegram + env-tagged jobs active');
 
   // Recurring scan scheduler
   registerScanScheduler(ctx.scheduler, ctx.models);

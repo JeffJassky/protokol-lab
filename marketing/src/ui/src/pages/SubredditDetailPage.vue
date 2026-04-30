@@ -71,12 +71,15 @@ async function scanNow() {
             <option v-for="v in voices" :key="v._id" :value="v._id">{{ v.name }}</option>
           </select>
         </div>
-        <label style="display:flex;gap:6px;align-items:center;font-size:13px">
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px" title="Sub is monitored. Off = hidden from scheduler entirely.">
           <input type="checkbox" v-model="sub.active" /> Active
         </label>
-        <div class="field" style="margin:0;max-width:140px">
-          <label class="field-label">Scan every (min)</label>
-          <input class="input" type="number" min="5" v-model="sub.scanIntervalMinutes" />
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px" title="On = scheduler scans on the interval below. Off = manual-only via Scan now.">
+          <input type="checkbox" v-model="sub.autoScanEnabled" /> Auto-scan
+        </label>
+        <div class="field" style="margin:0;max-width:160px">
+          <label class="field-label">Auto-scan every (min)</label>
+          <input class="input" type="number" min="60" step="60" v-model.number="sub.scanIntervalMinutes" :disabled="!sub.autoScanEnabled" />
         </div>
       </div>
     </div>

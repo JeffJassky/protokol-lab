@@ -43,6 +43,20 @@ export function getMarketingAdmin() {
       username: process.env.REDDIT_USERNAME || null,
       password: process.env.REDDIT_PASSWORD || null,
     },
+    // Worker env namespace. Local dev and prod share one Mongo cluster.
+    // Without this, both workers race for the same jobs and prod (Alpine,
+    // no Claude Code binary) fails everything before local can claim. We
+    // tag each install with a distinct env so they only see their own
+    // queue. Set MARKETING_ENV in each environment (.env locally,
+    // .do/app.yaml in prod). Defaults to NODE_ENV or 'default'.
+    env: process.env.MARKETING_ENV || process.env.NODE_ENV || 'default',
+    // Kill switch: set MARKETING_WORKER_ENABLED=false to disable the
+    // worker on this install entirely (e.g. prod doesn't have Claude Code
+    // CLI, so let local handle all jobs until prod is redeployed with
+    // bucket-classification + Anthropic-API agent). Defaults to enabled.
+    worker: process.env.MARKETING_WORKER_ENABLED === 'false'
+      ? { enabled: false }
+      : undefined,
     logger: log,
   });
 
