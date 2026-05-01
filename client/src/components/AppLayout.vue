@@ -1,11 +1,18 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, defineAsyncComponent, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useAuthStore } from '../stores/auth.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { usePushStore } from '../stores/push.js';
 import { useChatStarterStore } from '../stores/chatStarter.js';
+import { useFoodLogStore } from '../stores/foodlog.js';
 import { useTheme } from '../composables/useTheme.js';
-import ChatDrawer from './ChatDrawer.vue';
+import { useNetworkStatus } from '../composables/useNetworkStatus.js';
+import { isNativePlatform } from '../api/auth-token.js';
+import { localYmd } from '../utils/date.js';
+// ChatDrawer pulls deep-chat (~150 kB). Lazy-load it so the chunk only
+// downloads on first FAB tap, not on every authed-route mount. Cold-start
+// matters more on native; web users rarely notice but get the same win.
+const ChatDrawer = defineAsyncComponent(() => import('./ChatDrawer.vue'));
 import OnboardingBanner from './OnboardingBanner.vue';
 import OnboardingChecklist from './OnboardingChecklist.vue';
 import DemoBanner from './DemoBanner.vue';
@@ -17,6 +24,8 @@ const auth = useAuthStore();
 const onboarding = useOnboardingStore();
 const pushStore = usePushStore();
 const chatStarter = useChatStarterStore();
+const foodlog = useFoodLogStore();
+const { isOnline } = useNetworkStatus();
 
 const showChat = ref(false);
 
@@ -38,11 +47,59 @@ function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark';
 }
 
+// On native, when iOS purges a backgrounded WebView under memory pressure,
+// the user returns to a cold app. Persisted Pinia state (auth.user,
+// foodlog entries, settings, compounds) renders the shell instantly; this
+// listener refreshes the parts that change by the minute. Throttled so a
+// quick tab-switch doesn't burn API calls.
+const REVALIDATE_THROTTLE_MS = 60_000;
+let lastRevalidatedAt = 0;
+let appStateListener = null;
+
+async function revalidateToday() {
+  const now = Date.now();
+  if (now - lastRevalidatedAt < REVALIDATE_THROTTLE_MS) return;
+  lastRevalidatedAt = now;
+  try {
+    await foodlog.loadDay(localYmd());
+  } catch (_e) {
+    // Best-effort — a transient network blip shouldn't surface as an error
+    // banner just because the app came back to foreground.
+  }
+}
+
 onMounted(async () => {
   const uid = auth.user?._id || auth.user?.id;
   if (uid) onboarding.hydrate(String(uid));
   if (pushStore.supported) {
     await pushStore.loadExistingSubscription().catch(() => {});
+  }
+
+  if (isNativePlatform()) {
+    const { App } = await import('@capacitor/app');
+    appStateListener = await App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) revalidateToday();
+    });
+
+    // StatusBar: don't overlay the WebView. iOS notch + Android edge-to-edge
+    // (Android 15+) both reserve the status-bar area outside our content.
+    // Belt-and-suspenders with the `env(safe-area-inset-top)` padding on
+    // .top-nav so layout still works if the plugin call fails.
+    try {
+      const { StatusBar, Style } = await import('@capacitor/status-bar');
+      await StatusBar.setOverlaysWebView({ overlay: false });
+      const isDark = (theme.value || 'dark') === 'dark';
+      await StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
+    } catch (_e) {
+      // Status-bar setup is cosmetic — failure must not block the app.
+    }
+  }
+});
+
+onBeforeUnmount(() => {
+  if (appStateListener) {
+    appStateListener.remove();
+    appStateListener = null;
   }
 });
 
@@ -58,6 +115,28 @@ watch(() => auth.user, (u) => {
 
 <template>
   <div class="app-layout">
+    <div v-if="!isOnline" class="offline-banner" role="status" aria-live="polite">
+      <svg
+        class="offline-icon"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <line x1="2" y1="2" x2="22" y2="22" />
+        <path d="M8.5 16.5a5 5 0 0 1 7 0" />
+        <path d="M2 8.82a15 15 0 0 1 4.17-2.65" />
+        <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76" />
+        <path d="M16.85 11.25a10 10 0 0 1 2.22 1.68" />
+        <path d="M5 13a10 10 0 0 1 5.24-2.76" />
+        <line x1="12" y1="20" x2="12.01" y2="20" />
+      </svg>
+      <span>You're offline. Showing your last cached data — new entries will sync when you reconnect.</span>
+    </div>
     <DemoBanner />
     <OnboardingBanner />
     <nav class="top-nav">
@@ -214,12 +293,33 @@ watch(() => auth.user, (u) => {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-warning-bg, #4a3a14);
+  color: var(--color-warning-text, #ffd789);
+  font-size: var(--font-size-s);
+  border-bottom: 1px solid var(--color-warning, #b18a2e);
+  flex: none;
+}
+.offline-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
 .top-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-6);
-  height: 56px;
+  /* env(safe-area-inset-top) reserves the iPhone notch / Dynamic Island and
+     Android 15+ edge-to-edge status-bar area. Pairs with StatusBar
+     setOverlaysWebView({overlay:false}) on native; the CSS alone keeps web
+     PWAs (installed home-screen) clean. */
+  padding-top: env(safe-area-inset-top, 0);
+  height: calc(56px + env(safe-area-inset-top, 0));
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   font-family: var(--font-display);

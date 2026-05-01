@@ -39,4 +39,9 @@ export const useCompoundsStore = defineStore('compounds', () => {
   }
 
   return { compounds, enabled, loaded, fetchAll, create, update, remove, getById };
+}, {
+  // Persist the catalog so the dose log + reminder UIs render without a
+  // network round-trip on cold start. fetchAll() refreshes once the app
+  // mounts. `loaded` is a session flag, not persisted.
+  persist: { pick: ['compounds'] },
 });

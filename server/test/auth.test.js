@@ -494,3 +494,216 @@ describe('POST /api/auth/google', () => {
     expect(demoCookie).toMatch(/expires=Thu, 01 Jan 1970|max-age=0\b|max-age=-\d+/i);
   });
 });
+
+// Native (Capacitor) clients can't use the cookie reliably across origins.
+// They opt into Bearer auth with `X-Auth-Mode: bearer` on the auth call,
+// receive the JWT in the JSON body, and pass it back as Authorization on
+// subsequent requests. Web continues to use cookies and never sees the JWT
+// in JS-readable space.
+describe('Bearer auth (native opt-in via X-Auth-Mode header)', () => {
+  it('returns the JWT in the JSON body when X-Auth-Mode=bearer on register', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .set('X-Auth-Mode', 'bearer')
+      .send({ email: 'bearer-register@example.com', password: 'passw0rd-ok' });
+    expect(res.status).toBe(201);
+    expect(typeof res.body.token).toBe('string');
+    expect(res.body.token.split('.').length).toBe(3); // looks like a JWT
+  });
+
+  it('returns the JWT in the JSON body when X-Auth-Mode=bearer on login', async () => {
+    await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'bearer-login@example.com', password: 'passw0rd-ok' });
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('X-Auth-Mode', 'bearer')
+      .send({ email: 'bearer-login@example.com', password: 'passw0rd-ok' });
+    expect(res.status).toBe(200);
+    expect(typeof res.body.token).toBe('string');
+  });
+
+  it('omits the token from the JSON body for cookie-mode requests (web)', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'cookie-only@example.com', password: 'passw0rd-ok' });
+    expect(res.status).toBe(201);
+    expect(res.body.token).toBeUndefined();
+    // Cookie path still works for the web client.
+    const tokenCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith('token='));
+    expect(tokenCookie).toBeDefined();
+  });
+
+  it('authenticates /api/auth/me with Authorization: Bearer (no cookie jar)', async () => {
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .set('X-Auth-Mode', 'bearer')
+      .send({ email: 'bearer-me@example.com', password: 'passw0rd-ok' });
+    const token = reg.body.token;
+    expect(token).toBeDefined();
+
+    // Plain request() — no agent, no cookie jar. Auth must come from the
+    // Authorization header alone.
+    const me = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.user.email).toBe('bearer-me@example.com');
+  });
+
+  it('rejects /api/auth/me with a malformed Bearer token', async () => {
+    const me = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer not-a-real-jwt');
+    expect(me.status).toBe(401);
+  });
+
+  it('cookie auth still works without any Authorization header (web unchanged)', async () => {
+    const agent = request.agent(app);
+    await agent
+      .post('/api/auth/register')
+      .send({ email: 'still-cookie@example.com', password: 'passw0rd-ok' });
+    const me = await agent.get('/api/auth/me');
+    expect(me.status).toBe(200);
+    expect(me.body.user.email).toBe('still-cookie@example.com');
+  });
+
+  it('returns the JWT in JSON body on /api/auth/google with X-Auth-Mode=bearer', async () => {
+    googleVerifyMock.mockResolvedValueOnce({
+      getPayload: () => ({
+        sub: 'google-bearer-sub',
+        email: 'bearer-google@example.com',
+        email_verified: true,
+        name: 'Bearer Google',
+      }),
+    });
+    const res = await request(app)
+      .post('/api/auth/google')
+      .set('X-Auth-Mode', 'bearer')
+      .send({ credential: 'fake-id-token' });
+    expect(res.status).toBe(201);
+    expect(typeof res.body.token).toBe('string');
+  });
+});
+
+describe('DELETE /api/auth/me', () => {
+  beforeEach(() => {
+    emailService.sendAccountDeletedEmail.mockClear();
+  });
+
+  it('rejects unauthenticated requests', async () => {
+    const res = await request(app).delete('/api/auth/me').send({ password: 'whatever' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects when password missing for password account', async () => {
+    const { agent } = await registerUser({ email: 'del-nopw@example.com' });
+    const res = await agent.delete('/api/auth/me').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('password_required');
+    // User row still exists.
+    expect(await User.findOne({ email: 'del-nopw@example.com' })).toBeTruthy();
+  });
+
+  it('rejects when password wrong', async () => {
+    const { agent } = await registerUser({ email: 'del-bad@example.com' });
+    const res = await agent.delete('/api/auth/me').send({ password: 'not-the-right-one' });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('invalid_password');
+    expect(await User.findOne({ email: 'del-bad@example.com' })).toBeTruthy();
+  });
+
+  it('deletes user, clears cookie, and emails confirmation on happy path', async () => {
+    const { agent, body } = await registerUser({ email: 'del-ok@example.com' });
+    const res = await agent.delete('/api/auth/me').send({ password: body.password });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+
+    // Cookie cleared (Set-Cookie: token=; expires past).
+    const setCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith('token='));
+    expect(setCookie).toBeDefined();
+    expect(setCookie).toMatch(/expires=Thu, 01 Jan 1970|max-age=0\b/i);
+
+    // User row gone.
+    expect(await User.findOne({ email: 'del-ok@example.com' })).toBeNull();
+
+    // Confirmation email fired (allow microtask for fire-and-forget).
+    await new Promise((r) => setImmediate(r));
+    expect(emailService.sendAccountDeletedEmail).toHaveBeenCalledWith('del-ok@example.com');
+  });
+
+  it('cascades user-owned data via the User cascade hook', async () => {
+    // Register, then write a row in a cascaded collection through the API
+    // (uses the same userId resolution as a real client).
+    const { agent } = await registerUser({ email: 'del-cascade@example.com' });
+    const user = await User.findOne({ email: 'del-cascade@example.com' });
+
+    // Drop a WeightLog row directly so we don't depend on a separate route here.
+    const WeightLog = (await import('../src/models/WeightLog.js')).default;
+    await WeightLog.create({ userId: user._id, weightLbs: 180, date: new Date() });
+    expect(await WeightLog.countDocuments({ userId: user._id })).toBe(1);
+
+    const res = await agent.delete('/api/auth/me').send({ password: valid.password });
+    expect(res.status).toBe(200);
+
+    expect(await User.findById(user._id)).toBeNull();
+    expect(await WeightLog.countDocuments({ userId: user._id })).toBe(0);
+  });
+
+  it('OAuth-only account requires `confirm:true` instead of password', async () => {
+    googleVerifyMock.mockResolvedValueOnce({
+      getPayload: () => ({
+        sub: 'google-del-sub',
+        email: 'del-oauth@example.com',
+        email_verified: true,
+        name: 'Delete Me',
+      }),
+    });
+    const agent = request.agent(app);
+    const reg = await agent.post('/api/auth/google').send({ credential: 'fake-id-token' });
+    expect(reg.status).toBe(201);
+
+    // Without confirm flag → 400.
+    const r1 = await agent.delete('/api/auth/me').send({});
+    expect(r1.status).toBe(400);
+    expect(r1.body.error).toBe('confirmation_required');
+
+    // With confirm:true → 200, user gone.
+    const r2 = await agent.delete('/api/auth/me').send({ confirm: true });
+    expect(r2.status).toBe(200);
+    expect(await User.findOne({ email: 'del-oauth@example.com' })).toBeNull();
+  });
+
+  it('rejects password challenge for OAuth-only account (passwordHash absent)', async () => {
+    googleVerifyMock.mockResolvedValueOnce({
+      getPayload: () => ({
+        sub: 'google-del-sub-2',
+        email: 'del-oauth-pw@example.com',
+        email_verified: true,
+        name: 'Delete Me 2',
+      }),
+    });
+    const agent = request.agent(app);
+    await agent.post('/api/auth/google').send({ credential: 'fake-id-token' });
+
+    // Sending a password on an OAuth account still hits the confirm branch.
+    const res = await agent.delete('/api/auth/me').send({ password: 'whatever' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('confirmation_required');
+  });
+
+  it('works with Bearer auth (no cookie)', async () => {
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .set('X-Auth-Mode', 'bearer')
+      .send({ email: 'del-bearer@example.com', password: 'passw0rd-ok' });
+    const token = reg.body.token;
+
+    const res = await request(app)
+      .delete('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ password: 'passw0rd-ok' });
+    expect(res.status).toBe(200);
+    expect(await User.findOne({ email: 'del-bearer@example.com' })).toBeNull();
+  });
+});

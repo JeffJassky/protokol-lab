@@ -77,7 +77,7 @@ describe('requireAuth', () => {
     expect(res.body.error).toMatch(/user not found/i);
   });
 
-  it('attaches userId + user to req on success, strips passwordHash', async () => {
+  it('attaches userId + user to req on success', async () => {
     const user = await mkUser();
     const good = tokenFor(user._id);
     const res = await request(mkApp())
@@ -86,6 +86,9 @@ describe('requireAuth', () => {
     expect(res.status).toBe(200);
     expect(res.body.userId).toBe(String(user._id));
     expect(res.body.email).toBe(user.email);
-    expect(res.body.hasPasswordHash).toBe(false);
+    // passwordHash is loaded onto req.user (used by DELETE /api/auth/me's
+    // re-auth) but never serialized — every route either uses serializeUser()
+    // or projects whitelisted fields.
+    expect(res.body.hasPasswordHash).toBe(true);
   });
 });

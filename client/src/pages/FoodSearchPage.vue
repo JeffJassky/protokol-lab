@@ -1,12 +1,15 @@
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, defineAsyncComponent, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useFoodStore } from '../stores/food.js';
 import { useMealsStore } from '../stores/meals.js';
 import { api } from '../api/index.js';
 import FoodItemRow from '../components/FoodItemRow.vue';
 import EmojiPickerButton from '../components/EmojiPickerButton.vue';
-import BarcodeScannerModal from '../components/BarcodeScannerModal.vue';
+// BarcodeScannerModal pulls @zxing/browser + @zxing/library on web (~150 kB).
+// Lazy-load so the chunk only downloads on first scan-button tap. On native
+// the modal swaps to ML Kit which uses the OS scanner and adds nothing.
+const BarcodeScannerModal = defineAsyncComponent(() => import('../components/BarcodeScannerModal.vue'));
 import UpgradeBadge from '../components/UpgradeBadge.vue';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';

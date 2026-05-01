@@ -15,7 +15,17 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import { CLIENT_EVENT_ALLOWLIST, insertFunnelEvent } from '../lib/funnelEvents.js';
+import { readAuthToken } from '../middleware/requireAuth.js';
 import { childLogger } from '../lib/logger.js';
+
+// Native (Capacitor) shells are origin capacitor://localhost (iOS) or
+// https://localhost (Android). Allow them alongside APP_URL so first-party
+// funnel beacons from the native app aren't dropped as cross-origin.
+const NATIVE_ORIGINS = new Set([
+  'capacitor://localhost',
+  'https://localhost',
+  'http://localhost',
+]);
 
 const log = childLogger('track');
 const router = Router();
@@ -39,7 +49,7 @@ const beaconLimiter = rateLimit({
 });
 
 function resolveUserId(req) {
-  const token = req.cookies?.token;
+  const token = readAuthToken(req);
   if (!token) return null;
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
@@ -63,10 +73,11 @@ router.post('/', beaconLimiter, async (req, res) => {
   // multi-subdomain deploys) that protection drops. Reject when the Origin
   // header is present and not from APP_URL — same-origin browser requests
   // omit the Origin or send our own host. Server-to-server calls have no
-  // Origin and pass through.
+  // Origin and pass through. Capacitor native shells are first-party too —
+  // their fixed origins are allowlisted alongside APP_URL.
   const origin = req.headers.origin;
   const expectedOrigin = process.env.APP_URL;
-  if (origin && expectedOrigin && origin !== expectedOrigin) {
+  if (origin && expectedOrigin && origin !== expectedOrigin && !NATIVE_ORIGINS.has(origin)) {
     log.warn({ origin, expectedOrigin }, 'track: rejected cross-origin beacon');
     return res.status(403).json({ error: 'forbidden_origin' });
   }

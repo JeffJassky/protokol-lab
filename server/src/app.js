@@ -99,8 +99,14 @@ export function createApp({ serveClient = true } = {}) {
     })
   );
 
+  // Web stays cookie-authenticated against APP_URL. Native (Capacitor) shells
+  // run from capacitor://localhost (iOS) or https://localhost (Android) and
+  // authenticate via Bearer — they need their origins on the allowlist so
+  // browser CORS doesn't block the cross-origin XHR. credentials:true keeps
+  // working for the web cookie path; native ignores cookies anyway.
+  const NATIVE_ORIGINS = ['capacitor://localhost', 'https://localhost', 'http://localhost'];
   const corsOrigin = isProd
-    ? (process.env.APP_URL || false)
+    ? [process.env.APP_URL, ...NATIVE_ORIGINS].filter(Boolean)
     : true;
   app.use(cors({ origin: corsOrigin, credentials: true }));
 

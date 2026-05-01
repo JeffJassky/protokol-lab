@@ -17,25 +17,56 @@ publicPushRouter.get("/vapid-public-key", (req, res) => {
 
 const router = Router();
 
+// Accepts three transport variants:
+//   web : { subscription: { endpoint, keys: { p256dh, auth } } }
+//   fcm : { transport: 'fcm', token: '<device token>' }
+//   apns: { transport: 'apns', token: '<device token>' }
+// Phase A wires fcm + apns through the schema; the actual send paths land
+// when M7 ships its Firebase + APNs credentials. Until then native sub
+// rows are stored but the cron worker skips them gracefully.
 router.post("/subscribe", async (req, res) => {
   const rlog = req.log || log;
-  const { subscription, categories } = req.body || {};
-  if (
-    !subscription?.endpoint ||
-    !subscription?.keys?.p256dh ||
-    !subscription?.keys?.auth
-  ) {
-    rlog.warn('push subscribe: invalid subscription body');
-    return res.status(400).json({ error: "Invalid subscription" });
+  const { subscription, categories, transport, token } = req.body || {};
+
+  let filter;
+  let update;
+
+  if (transport === 'fcm' || transport === 'apns') {
+    if (typeof token !== 'string' || !token) {
+      rlog.warn({ transport }, 'push subscribe: native token missing');
+      return res.status(400).json({ error: "Invalid native token" });
+    }
+    // Synthesize a stable endpoint string from `${transport}:${token}` so
+    // the existing (userId, endpoint) unique index dedupes native subs
+    // without changing the index shape.
+    const endpoint = `${transport}:${token}`;
+    filter = { userId: req.authUserId, endpoint };
+    update = {
+      userId: req.authUserId,
+      transport,
+      endpoint,
+      token,
+      userAgent: req.headers["user-agent"] || "",
+    };
+  } else {
+    if (
+      !subscription?.endpoint ||
+      !subscription?.keys?.p256dh ||
+      !subscription?.keys?.auth
+    ) {
+      rlog.warn('push subscribe: invalid subscription body');
+      return res.status(400).json({ error: "Invalid subscription" });
+    }
+    filter = { userId: req.authUserId, endpoint: subscription.endpoint };
+    update = {
+      userId: req.authUserId,
+      transport: 'web',
+      endpoint: subscription.endpoint,
+      keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
+      userAgent: req.headers["user-agent"] || "",
+    };
   }
 
-  const filter = { userId: req.authUserId, endpoint: subscription.endpoint };
-  const update = {
-    userId: req.authUserId,
-    endpoint: subscription.endpoint,
-    keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
-    userAgent: req.headers["user-agent"] || "",
-  };
   if (categories && typeof categories === "object") {
     update.categories = {
       doseReminder: categories.doseReminder !== false,
@@ -51,7 +82,12 @@ router.post("/subscribe", async (req, res) => {
   });
 
   rlog.info(
-    { subscriptionId: String(sub._id), endpointHost: new URL(subscription.endpoint).host, categories: update.categories },
+    {
+      subscriptionId: String(sub._id),
+      transport: sub.transport,
+      endpointHost: sub.transport === 'web' ? new URL(sub.endpoint).host : sub.transport,
+      categories: update.categories,
+    },
     'push: subscription upserted',
   );
   res.status(201).json({ subscription: sub });

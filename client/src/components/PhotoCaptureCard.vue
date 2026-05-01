@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { usePhotosStore } from '../stores/photos.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
+import { isNativePlatform } from '../api/auth-token.js';
 import PhotoViewerModal from './PhotoViewerModal.vue';
 import UpgradeBadge from './UpgradeBadge.vue';
 
@@ -62,8 +63,51 @@ function triggerPick(angle) {
     });
     return;
   }
+  if (isNativePlatform()) {
+    capturePhotoNative(angle);
+    return;
+  }
   const el = fileInputs.value[angle];
   if (el) el.click();
+}
+
+// Native capture path. Calls @capacitor/camera's getPhoto() — surfaces the
+// system "Take Photo / Choose from Library" sheet on iOS and the equivalent
+// on Android, then hands back a temporary file URL we read into a Blob and
+// route through the existing presigned-URL upload pipeline. Web continues
+// to use the hidden <input type="file"> below (handled by onFile).
+async function capturePhotoNative(angle) {
+  errorMsg.value = '';
+  try {
+    const [{ Camera, CameraResultType, CameraSource }] = await Promise.all([
+      import('@capacitor/camera'),
+    ]);
+    const photo = await Camera.getPhoto({
+      quality: 90,
+      allowEditing: false,
+      resultType: CameraResultType.Uri,
+      // Prompt offers Camera + Library; user picks. Matches the iOS sheet
+      // the file-input path used to surface (no `capture` attribute).
+      source: CameraSource.Prompt,
+      promptLabelHeader: 'Add a progress photo',
+      promptLabelPhoto: 'Choose from Library',
+      promptLabelPicture: 'Take Photo',
+      saveToGallery: false,
+    });
+    if (!photo?.webPath) return;
+    // Fetch the temporary file URL into a Blob so the existing
+    // photosStore.uploadPhoto() path (presign → S3 PUT) just works.
+    const res = await fetch(photo.webPath);
+    const blob = await res.blob();
+    const ext = (photo.format || 'jpeg').toLowerCase();
+    const file = new File([blob], `photo.${ext}`, { type: blob.type || `image/${ext}` });
+    await photosStore.uploadPhoto(file, { date: props.date, angle });
+  } catch (err) {
+    const msg = String(err?.message || err || '').toLowerCase();
+    // User-cancel surfaces as a thrown error; quiet swallow.
+    if (msg.includes('cancel') || msg.includes('user denied')) return;
+    errorMsg.value = err?.message || 'Upload failed';
+  }
 }
 
 async function onFile(angle, event) {

@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-native
 .env
 .env.local
 .env.*.local
@@ -10,3 +11,22 @@ client_secret_*.json
 plans/
 test-results/
 playwright-report/
+
+# Capacitor / Xcode / Android Studio build artifacts. The platform shells
+# (client/ios/, client/android/) are committed; their per-developer build
+# outputs and IDE state are not.
+client/ios/App/Pods/
+client/ios/App/build/
+client/ios/App/App.xcworkspace/xcuserdata/
+client/ios/App/App.xcodeproj/xcuserdata/
+client/ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+client/ios/DerivedData/
+client/ios/.build/
+client/android/build/
+client/android/app/build/
+client/android/.gradle/
+client/android/.idea/
+client/android/local.properties
+client/android/captures/
+client/android/app/release/
+client/android/app/debug/

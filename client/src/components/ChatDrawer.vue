@@ -8,6 +8,7 @@ import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { useChatStarterStore } from '../stores/chatStarter.js';
 import { renderChartsInHtml } from '../utils/chatChartRenderer.js';
+import { nativeFetch } from '../api/index.js';
 
 const authStore = useAuthStore();
 const planLimits = usePlanLimits();
@@ -951,7 +952,7 @@ async function handleProposalAction(proposalId, action, proposalEl) {
     const endpoint = action === 'confirm' ? 'confirm' : 'cancel';
     const reqBody =
       action === 'confirm' ? { items: readProposalItems(proposalEl) } : {};
-    const res = await fetch(`/api/chat/proposals/${proposalId}/${endpoint}`, {
+    const res = await nativeFetch(`/api/chat/proposals/${proposalId}/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
@@ -1140,7 +1141,7 @@ const streamChat = (body, signals) => {
 
     let res;
     try {
-      res = await fetch('/api/chat', {
+      res = await nativeFetch('/api/chat', {
         method: 'POST',
         headers,
         body: requestBody,
@@ -1356,7 +1357,7 @@ const activeThreadHistory = computed(() => {
 
 const loadThreads = async () => {
   try {
-    const res = await fetch('/api/chat/threads?includeMessages=1', { credentials: 'same-origin' });
+    const res = await nativeFetch('/api/chat/threads?includeMessages=1', { credentials: 'same-origin' });
     if (!res.ok) { threads.value = []; return; }
     const data = await res.json();
     threads.value = data.threads || [];
@@ -1386,7 +1387,7 @@ const saveThreadNow = async (threadId) => {
   const t = threads.value.find((x) => x.id === threadId);
   if (!t) return;
   try {
-    await fetch(`/api/chat/threads/${threadId}`, {
+    await nativeFetch(`/api/chat/threads/${threadId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
@@ -1441,7 +1442,7 @@ const newThread = async (opts = {}) => {
 
   creatingThread = true;
   try {
-    const res = await fetch('/api/chat/threads', {
+    const res = await nativeFetch('/api/chat/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
@@ -1475,7 +1476,7 @@ const deleteThread = async (id) => {
   const prev = threads.value;
   threads.value = prev.filter((t) => t.id !== id);
   try {
-    const res = await fetch(`/api/chat/threads/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+    const res = await nativeFetch(`/api/chat/threads/${id}`, { method: 'DELETE', credentials: 'same-origin' });
     if (!res.ok) throw new Error();
   } catch {
     threads.value = prev;
@@ -1588,7 +1589,7 @@ const maybeGenerateTitle = async () => {
   const userText = firstUser.text || (firstUser.html || '').replace(/<[^>]*>/g, ' ').trim();
   if (!userText.trim()) return;
   try {
-    const res = await fetch('/api/chat/title', {
+    const res = await nativeFetch('/api/chat/title', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',

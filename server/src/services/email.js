@@ -193,6 +193,36 @@ Reply here: ${url}`;
   await send({ to, subject, html, text, template: 'ticket-reply' });
 }
 
+// Sent after a successful DELETE /api/auth/me. Confirms the action and gives
+// the user a contact path in case it wasn't intentional. Fire-and-forget at
+// the call site — failure must not block the deletion response.
+export async function sendAccountDeletedEmail(to) {
+  const subject = "Your Protokol Lab account has been deleted";
+  const supportEmail = process.env.SUPPORT_ADMIN_EMAIL || '';
+  const text = `Your Protokol Lab account has been deleted.
+
+All of your data — logs, photos, settings, and any active subscription — has been removed and cannot be recovered.
+
+If you didn't request this, reply to this email${supportEmail ? ` or contact ${supportEmail}` : ''} as soon as possible.`;
+  const html = `<!doctype html>
+<html>
+  <body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f5f5f7;padding:24px;margin:0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e5e5ea;">
+      <tr><td style="padding:32px 28px;">
+        <h1 style="font-size:20px;margin:0 0 12px;color:#111;">Your account has been deleted</h1>
+        <p style="font-size:15px;color:#333;line-height:1.5;margin:0 0 16px;">
+          We've deleted your Protokol Lab account. All of your data &mdash; logs, photos, settings, and any active subscription &mdash; has been removed and can't be recovered.
+        </p>
+        <p style="font-size:14px;color:#555;line-height:1.5;margin:0 0 8px;">
+          If you didn't request this, reply to this email${supportEmail ? ` or contact <a href="mailto:${supportEmail}" style="color:#4f46e5;">${supportEmail}</a>` : ''} as soon as possible.
+        </p>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+  await send({ to, subject, html, text, template: 'account-deleted' });
+}
+
 export async function sendWelcomeEmail(to) {
   const subject = "Welcome to Protokol Lab";
   const appUrl = process.env.APP_URL || "";

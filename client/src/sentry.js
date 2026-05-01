@@ -6,14 +6,21 @@
 // credentials work normally. Replay is enabled (10% of normal sessions,
 // 100% of error sessions) — keeps free-tier usage predictable while
 // still capturing context around every crash.
+//
+// On native (Capacitor), `@sentry/capacitor` wraps `@sentry/vue` and adds
+// a native crash sink — Swift/Kotlin exceptions in the WebView host or
+// in plugin code that bypass the JS error handler are still captured.
+// Single DSN; the SDK routes events through both transport sinks.
 
 import * as Sentry from '@sentry/vue';
+import * as SentryCapacitor from '@sentry/capacitor';
+import { isNativePlatform } from './api/auth-token.js';
 
 export function initSentry(app, router) {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   if (!dsn) return;
 
-  Sentry.init({
+  const config = {
     app,
     dsn,
     environment:
@@ -40,8 +47,20 @@ export function initSentry(app, router) {
     // Only propagate trace headers to our own backend so other origins
     // (Stripe, Google) don't see Sentry trace IDs. Anchor `localhost` to a
     // protocol+host prefix so a substring match doesn't leak headers to a
-    // pathological URL like `https://localhost.evil.com`.
+    // pathological URL like `https://localhost.evil.com`. Native is
+    // capacitor://localhost which the regex still allows for outbound
+    // calls back to our API.
     tracePropagationTargets: [/^https?:\/\/localhost(:\d+)?\//, /^\//],
     sendDefaultPii: false,
-  });
+  };
+
+  if (isNativePlatform()) {
+    // SentryCapacitor.init takes (config, vueInit). It calls vueInit under
+    // the hood (passing the merged config) so we only register the Vue
+    // wiring once — no double-init.
+    SentryCapacitor.init(config, Sentry.init);
+    return;
+  }
+
+  Sentry.init(config);
 }

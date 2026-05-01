@@ -8,7 +8,12 @@
 //
 // Transport prefers navigator.sendBeacon so navigations don't cancel the
 // request. Falls back to fetch with keepalive when sendBeacon isn't
-// available (e.g. SSR / older browsers).
+// available (e.g. SSR / older browsers). On native (Capacitor) sendBeacon is
+// skipped — it can't carry an Authorization header, and the relative URL
+// wouldn't resolve against the capacitor://localhost origin.
+
+import { nativeFetch } from '../api/index.js';
+import { isNativePlatform } from '../api/auth-token.js';
 
 const SESSION_REFERRER_KEY = 'bo_initial_referrer';
 const SESSION_UTM_KEY = 'bo_initial_utm';
@@ -97,19 +102,23 @@ function getInitialUtm() {
 
 function postBeacon(payload) {
   if (typeof window === 'undefined') return;
-  const url = '/api/track';
+  const path = '/api/track';
   const body = JSON.stringify(payload);
   // sendBeacon is fire-and-forget and survives page unload. The server
-  // ignores response codes for these (it returns 204).
-  if (navigator.sendBeacon) {
+  // ignores response codes for these (it returns 204). It can't carry custom
+  // headers, so on native we skip it entirely — Bearer auth requires
+  // Authorization, and the relative URL wouldn't resolve from
+  // capacitor://localhost anyway. Falls through to nativeFetch which handles
+  // host + auth.
+  if (!isNativePlatform() && navigator.sendBeacon) {
     try {
       const blob = new Blob([body], { type: 'application/json' });
-      const ok = navigator.sendBeacon(url, blob);
+      const ok = navigator.sendBeacon(path, blob);
       if (ok) return;
     } catch { /* fall through to fetch */ }
   }
   try {
-    fetch(url, {
+    nativeFetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,

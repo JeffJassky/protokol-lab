@@ -2,29 +2,25 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useDemoStore } from '../stores/demo.js';
 
+// VITE_APP_ONLY=1 produces a stripped native build. The native binary
+// contains only the app surface (auth edges + authed app + Privacy / Terms /
+// Medical Advisory). Marketing routes and admin routes are excluded from the
+// route table so their lazy-import call sites tree-shake out of the bundle.
+// App Store reviewer launches the binary and sees the authed app, not a
+// marketing brochure — see plans/native-app-plan.md §6.13.
+const APP_ONLY = import.meta.env.VITE_APP_ONLY === '1' || import.meta.env.VITE_APP_ONLY === 'true';
+
 // Route components are lazy-loaded so each page ships in its own chunk.
 // Marketing pages don't pull Chart.js; the login flow doesn't pull the
 // dashboard. Vite's prerender step (puppeteer) waits on networkidle, so
 // the dynamic imports resolve before HTML is snapshotted.
-const LandingPage = () => import('../pages/LandingPage.vue');
-const FeaturesPage = () => import('../pages/FeaturesPage.vue');
-const PricingPage = () => import('../pages/PricingPage.vue');
-const AiPage = () => import('../pages/AiPage.vue');
-const CompoundsPage = () => import('../pages/CompoundsPage.vue');
-const FaqPage = () => import('../pages/FaqPage.vue');
-const AboutPage = () => import('../pages/AboutPage.vue');
-const TermsPage = () => import('../pages/TermsPage.vue');
+//
+// Public-edge pages (Privacy, Terms, MedicalAdvisory) ship in BOTH builds —
+// Apple guideline 5.1.1 requires them reachable in-app.
 const PrivacyPage = () => import('../pages/PrivacyPage.vue');
+const TermsPage = () => import('../pages/TermsPage.vue');
 const MedicalAdvisoryPage = () => import('../pages/MedicalAdvisoryPage.vue');
-const BlogIndexPage = () => import('../pages/BlogIndexPage.vue');
-const TirzepatideHalfLifePage = () => import('../pages/blog/TirzepatideHalfLifePage.vue');
-const WeeklyCalorieBudgetPage = () => import('../pages/blog/WeeklyCalorieBudgetPage.vue');
-const Glp1NauseaTimelinePage = () => import('../pages/blog/Glp1NauseaTimelinePage.vue');
-const OzempicVsWegovyPage = () => import('../pages/blog/OzempicVsWegovyPage.vue');
-const ManagingSideEffectsPage = () => import('../pages/blog/ManagingSideEffectsPage.vue');
-const AdhdNutritionTrackerPage = () => import('../pages/blog/AdhdNutritionTrackerPage.vue');
-const CompareIndexPage = () => import('../pages/CompareIndexPage.vue');
-const ComparisonPage = () => import('../pages/ComparisonPage.vue');
+
 const LoginPage = () => import('../pages/LoginPage.vue');
 const RegisterPage = () => import('../pages/RegisterPage.vue');
 const StartPage = () => import('../pages/StartPage.vue');
@@ -40,22 +36,44 @@ const SubscriptionPage = () => import('../pages/settings/SubscriptionPage.vue');
 const LogPage = () => import('../pages/LogPage.vue');
 const WelcomePage = () => import('../pages/WelcomePage.vue');
 const FoodSearchPage = () => import('../pages/FoodSearchPage.vue');
-const AdminLayout = () => import('../components/AdminLayout.vue');
-const AdminOverviewPage = () => import('../pages/AdminOverviewPage.vue');
-const AdminLlmUsagePage = () => import('../pages/AdminLlmUsagePage.vue');
-const AdminUsersPage = () => import('../pages/AdminUsersPage.vue');
-const AdminUserDetailPage = () => import('../pages/AdminUserDetailPage.vue');
-const AdminFunnelPage = () => import('../pages/AdminFunnelPage.vue');
-const AdminMarketingEmbedPage = () => import('../pages/AdminMarketingEmbedPage.vue');
-const AdminJobsPage = () => import('../pages/AdminJobsPage.vue');
 const SupportPage = () => import('../pages/SupportPage.vue');
 const SupportTicketDetailPage = () => import('../pages/SupportTicketDetailPage.vue');
 const FeatureRequestDetailPage = () => import('../pages/FeatureRequestDetailPage.vue');
-const AdminSupportPage = () => import('../pages/AdminSupportPage.vue');
-const AdminSupportTicketPage = () => import('../pages/AdminSupportTicketPage.vue');
-const AdminFeatureRequestPage = () => import('../pages/AdminFeatureRequestPage.vue');
 
-const routes = [
+// Marketing + admin route lazy-imports are gated by APP_ONLY. When the flag
+// is set, these `import()` call sites are dead code — Vite's static
+// elimination removes the unreached chunks from the bundle entirely.
+const LandingPage = APP_ONLY ? null : () => import('../pages/LandingPage.vue');
+const FeaturesPage = APP_ONLY ? null : () => import('../pages/FeaturesPage.vue');
+const PricingPage = APP_ONLY ? null : () => import('../pages/PricingPage.vue');
+const AiPage = APP_ONLY ? null : () => import('../pages/AiPage.vue');
+const CompoundsPage = APP_ONLY ? null : () => import('../pages/CompoundsPage.vue');
+const FaqPage = APP_ONLY ? null : () => import('../pages/FaqPage.vue');
+const AboutPage = APP_ONLY ? null : () => import('../pages/AboutPage.vue');
+const BlogIndexPage = APP_ONLY ? null : () => import('../pages/BlogIndexPage.vue');
+const TirzepatideHalfLifePage = APP_ONLY ? null : () => import('../pages/blog/TirzepatideHalfLifePage.vue');
+const WeeklyCalorieBudgetPage = APP_ONLY ? null : () => import('../pages/blog/WeeklyCalorieBudgetPage.vue');
+const Glp1NauseaTimelinePage = APP_ONLY ? null : () => import('../pages/blog/Glp1NauseaTimelinePage.vue');
+const OzempicVsWegovyPage = APP_ONLY ? null : () => import('../pages/blog/OzempicVsWegovyPage.vue');
+const ManagingSideEffectsPage = APP_ONLY ? null : () => import('../pages/blog/ManagingSideEffectsPage.vue');
+const AdhdNutritionTrackerPage = APP_ONLY ? null : () => import('../pages/blog/AdhdNutritionTrackerPage.vue');
+const CompareIndexPage = APP_ONLY ? null : () => import('../pages/CompareIndexPage.vue');
+const ComparisonPage = APP_ONLY ? null : () => import('../pages/ComparisonPage.vue');
+const AdminLayout = APP_ONLY ? null : () => import('../components/AdminLayout.vue');
+const AdminOverviewPage = APP_ONLY ? null : () => import('../pages/AdminOverviewPage.vue');
+const AdminLlmUsagePage = APP_ONLY ? null : () => import('../pages/AdminLlmUsagePage.vue');
+const AdminUsersPage = APP_ONLY ? null : () => import('../pages/AdminUsersPage.vue');
+const AdminUserDetailPage = APP_ONLY ? null : () => import('../pages/AdminUserDetailPage.vue');
+const AdminFunnelPage = APP_ONLY ? null : () => import('../pages/AdminFunnelPage.vue');
+const AdminMarketingEmbedPage = APP_ONLY ? null : () => import('../pages/AdminMarketingEmbedPage.vue');
+const AdminJobsPage = APP_ONLY ? null : () => import('../pages/AdminJobsPage.vue');
+const AdminSupportPage = APP_ONLY ? null : () => import('../pages/AdminSupportPage.vue');
+const AdminSupportTicketPage = APP_ONLY ? null : () => import('../pages/AdminSupportTicketPage.vue');
+const AdminFeatureRequestPage = APP_ONLY ? null : () => import('../pages/AdminFeatureRequestPage.vue');
+
+// Marketing routes ship only in the web build. APP_ONLY (native) excludes
+// them from the route table so the lazy-import call sites tree-shake out.
+const marketingRoutes = APP_ONLY ? [] : [
   { path: '/', name: 'landing', component: LandingPage, meta: { public: true, marketing: true } },
   { path: '/features', name: 'features', component: FeaturesPage, meta: { public: true, marketing: true } },
   { path: '/pricing', name: 'pricing', component: PricingPage, meta: { public: true, marketing: true } },
@@ -63,9 +81,6 @@ const routes = [
   { path: '/compounds', name: 'compounds', component: CompoundsPage, meta: { public: true, marketing: true } },
   { path: '/faq', name: 'faq', component: FaqPage, meta: { public: true, marketing: true } },
   { path: '/about', name: 'about', component: AboutPage, meta: { public: true, marketing: true } },
-  { path: '/terms', name: 'terms', component: TermsPage, meta: { public: true, marketing: true } },
-  { path: '/privacy', name: 'privacy', component: PrivacyPage, meta: { public: true, marketing: true } },
-  { path: '/medical-advisory', name: 'medical-advisory', component: MedicalAdvisoryPage, meta: { public: true, marketing: true } },
   { path: '/blog', name: 'blog', component: BlogIndexPage, meta: { public: true, marketing: true } },
   { path: '/blog/tirzepatide-half-life-explained', name: 'blog-tirzepatide-half-life', component: TirzepatideHalfLifePage, meta: { public: true, marketing: true } },
   { path: '/blog/weekly-calorie-budget-for-glp1', name: 'blog-weekly-calorie-budget', component: WeeklyCalorieBudgetPage, meta: { public: true, marketing: true } },
@@ -75,6 +90,22 @@ const routes = [
   { path: '/blog/adhd-nutrition-tracker', name: 'blog-adhd-nutrition-tracker', component: AdhdNutritionTrackerPage, meta: { public: true, marketing: true } },
   { path: '/compare', name: 'compare', component: CompareIndexPage, meta: { public: true, marketing: true } },
   { path: '/compare/:slug', name: 'comparison', component: ComparisonPage, meta: { public: true, marketing: true } },
+];
+
+// Native root: no LandingPage in the bundle. '/' redirects into the app —
+// the auth guard below sends unauthed users to /login from /log.
+const nativeRootRoutes = APP_ONLY ? [
+  { path: '/', redirect: '/log' },
+] : [];
+
+const routes = [
+  ...marketingRoutes,
+  ...nativeRootRoutes,
+  // Public-edge pages (Privacy / Terms / Medical Advisory) ship in BOTH
+  // builds. Apple guideline 5.1.1 requires them reachable in-app.
+  { path: '/terms', name: 'terms', component: TermsPage, meta: { public: true, marketing: !APP_ONLY } },
+  { path: '/privacy', name: 'privacy', component: PrivacyPage, meta: { public: true, marketing: !APP_ONLY } },
+  { path: '/medical-advisory', name: 'medical-advisory', component: MedicalAdvisoryPage, meta: { public: true, marketing: !APP_ONLY } },
   { path: '/login', name: 'login', component: LoginPage, meta: { guest: true, public: true } },
   { path: '/register', name: 'register', component: RegisterPage, meta: { guest: true, public: true } },
   // Demo-mode converter signup. Same guest gate as /register; both routes
@@ -104,12 +135,13 @@ const routes = [
   { path: '/support', name: 'support', component: SupportPage, meta: { requiresAuth: true } },
   { path: '/support/tickets/:id', name: 'support-ticket', component: SupportTicketDetailPage, meta: { requiresAuth: true } },
   { path: '/support/features/:id', name: 'support-feature', component: FeatureRequestDetailPage, meta: { requiresAuth: true } },
-  // Admin surface — AdminLayout owns the chrome (sidebar nav, theme toggle,
-  // mobile drawer). hideAppChrome bypasses AppLayout so we don't double-wrap.
-  // Vue Router 4 merges parent + child meta, so children inherit the auth
-  // and admin flags. Embedded iframe pages set adminFullBleed so AdminLayout
-  // gives them an unpadded, full-height pane.
-  {
+  // Admin surface — web build only. APP_ONLY native build excludes the
+  // entire /admin tree so the lazy-imported chunks tree-shake out.
+  // AdminLayout owns the chrome (sidebar nav, theme toggle, mobile drawer).
+  // hideAppChrome bypasses AppLayout so we don't double-wrap. Embedded
+  // iframe pages set adminFullBleed so AdminLayout gives them an unpadded,
+  // full-height pane.
+  ...(APP_ONLY ? [] : [{
     path: '/admin',
     component: AdminLayout,
     meta: { requiresAuth: true, requiresAdmin: true, hideAppChrome: true },
@@ -125,7 +157,7 @@ const routes = [
       { path: 'marketing-embed', name: 'admin-marketing-embed', component: AdminMarketingEmbedPage, meta: { adminFullBleed: true } },
       { path: 'jobs', name: 'admin-jobs', component: AdminJobsPage, meta: { adminFullBleed: true } },
     ],
-  },
+  }]),
   // Old top-level paths — redirect bookmarks so they still land somewhere useful.
   { path: '/weight', redirect: '/dashboard' },
   { path: '/meals', redirect: '/food/search?tab=meals' },
@@ -182,7 +214,10 @@ router.beforeEach(async (to) => {
   if (!auth.checked) {
     await auth.fetchMe();
   }
-  if (!demo.checked) {
+  // Demo mode is web-only (§7.2). Native skips the demo store fetch — the
+  // sandbox path doesn't exist there and the request would just round-trip
+  // for nothing.
+  if (!APP_ONLY && !demo.checked) {
     await demo.fetchStatus();
   }
 

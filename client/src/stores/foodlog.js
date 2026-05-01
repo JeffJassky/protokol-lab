@@ -86,4 +86,11 @@ export const useFoodLogStore = defineStore('foodlog', () => {
     copyEntries,
     moveEntries,
   };
+}, {
+  // Persist today's entries + summary + currentDate so cold native starts
+  // render the diary instantly while loadDay() refreshes in the background.
+  // dailyCalories / dailyNutrition (multi-day series for the dashboard
+  // chart) are not persisted — they're cheap to refetch and would inflate
+  // storage with stale data after the user moves through dates.
+  persist: { pick: ['entries', 'summary', 'currentDate'] },
 });

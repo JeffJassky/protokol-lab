@@ -63,6 +63,7 @@ delete process.env.SENDGRID_FROM_EMAIL;
 vi.mock('../src/services/email.js', () => ({
   sendPasswordResetEmail: vi.fn(async () => {}),
   sendWelcomeEmail: vi.fn(async () => {}),
+  sendAccountDeletedEmail: vi.fn(async () => {}),
   sendTicketCreatedUserEmail: vi.fn(async () => {}),
   sendTicketAdminNotifyEmail: vi.fn(async () => {}),
   sendTicketStatusChangedEmail: vi.fn(async () => {}),

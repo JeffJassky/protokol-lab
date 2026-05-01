@@ -6,7 +6,8 @@ import rateLimit from 'express-rate-limit';
 import { OAuth2Client } from 'google-auth-library';
 import User from '../models/User.js';
 import { requireAuth, requireAuthUser } from '../middleware/requireAuth.js';
-import { sendPasswordResetEmail, sendWelcomeEmail } from '../services/email.js';
+import { sendPasswordResetEmail, sendWelcomeEmail, sendAccountDeletedEmail } from '../services/email.js';
+import { deleteUser } from '../services/userDeletion.js';
 import { readDemoCookie, verifyDemoToken, clearDemoCookie } from '../lib/demoSession.js';
 import { emitDemoEvent } from '../lib/demoEvents.js';
 import { insertFunnelEvent } from '../lib/funnelEvents.js';
@@ -66,6 +67,14 @@ function signToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
 
+// Native (Capacitor) clients opt into Bearer auth by sending this header.
+// They get the JWT in the response JSON in addition to the cookie. Web
+// clients don't send it, so they never see the JWT in a JS-readable surface
+// — cookie-only auth keeps its threat model.
+function wantsBearer(req) {
+  return req.headers['x-auth-mode'] === 'bearer';
+}
+
 // Backfill the freshly-bound userId onto every FunnelEvent that shares
 // this anonId. Lets the admin funnel join a /pricing page_view → demo
 // → register sequence into one row keyed by user. Best-effort: never
@@ -97,6 +106,9 @@ function serializeUser(u) {
     planExpiresAt: u.planExpiresAt,
     hasStripeCustomer: Boolean(u.stripeCustomerId),
     hasActiveSubscription: Boolean(u.stripeSubscriptionId),
+    // Drives the delete-account UI: password accounts get a password-challenge
+    // field; OAuth-only accounts get a confirm checkbox.
+    hasPassword: Boolean(u.passwordHash),
     imageRecognitionCount: u.imageRecognitionCount || 0,
     onboardingComplete: Boolean(u.onboardingComplete),
     onboardingStep: u.onboardingStep || 'basics',
@@ -234,7 +246,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     rlog.error({ ...errContext(err), userId: String(user._id) }, 'register: welcome email failed');
   });
 
-  res.status(201).json({ user: serializeUser(user) });
+  const body = { user: serializeUser(user) };
+  if (wantsBearer(req)) body.token = token;
+  res.status(201).json(body);
 });
 
 router.post('/login', loginLimiter, async (req, res) => {
@@ -261,7 +275,9 @@ router.post('/login', loginLimiter, async (req, res) => {
   await stitchAnonToUser(req.anonId, user._id, rlog);
   await wipeDemoForAuthedSession({ req, res, userId: user._id, rlog });
 
-  res.json({ user: serializeUser(user) });
+  const body = { user: serializeUser(user) };
+  if (wantsBearer(req)) body.token = token;
+  res.json(body);
 });
 
 // Google Identity Services flow: client gets an ID token from the GIS popup
@@ -344,11 +360,68 @@ router.post('/google', loginLimiter, async (req, res) => {
   await stitchAnonToUser(req.anonId, user._id, rlog);
   await wipeDemoForAuthedSession({ req, res, userId: user._id, rlog });
 
-  res.status(created ? 201 : 200).json({ user: serializeUser(user) });
+  const body = { user: serializeUser(user) };
+  if (wantsBearer(req)) body.token = token;
+  res.status(created ? 201 : 200).json(body);
 });
 
 router.get('/me', requireAuth, requireAuthUser, (req, res) => {
-  res.json({ user: serializeUser(req.user) });
+  // `minAppVersion` lets us force native binaries below a known floor to
+  // update before they hit a breaking API change. Env-driven so we can
+  // bump the floor without a code release. Web clients don't carry an
+  // X-App-Version header and ignore this field.
+  const minAppVersion = process.env.MIN_APP_VERSION || null;
+  res.json({ user: serializeUser(req.user), minAppVersion });
+});
+
+// Account deletion. Apple App Store guideline 5.1.1(v) requires this to be
+// available in-app for any app that allows account creation. The cascade
+// hook on User (`models/User.js`) handles child sandboxes, S3 keys (photos,
+// support attachments), Stripe customer deletion (which auto-cancels every
+// subscription), and the 21 collections in CASCADE_COLLECTIONS — so this
+// route only re-authenticates the user, fires the cascade, sends a
+// confirmation email, and clears auth state.
+router.delete('/me', requireAuth, requireAuthUser, async (req, res) => {
+  const rlog = req.log || log;
+  const user = req.user;
+
+  // Re-auth as defense-in-depth against CSRF + accidental clicks. Password
+  // accounts must re-enter the password. OAuth-only accounts (no passwordHash)
+  // just need an explicit `confirm:true` flag — the live session is the
+  // credential, and there's no password to challenge against.
+  if (user.passwordHash) {
+    const password = req.body?.password;
+    if (typeof password !== 'string' || !password) {
+      return res.status(400).json({ error: 'password_required' });
+    }
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      rlog.warn({ userId: String(user._id) }, 'delete-account: password mismatch');
+      return res.status(401).json({ error: 'invalid_password' });
+    }
+  } else if (req.body?.confirm !== true) {
+    return res.status(400).json({ error: 'confirmation_required' });
+  }
+
+  const email = user.email;
+
+  try {
+    await deleteUser(user._id);
+  } catch (err) {
+    rlog.error({ ...errContext(err), userId: String(user._id) }, 'delete-account: cascade failed');
+    return res.status(500).json({ error: 'deletion_failed' });
+  }
+
+  rlog.info({ userId: String(user._id), email }, 'delete-account: success');
+
+  // Fire-and-forget — a SendGrid hiccup must not block the deletion response,
+  // and the row is already gone so retries are pointless.
+  sendAccountDeletedEmail(email).catch((err) => {
+    rlog.warn({ ...errContext(err), email }, 'delete-account: confirmation email failed');
+  });
+
+  res.clearCookie('token');
+  res.json({ ok: true });
 });
 
 router.patch('/me', requireAuth, requireAuthUser, async (req, res) => {

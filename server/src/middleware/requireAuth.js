@@ -23,8 +23,21 @@ const log = childLogger('auth');
 // billing, push subscribe, AI quota) use req.authUserId — and the
 // requireAuthUser middleware below rejects anonymous demo at those edges.
 
+// Native (Capacitor) clients can't use cookies cross-origin reliably and
+// authenticate with `Authorization: Bearer <jwt>` instead. Web continues to
+// authenticate via the HTTP-only cookie. Same JWT, two transports.
+function extractBearer(authorizationHeader) {
+  if (typeof authorizationHeader !== 'string') return null;
+  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+export function readAuthToken(req) {
+  return req.cookies?.token || extractBearer(req.headers?.authorization);
+}
+
 // Returns one of:
-//   { kind: 'absent' }                         — no JWT cookie at all
+//   { kind: 'absent' }                         — no JWT (cookie or Bearer)
 //   { kind: 'invalid', reason: 'jwt' }         — JWT failed to verify
 //   { kind: 'invalid', reason: 'missing' }     — JWT verified but user gone
 //   { kind: 'ok', user }                       — happy path
@@ -32,7 +45,12 @@ async function loadAuthUser(token, req) {
   if (!token) return { kind: 'absent' };
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(payload.userId).select('-passwordHash');
+    // We used to strip passwordHash here as defense-in-depth, but the route
+    // surface always serializes via serializeUser() (whitelist projection),
+    // so the field never reaches the wire. Loading it lets the delete-account
+    // re-auth happen without a second findById, and lets serializeUser emit
+    // a correct `hasPassword` flag for OAuth-only accounts.
+    const user = await User.findById(payload.userId);
     if (!user) {
       (req.log || log).warn(
         { userId: String(payload.userId), path: req.path },
@@ -99,7 +117,7 @@ function touchSandboxAsync(sandboxId, lastActiveAt) {
 }
 
 export async function requireAuth(req, res, next) {
-  const authResult = await loadAuthUser(req.cookies?.token, req);
+  const authResult = await loadAuthUser(readAuthToken(req), req);
 
   if (authResult.kind === 'ok') {
     const authUser = authResult.user;

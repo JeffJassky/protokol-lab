@@ -34,6 +34,17 @@ function endpointHost(endpoint) {
 }
 
 export async function sendToSubscription(subDoc, payload) {
+  // Native subs (FCM/APNs) are stored but not sent until M7 wires Firebase
+  // and APNs credentials. Until then we log + skip so the cron worker
+  // doesn't crash trying to call web-push with a missing endpoint.
+  if (subDoc.transport === 'fcm' || subDoc.transport === 'apns') {
+    log.debug(
+      { subscriptionId: String(subDoc._id), transport: subDoc.transport },
+      'push send: native transport not yet wired, skipping',
+    );
+    return { ok: false, reason: 'native-transport-pending' };
+  }
+
   if (!configured) {
     log.warn({ subscriptionId: String(subDoc._id) }, 'push send: not configured, skipping');
     return { ok: false, reason: 'not-configured' };

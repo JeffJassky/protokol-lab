@@ -32,4 +32,9 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   return { settings, loaded, fetchSettings, updateSettings, patchSettings, updateNotifications };
+}, {
+  // Persist the resolved settings doc so cold starts on native render the
+  // user's units / timezone / target macros without waiting on the API.
+  // The next mounted call to fetchSettings() will refresh server-side.
+  persist: { pick: ['settings'] },
 });
