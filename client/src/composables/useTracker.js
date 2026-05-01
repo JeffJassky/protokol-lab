@@ -121,6 +121,12 @@ function postBeacon(payload) {
 
 export function track(name, props = {}) {
   if (typeof window === 'undefined') return;
+  // Suppress beacons from automated browsers on prod (Playwright synthetic
+  // + post-deploy smoke). Scoped to prod hostname so e2e specs running
+  // against localhost still emit real beacons into mem-mongo and exercise
+  // the funnel pipeline. Server also drops on x-synthetic-probe header
+  // for defense in depth.
+  if (navigator.webdriver && window.location.hostname === 'protokollab.com') return;
   const utm = getInitialUtm();
   postBeacon({
     name,

@@ -36,9 +36,14 @@ export default defineConfig({
     // from exposing the reset-everything endpoint. Prod synthetic must not
     // send it (prod server rejects on missing NODE_ENV match anyway, but
     // omitting the header makes the intent loud).
-    extraHTTPHeaders: SYNTHETIC_MODE ? {} : {
-      'x-internal-test-token': 'e2e-internal-token-not-for-prod',
-    },
+    //
+    // x-synthetic-probe tells the prod server to suppress FunnelEvent
+    // inserts for this request (track beacon + emitDemoEvent both honor
+    // it). Pino log lines still emit so the synthetic run remains
+    // observable. Synthetic-only — e2e against mem-mongo doesn't need it.
+    extraHTTPHeaders: SYNTHETIC_MODE
+      ? { 'x-synthetic-probe': '1' }
+      : { 'x-internal-test-token': 'e2e-internal-token-not-for-prod' },
   },
 
   projects: [

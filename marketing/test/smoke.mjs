@@ -134,15 +134,33 @@ async function main() {
         };
         return;
       }
-      if (/drafting a Reddit reply/i.test(systemPrompt)) {
+      // Reddit triage — batch form (used by scan).
+      if (/Classify each Reddit thread/i.test(systemPrompt)) {
         yield {
           type: 'text',
-          text:
-            'Quick read: BPC-157 → 2 weeks alone first to confirm response and side effects, then add TB-500 in the second cycle. Watch resting HR; it drifts up if you stack too aggressively. Studies on co-administration are thin, so I would lean conservative.',
+          text: JSON.stringify({
+            classifications: [
+              { i: 1, bucket: 'DIRECT_ASK', because: 'asking how to stack two peptides' },
+            ],
+          }),
         };
-        yield { type: 'done', costUsd: 0.002, tokensIn: 200, tokensOut: 100, stoppedReason: 'end_turn' };
+        yield { type: 'done', costUsd: 0.0001, tokensIn: 100, tokensOut: 50, stoppedReason: 'end_turn' };
         return;
       }
+      // Reddit triage — single-thread form (used by manual /triage).
+      if (/Classify a Reddit thread/i.test(systemPrompt)) {
+        yield {
+          type: 'text',
+          text: JSON.stringify({
+            bucket: 'DIRECT_ASK',
+            because: 'asking how to stack two peptides',
+          }),
+        };
+        yield { type: 'done', costUsd: 0.0001, tokensIn: 100, tokensOut: 50, stoppedReason: 'end_turn' };
+        return;
+      }
+      // (Reddit reply drafting is no longer driven by the prompt registry —
+      // it runs through the local claude subprocess, outside this stub LLM.)
       // Fallback
       yield { type: 'text', text: '(stub default)' };
       yield { type: 'done', costUsd: 0, tokensIn: 0, tokensOut: 0, stoppedReason: 'end_turn' };
@@ -537,11 +555,19 @@ async function main() {
   check('voice contact created', r.status === 201, r.body);
   const voiceContactId = r.json?._id;
 
-  // Create a monitored subreddit
+  // Create a monitored subreddit. The default prefilter requires ≥2
+  // matched keywords; the smoke fixture only provides 'bpc-157', so
+  // override that floor or the lone match gets filtered out before the
+  // opportunity is recorded.
   r = await fetchJson(server, 'POST', `${base}/api/reddit-engagement/subreddits`, {
     subreddit: 'peptides',
     voiceContactId,
-    scanRules: { keywords: ['bpc-157'], maxPostAgeHours: 72, minPostScore: 1 },
+    scanRules: {
+      keywords: ['bpc-157'],
+      maxPostAgeHours: 72,
+      minPostScore: 1,
+      prefilter: { minKeywordMatches: 1 },
+    },
     scanIntervalMinutes: 30,
   });
   check('subreddit monitored', r.status === 201 && r.json?._id, r.body);
@@ -567,44 +593,60 @@ async function main() {
     Array.isArray(foundOpp?.matchedKeywords) && foundOpp.matchedKeywords.includes('bpc-157'),
     foundOpp?.matchedKeywords
   );
+  // Author auto-link was removed from scan — it was polluting Contacts
+  // with thousands of random reddit users. The link is now opt-in via
+  // POST /opportunities/:id/link-author-to-contact.
   check(
-    'scan auto-linked author to a Contact',
-    !!foundOpp?.authorContactId,
+    'scan does NOT auto-create author Contact',
+    !foundOpp?.authorContactId,
     foundOpp?.authorContactId
   );
 
-  // Stub the chatWithTools further to handle redditEngagement.draftReply prompt:
-  // The existing stub returns NO_REPLY-free text by default — needs to detect
-  // the draftReply system prompt and emit reddit-formatted body.
-  // (The existing stub already returns "Found one strong distinctive point about MOTS-c..."
-  //  which doesn't start with NO_REPLY, so it'll be treated as a valid draft body.)
-
-  // Triage the opportunity
+  // Triage the opportunity. Drafting is no longer auto-enqueued after
+  // triage (2026-04-30) — drafting moved to an interactive chat-style
+  // flow backed by a local claude subprocess, which the smoke test
+  // doesn't exercise. Verify only that triage classifies the post.
   r = await fetchJson(server, 'POST', `${base}/api/reddit-engagement/opportunities/${foundOpp._id}/triage`);
   check('triage enqueued', r.status === 202 && r.json?.jobId, r.body);
 
-  // Wait for triage + auto-enqueued draft to finish
+  // Wait for triage to land — bucket assigned + status=triaged or SKIP-tombstoned.
   let postOp = null;
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 250));
     const u = await fetchJson(server, 'GET', `${base}/api/reddit-engagement/opportunities/${foundOpp._id}`);
-    if (u.json?.draft?.body || ['low-fit-archived', 'dismissed'].includes(u.json?.status)) {
+    if (u.json?.triage?.bucket || ['low-fit-archived', 'dismissed'].includes(u.json?.status)) {
       postOp = u.json;
       break;
     }
   }
   check(
-    'opportunity got a draft body (or was archived)',
-    postOp && (postOp.draft?.body || postOp.status === 'low-fit-archived'),
-    { status: postOp?.status, draft: postOp?.draft?.body?.slice(0, 80) }
+    'triage classified opportunity',
+    postOp && (postOp.triage?.bucket || postOp.status === 'low-fit-archived'),
+    { status: postOp?.status, bucket: postOp?.triage?.bucket }
   );
-  if (postOp?.draft?.body) {
+  // If non-SKIP, status should be 'triaged' (drafted only after the chat
+  // agent calls set_draft, which this test doesn't drive).
+  if (postOp?.triage?.bucket && postOp.triage.bucket !== 'SKIP') {
     check(
-      'opportunity status drafted',
-      postOp.status === 'drafted',
+      'opportunity status triaged (drafts are now manual)',
+      postOp.status === 'triaged',
       postOp.status
     );
+    check(
+      'no draft body present (drafting is interactive)',
+      !postOp.draft?.body,
+      postOp.draft?.body?.slice(0, 80)
+    );
   }
+
+  // Smoke-check the chat history endpoint — should exist and return
+  // empty state for an opportunity that's never been chat-drafted.
+  r = await fetchJson(server, 'GET', `${base}/api/reddit-engagement/opportunities/${foundOpp._id}/chat/messages`);
+  check(
+    'chat messages endpoint returns empty initial state',
+    r.status === 200 && Array.isArray(r.json?.messages) && r.json.messages.length === 0,
+    r.body
+  );
 
   // Mark posted
   r = await fetchJson(

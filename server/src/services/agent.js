@@ -16,6 +16,7 @@ import { childLogger, errContext } from "../lib/logger.js";
 import { evaluateStorageCap, getEffectiveChatLimits } from "../lib/planLimits.js";
 import { getPlanForUser } from "../../../shared/plans.js";
 import { mockChatStream, isMockAgentEnabled } from "./agent.mock.js";
+import { touchRecent } from "./recentFood.js";
 
 const log = childLogger('agent');
 
@@ -625,6 +626,7 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
         mealType: args.mealType,
         servingCount: Number(args.servingCount) || 1,
       });
+      await touchRecent(userId, args.foodItemId, entry.servingCount, entry.mealType);
 
       const servings = entry.servingCount;
       return {

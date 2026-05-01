@@ -26,10 +26,7 @@ const BUCKETS_DESCRIPTION = `
 - TOPIC_ADJACENT = On-topic for the niche (peptides, GLP-1s, biohacking, weight loss) but not about anything the app addresses. Vendor/sourcing questions, dosing protocols, side effects, reconstitution, etc.
 - SKIP = Off-topic, pure vent with no question, drama, brigade-bait, or nothing useful to add.`;
 
-const DEFAULT_BODY = `Classify a Reddit thread into one of four buckets for a builder of an ADHD-friendly tracking app for GLP-1 patients.
-
-PERSONA / VOICE:
-{{voiceCard}}
+const DEFAULT_BODY = `Classify a Reddit thread into one of four buckets for a builder of an ADHD-friendly tracking app for GLP-1 patients (Protokol — protokollab.com).
 
 THREAD:
 r/{{subreddit}} · score {{postScore}} · {{postCommentCount}} comments · matched: {{matchedKeywords}}
@@ -50,7 +47,9 @@ export function registerTriagePrompt(promptRegistry) {
     description: 'Classifies a single Reddit thread into one of four action-oriented buckets (DIRECT_ASK / INDIRECT_PROBLEM / TOPIC_ADJACENT / SKIP).',
     defaultBody: DEFAULT_BODY,
     variables: [
-      { name: 'voiceCard', description: 'Slim persona triage card (~150 tokens).' },
+      // voiceCard variable removed 2026-04-30 — persona is baked into the
+      // prompt body now; matching the operator's voice is the chat agent's
+      // job using fetch_my_recent_comments, not a static persona blob.
       { name: 'subreddit', description: 'Subreddit name (no r/)' },
       { name: 'title', description: 'Post title' },
       { name: 'postScore', description: '' },
@@ -61,6 +60,7 @@ export function registerTriagePrompt(promptRegistry) {
     outputSchema: {
       type: 'object',
       required: ['bucket', 'because'],
+      additionalProperties: false,
       properties: {
         bucket: { type: 'string', enum: ['DIRECT_ASK', 'INDIRECT_PROBLEM', 'TOPIC_ADJACENT', 'SKIP'] },
         because: { type: 'string' },
@@ -72,9 +72,9 @@ export function registerTriagePrompt(promptRegistry) {
 
 // ──────────────────────────────────────────────────────────────────────
 // Bucket → action mapping (used by both single + batch handlers).
-//   DIRECT_ASK / INDIRECT_PROBLEM / TOPIC_ADJACENT → status='triaged',
-//     auto-enqueue a draft. Drafter receives the bucket and frames the
-//     reply accordingly (recommend the app vs footnote vs no mention).
+//   DIRECT_ASK / INDIRECT_PROBLEM / TOPIC_ADJACENT → status='triaged'.
+//     Drafts are NOT auto-enqueued — user must click Draft manually
+//     (avoids burning Sonnet tokens on posts the user won't reply to).
 //   SKIP → permanent tombstone (decision='dismissed') so future scans
 //     hit the unique index and skip re-triage cost.
 // ──────────────────────────────────────────────────────────────────────
@@ -85,10 +85,9 @@ function applyBucketDecision(opp, bucket, because, isBatch) {
     opp.decision = 'dismissed';
     opp.decidedAt = new Date();
     opp.decisionNote = `auto-dismissed: triage bucket=SKIP${isBatch ? ' (batch)' : ''}`;
-    return { autoDraft: false };
+    return;
   }
   opp.status = 'triaged';
-  return { autoDraft: true };
 }
 
 // Fire-and-forget Telegram alert. DIRECT_ASK posts have a 1-hour visibility
@@ -120,19 +119,13 @@ export function registerTriageJob(registry) {
   registry.register('redditEngagement.triageOpportunity', async ({ job, ctx }) => {
     const opp = await ctx.models.EngagementOpportunity.findById(job.opportunityId);
     if (!opp) throw new Error(`opportunity ${job.opportunityId} not found`);
-    const sub = await ctx.models.MonitoredSubreddit.findById(opp.subredditId);
-    if (!sub) throw new Error(`subreddit ${opp.subredditId} not found`);
-    const voice = await ctx.models.Contact.findById(sub.voiceContactId).lean();
-
-    const voiceCard = voice?.voiceProfile?.triageCard
-      || (voice
-        ? `${voice.name} — ${voice.niche || ''}\nTop tags: ${(voice.voiceProfile?.expertiseTags || []).slice(0, 8).join(', ')}`
-        : '(no voice profile configured)');
 
     const result = await ctx.agent.run({
       promptKey: TRIAGE_PROMPT_KEY,
       context: {
-        voiceCard,
+        // voiceCard kept as empty string for backwards compat with any
+        // existing seeded prompt that still references {{voiceCard}}.
+        voiceCard: '',
         subreddit: opp.subreddit,
         title: opp.title,
         postScore: opp.postScore,
@@ -148,44 +141,32 @@ export function registerTriageJob(registry) {
 
     if (!result.parsed) throw new Error('triage agent returned non-JSON output');
 
-    const { autoDraft } = applyBucketDecision(opp, result.parsed.bucket, result.parsed.because, false);
+    applyBucketDecision(opp, result.parsed.bucket, result.parsed.because, false);
     await opp.save();
 
     notifyDirectAsk(opp, ctx.logger);
 
-    if (autoDraft) {
-      await ctx.worker.enqueue({
-        type: 'redditEngagement.draftReply',
-        opportunityId: opp._id,
-      });
-    }
-
     return {
       bucket: opp.triage.bucket,
-      autoEnqueueDraft: autoDraft,
       costUsd: result.costUsd,
     };
   });
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// BATCH TRIAGE — one Haiku call rates N opportunities. Voice card sent
-// once per call instead of N times = ~50% token reduction. Used by scan
+// BATCH TRIAGE — one Haiku call rates N opportunities. Used by scan
 // after each successful crawl.
 // ──────────────────────────────────────────────────────────────────────
 
-const BATCH_DEFAULT_BODY = `Classify each Reddit thread below into one of four buckets for a builder of an ADHD-friendly tracking app for GLP-1 patients.
-
-PERSONA / VOICE:
-{{voiceCard}}
+const BATCH_DEFAULT_BODY = `Classify each Reddit thread below into one of four buckets for a builder of an ADHD-friendly tracking app for GLP-1 patients (Protokol — protokollab.com).
 
 BUCKETS:${BUCKETS_DESCRIPTION}
 
 THREADS:
 {{threads}}
 
-Return ONLY a JSON array, one element per thread, in the same order, nothing else:
-[{"i":1,"bucket":"DIRECT_ASK|INDIRECT_PROBLEM|TOPIC_ADJACENT|SKIP","because":"≤15 words"}, {"i":2, ...}, ...]
+Return JSON in this exact shape (output is schema-constrained):
+{"classifications":[{"i":1,"bucket":"DIRECT_ASK|INDIRECT_PROBLEM|TOPIC_ADJACENT|SKIP","because":"≤15 words"}, ...]}
 `;
 
 export function registerTriageBatchPrompt(promptRegistry) {
@@ -196,18 +177,28 @@ export function registerTriageBatchPrompt(promptRegistry) {
     description: 'Classifies N Reddit threads in one Haiku call. ~50% cheaper than per-post triage.',
     defaultBody: BATCH_DEFAULT_BODY,
     variables: [
-      { name: 'voiceCard', description: 'Slim persona triage card' },
+      // voiceCard removed 2026-04-30 — see DEFAULT_BODY note above.
       { name: 'threads', description: 'Numbered list of threads with title + excerpt + meta' },
     ],
     outputSchema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['i', 'bucket'],
-        properties: {
-          i: { type: 'number' },
-          bucket: { type: 'string', enum: ['DIRECT_ASK', 'INDIRECT_PROBLEM', 'TOPIC_ADJACENT', 'SKIP'] },
-          because: { type: 'string' },
+      type: 'object',
+      required: ['classifications'],
+      additionalProperties: false,
+      properties: {
+        // Top-level array wrapped in an object — Anthropic's structured-
+        // output enforcement requires the root to be an object.
+        classifications: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['i', 'bucket', 'because'],
+            additionalProperties: false,
+            properties: {
+              i: { type: 'integer' },
+              bucket: { type: 'string', enum: ['DIRECT_ASK', 'INDIRECT_PROBLEM', 'TOPIC_ADJACENT', 'SKIP'] },
+              because: { type: 'string' },
+            },
+          },
         },
       },
     },
@@ -225,13 +216,6 @@ export function registerTriageBatchJob(registry) {
     const opps = await ctx.models.EngagementOpportunity.find({ _id: { $in: ids } });
     if (opps.length === 0) return { fits: {}, costUsd: 0 };
 
-    const sub = await ctx.models.MonitoredSubreddit.findById(opps[0].subredditId);
-    const voice = sub ? await ctx.models.Contact.findById(sub.voiceContactId).lean() : null;
-    const voiceCard = voice?.voiceProfile?.triageCard
-      || (voice
-        ? `${voice.name} — ${voice.niche || ''}\nTop tags: ${(voice.voiceProfile?.expertiseTags || []).slice(0, 8).join(', ')}`
-        : '(no voice profile configured)');
-
     const threadsBlock = opps.map((o, idx) => {
       const i = idx + 1;
       const excerpt = (o.postExcerpt || '').slice(0, 600).replace(/\s+/g, ' ');
@@ -240,24 +224,74 @@ export function registerTriageBatchJob(registry) {
 
     const result = await ctx.agent.run({
       promptKey: TRIAGE_BATCH_PROMPT_KEY,
-      context: { voiceCard, threads: threadsBlock },
+      // voiceCard kept as empty string for backwards compat with seeded
+      // prompts that still reference {{voiceCard}}; new default body
+      // doesn't use it.
+      context: { voiceCard: '', threads: threadsBlock },
       slot: 'triage',
       jobId: job._id,
       budgetCapUsd: job.budget?.capUsd,
       maxTokens: 50 + opps.length * 60,
     });
 
-    if (!Array.isArray(result.parsed)) {
-      throw new Error('triage batch agent returned non-array output');
+    // Be very permissive about model output shape. The agent SDK's
+    // extractJson() may return:
+    //   - Array of objects (ideal, prompt-shaped output)
+    //   - Single object wrapping an array (e.g. {results:[...]})
+    //   - Single object that's the FIRST classification only
+    //   - null when output is markdown-fenced incorrectly
+    let parsedArray = null;
+    if (Array.isArray(result.parsed)) {
+      parsedArray = result.parsed;
+    } else if (result.parsed && typeof result.parsed === 'object') {
+      // Common wrapper keys: results, classifications, items, data, output
+      for (const k of ['results', 'classifications', 'items', 'data', 'output']) {
+        if (Array.isArray(result.parsed[k])) {
+          parsedArray = result.parsed[k];
+          break;
+        }
+      }
     }
 
-    const byIndex = new Map();
-    for (const r of result.parsed) {
-      if (typeof r.i === 'number' && r.bucket) byIndex.set(r.i, r);
+    // Last-resort: extract array from raw text via a more aggressive regex
+    // (the SDK extractor has known issues when prose precedes the array).
+    if (!parsedArray && result.content) {
+      const arrMatch = String(result.content).match(/\[[\s\S]*\]/);
+      if (arrMatch) {
+        try { parsedArray = JSON.parse(arrMatch[0]); } catch {}
+      }
     }
+
+    // Save raw output for debugging when parsing fails or matches 0.
+    const debugInfo = {
+      parsedShape: Array.isArray(result.parsed) ? 'array' : typeof result.parsed,
+      parsedLength: Array.isArray(parsedArray) ? parsedArray.length : 0,
+      rawText: (result.content || '').slice(0, 1500), // first 1.5K chars
+    };
+
+    if (!Array.isArray(parsedArray)) {
+      throw new Error(`triage batch agent returned non-array output (shape=${debugInfo.parsedShape}). Raw: ${debugInfo.rawText.slice(0, 400)}`);
+    }
+
+    // Build lookup by index. Model sometimes returns `i` as a string ("1")
+    // instead of number (1); coerce. If `i` is missing entirely, fall back
+    // to positional order. Also accept `index` as alternative key.
+    const byIndex = new Map();
+    for (let pos = 0; pos < parsedArray.length; pos++) {
+      const r = parsedArray[pos];
+      if (!r || typeof r !== 'object') continue;
+      const rawI = r.i ?? r.index ?? r.idx;
+      const idx = Number(rawI);
+      const validIdx = Number.isFinite(idx) && idx > 0 ? idx : (pos + 1);
+      const bucket = r.bucket || r.category || r.classification;
+      if (bucket) byIndex.set(validIdx, { ...r, bucket });
+    }
+    ctx.logger?.info?.(
+      { matched: byIndex.size, expected: opps.length, parsed: parsedArray.length, ...debugInfo },
+      '[triageBatch] parsed model output'
+    );
 
     const buckets = {};
-    const draftEnqueues = [];
     for (let idx = 0; idx < opps.length; idx++) {
       const opp = opps[idx];
       const r = byIndex.get(idx + 1);
@@ -265,25 +299,19 @@ export function registerTriageBatchJob(registry) {
         buckets[opp._id.toString()] = 'unrated';
         continue;
       }
-      const { autoDraft } = applyBucketDecision(opp, r.bucket, r.because, true);
+      applyBucketDecision(opp, r.bucket, r.because, true);
       await opp.save();
       notifyDirectAsk(opp, ctx.logger);
       buckets[opp._id.toString()] = r.bucket;
-      if (autoDraft) draftEnqueues.push(opp._id);
-    }
-
-    for (const id of draftEnqueues) {
-      await ctx.worker.enqueue({
-        type: 'redditEngagement.draftReply',
-        opportunityId: id,
-      });
     }
 
     return {
       batched: opps.length,
       buckets,
-      draftEnqueues: draftEnqueues.length,
       costUsd: result.costUsd,
+      // Surface the raw model output and parsing trail in the job result
+      // when nothing matched — makes "all unrated" silent failures debuggable.
+      ...(byIndex.size === 0 ? { debug: debugInfo } : {}),
     };
   });
 }

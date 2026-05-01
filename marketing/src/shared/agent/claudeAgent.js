@@ -40,6 +40,7 @@ export function buildClaudeAgentAdapter({ logger, cwd }) {
       model,
       maxTurns,
       abortSignal,
+      jsonSchema, // strict JSON Schema; when set, model output is constrained
     }) {
       // Build (or skip) the in-process MCP server based on which custom
       // tools were passed in. Each tool becomes mcp__marketing__<name>.
@@ -78,6 +79,10 @@ export function buildClaudeAgentAdapter({ logger, cwd }) {
           ...(mcpServers && { mcpServers }),
           ...(model && { model: pickModelAlias(model) }),
           ...(abortSignal && { abortController: { signal: abortSignal } }),
+          // When provided, the SDK passes --json-schema to the underlying
+          // Claude Code binary, which constrains output to match. No more
+          // regex-fishing for JSON in freeform text.
+          ...(jsonSchema && { jsonSchema }),
         },
       };
 

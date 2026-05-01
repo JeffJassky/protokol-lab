@@ -16,12 +16,35 @@ const TriageSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// One turn in the drafting chat. The chat is the user-facing iteration
+// surface; the agent eventually writes the canonical reply via the
+// set_draft MCP tool, which lands in `body`.
+const ChatMessageSchema = new mongoose.Schema(
+  {
+    role: { type: String, enum: ['user', 'assistant', 'tool_use', 'tool_result'] },
+    content: String,            // text for user/assistant; JSON-stringified payload for tool_*
+    toolName: String,           // tool_use / tool_result only
+    toolUseId: String,          // pairs tool_use ↔ tool_result
+    isError: Boolean,
+    ts: { type: Date, default: () => new Date() },
+  },
+  { _id: false }
+);
+
 // Draft body. Other prior fields (citations, confidence,
 // voiceContactIdAtDraft, model, costUsd) were never read; dropped.
 const DraftSchema = new mongoose.Schema(
   {
     body: String,
     generatedAt: Date,
+
+    // Chat-style drafting (claude subprocess). Each user message kicks
+    // off an agent turn; the agent's final reply + any tool calls are
+    // appended here for replay on page reopen.
+    messages: { type: [ChatMessageSchema], default: undefined },
+    // claude session id from the SDK, lets subsequent turns resume the
+    // same context cheaply (the SDK passes --resume under the hood).
+    sessionId: String,
   },
   { _id: false }
 );

@@ -392,13 +392,17 @@ router.post('/onboarding/complete', requireAuth, requireAuthUser, async (req, re
     { new: true },
   ).select('-passwordHash');
   (req.log || log).info({ userId: String(user._id) }, 'onboarding: complete');
-  insertFunnelEvent({
-    name: 'onboarding_complete',
-    anonId: req.anonId || null,
-    userId: user._id,
-    ua: req.headers['user-agent'] || null,
-    ip: req.ip || null,
-  });
+  // Skip funnel persistence for synthetic probes — log line above stays
+  // for observability. Same pattern as lib/demoEvents.js.
+  if (!req.headers['x-synthetic-probe']) {
+    insertFunnelEvent({
+      name: 'onboarding_complete',
+      anonId: req.anonId || null,
+      userId: user._id,
+      ua: req.headers['user-agent'] || null,
+      ip: req.ip || null,
+    });
+  }
   res.json({ user: serializeUser(user) });
 });
 

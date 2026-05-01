@@ -7,6 +7,7 @@ import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
 import User from '../models/User.js';
 import { chatStream } from '../services/agent.js';
+import { touchRecent } from '../services/recentFood.js';
 import { calculateCost } from '../lib/pricing.js';
 import { requireChatQuota } from '../middleware/requireChatQuota.js';
 import { chatUpload, parseChatPayload } from '../middleware/chatUpload.js';
@@ -387,6 +388,9 @@ router.post('/proposals/:id/confirm', async (req, res) => {
   }
 
   const created = await FoodLog.insertMany(logDocs);
+  for (const doc of logDocs) {
+    await touchRecent(req.authUserId, doc.foodItemId, doc.servingCount, doc.mealType);
+  }
   proposal.status = 'confirmed';
   await proposal.save();
 

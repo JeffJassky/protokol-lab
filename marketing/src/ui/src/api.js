@@ -77,8 +77,13 @@ export const api = {
     getOpportunity: (id) => request('GET', `/reddit-engagement/opportunities/${id}`),
     updateOpportunity: (id, body) => request('PATCH', `/reddit-engagement/opportunities/${id}`, body),
     triage: (id) => request('POST', `/reddit-engagement/opportunities/${id}/triage`),
-    draft: (id, steeringNote) =>
-      request('POST', `/reddit-engagement/opportunities/${id}/draft`, { steeringNote }),
+
+    chatMessages: (id) => request('GET', `/reddit-engagement/opportunities/${id}/chat/messages`),
+    chatSend: (id, content) =>
+      request('POST', `/reddit-engagement/opportunities/${id}/chat/messages`, { content }),
+    chatClear: (id) => request('POST', `/reddit-engagement/opportunities/${id}/chat/clear`),
+    chatStreamUrl: (id) => `${BASE}/api/reddit-engagement/opportunities/${id}/chat/stream`,
+
     pass: (id, note) => request('POST', `/reddit-engagement/opportunities/${id}/pass`, { note }),
     save: (id, note) => request('POST', `/reddit-engagement/opportunities/${id}/save`, { note }),
     unpass: (id) => request('POST', `/reddit-engagement/opportunities/${id}/unpass`),

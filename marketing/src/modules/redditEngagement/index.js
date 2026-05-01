@@ -1,13 +1,12 @@
 // Reddit Engagement module: monitor configured subreddits, triage
-// candidate threads, draft genuine reply candidates, mark-posted flow.
-// All posting stays manual.
+// candidate threads, drive interactive reply drafting via the local
+// claude subprocess. All posting stays manual.
 
 import { buildMonitoredSubredditModel } from './models/MonitoredSubreddit.js';
 import { buildEngagementOpportunityModel } from './models/EngagementOpportunity.js';
 import { buildEngagementRunModel } from './models/EngagementRun.js';
 import { registerScanJob, registerScanScheduler } from './jobs/scan.js';
 import { registerTriagePrompt, registerTriageJob, registerTriageBatchPrompt, registerTriageBatchJob } from './jobs/triage.js';
-import { registerDraftReplyPrompt, registerDraftReplyJob } from './jobs/draftReply.js';
 import { buildSubredditsRoutes } from './routes/subreddits.js';
 import { buildOpportunitiesRoutes } from './routes/opportunities.js';
 import { buildRunsRoutes } from './routes/runs.js';
@@ -27,13 +26,14 @@ export function setupRedditEngagement(ctx) {
   // Prompts
   registerTriagePrompt(ctx.prompts);
   registerTriageBatchPrompt(ctx.prompts);
-  registerDraftReplyPrompt(ctx.prompts);
+  // The old draftReply Sonnet job + prompt were removed 2026-04-30 —
+  // drafting is now interactive via the chat-style routes in
+  // routes/opportunities.js (claude subprocess, not a prompt-keyed job).
 
   // Job handlers
   registerScanJob(ctx.worker.registry);
   registerTriageJob(ctx.worker.registry);
   registerTriageBatchJob(ctx.worker.registry);
-  registerDraftReplyJob(ctx.worker.registry);
 
   // Boot marker — proves the new code path executed at startup. If you
   // don't see this line in your dev server logs after a restart, the

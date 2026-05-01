@@ -51,6 +51,13 @@ function resolveUserId(req) {
 
 // POST /api/track  { name, props?, path?, referrer?, utm? }
 router.post('/', beaconLimiter, async (req, res) => {
+  // Synthetic / post-deploy smoke probes set this header so prod
+  // FunnelEvent doesn't accumulate bot traffic. Ack with 204 so the
+  // client tracker's keepalive logic stays happy; skip the insert.
+  if (req.headers['x-synthetic-probe']) {
+    return res.status(204).end();
+  }
+
   // CSRF defense-in-depth. Default SameSite=lax already blocks cross-origin
   // cookies on POST, but if COOKIE_SAMESITE=none is configured (e.g. for
   // multi-subdomain deploys) that protection drops. Reject when the Origin

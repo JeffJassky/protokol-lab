@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import FoodLog from '../models/FoodLog.js';
 import FoodItem from '../models/FoodItem.js';
-import RecentFood from '../models/RecentFood.js';
 import UserSettings from '../models/UserSettings.js';
+import { touchRecent } from '../services/recentFood.js';
 import { childLogger } from '../lib/logger.js';
 
 const log = childLogger('foodlog');
@@ -36,24 +36,6 @@ async function resolveFoodItemId(body, userId) {
   }
 
   return null;
-}
-
-async function updateRecent(userId, foodItemId, servingCount, mealType) {
-  await RecentFood.findOneAndUpdate(
-    { userId, foodItemId },
-    { lastServingCount: servingCount, lastMealType: mealType, lastUsedAt: new Date() },
-    { upsert: true },
-  );
-
-  const count = await RecentFood.countDocuments({ userId });
-  if (count > 50) {
-    const oldest = await RecentFood.find({ userId })
-      .sort({ lastUsedAt: 1 })
-      .limit(count - 50)
-      .select('_id');
-    await RecentFood.deleteMany({ _id: { $in: oldest.map((r) => r._id) } });
-    log.debug({ userId: String(userId), pruned: count - 50 }, 'foodlog: pruned recents');
-  }
 }
 
 router.get('/', async (req, res) => {
@@ -212,7 +194,7 @@ router.post('/', async (req, res) => {
     servingCount: req.body.servingCount || 1,
   });
 
-  await updateRecent(req.userId, foodItemId, entry.servingCount, entry.mealType);
+  await touchRecent(req.userId, foodItemId, entry.servingCount, entry.mealType);
 
   const populated = await entry.populate('foodItemId');
   rlog.info(

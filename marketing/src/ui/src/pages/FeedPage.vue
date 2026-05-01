@@ -80,10 +80,6 @@ async function unpass(opp) {
   await api.redditEngagement.unpass(opp._id);
   load();
 }
-async function draft(opp) {
-  await api.redditEngagement.draft(opp._id);
-  setTimeout(load, 1500);
-}
 async function markPosted(opp) {
   const url = prompt('Reddit comment URL (optional, paste if you have it):') || '';
   await api.redditEngagement.markPosted(opp._id, url);
@@ -117,7 +113,6 @@ function onKey(e) {
   else if (!opp) return;
   else if (e.key === 'p') pass(opp);
   else if (e.key === 's') save(opp);
-  else if (e.key === 'd') draft(opp);
   else if (e.key === 'r') openOnReddit(opp);
   else if (e.key === 'Enter') openDetail(opp);
   else if (e.key === 'm') markPosted(opp);
@@ -150,8 +145,8 @@ function isStaleDirect(opp) {
 </script>
 
 <template>
-  <div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
+  <div class="feed-wrap">
+    <div class="feed-head">
       <div>
         <h1 class="page-title">Engagement feed</h1>
         <p class="page-sub">
@@ -159,12 +154,12 @@ function isStaleDirect(opp) {
           · <span style="color:var(--text-dim)">saved {{ counts.saved || 0 }} · passed {{ counts.passed || 0 }} · replied {{ counts.replied || 0 }} · dismissed {{ counts.dismissed || 0 }}</span>
         </p>
       </div>
-      <div style="font-size:11px;color:var(--text-dim);text-align:right">
-        <kbd>j</kbd>/<kbd>k</kbd> next/prev · <kbd>p</kbd> pass · <kbd>s</kbd> save · <kbd>d</kbd> draft · <kbd>r</kbd> open · <kbd>m</kbd> mark posted · <kbd>↵</kbd> detail
+      <div class="kbd-hints">
+        <kbd>j</kbd>/<kbd>k</kbd> next/prev · <kbd>p</kbd> pass · <kbd>s</kbd> save · <kbd>r</kbd> open · <kbd>m</kbd> mark posted · <kbd>↵</kbd> open detail to draft
       </div>
     </div>
 
-    <div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+    <div class="toolbar">
       <select class="select" style="max-width:200px" v-model="filters.showBucket">
         <option value="actionable">Actionable (Direct + Indirect)</option>
         <option value="all-replyable">All replyable (+ Topic)</option>
@@ -199,71 +194,58 @@ function isStaleDirect(opp) {
       </p>
     </div>
 
-    <div
+    <article
       v-for="(opp, i) in visible"
       :key="opp._id"
-      class="card"
-      :style="{
-        cursor: 'pointer',
-        outline: i === activeIndex ? '2px solid var(--accent, #4d8aff)' : 'none',
-        outlineOffset: '-1px',
-      }"
+      class="post"
+      :class="{ 'post--active': i === activeIndex }"
       @click="activeIndex = i"
     >
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <span class="pill">r/{{ opp.subreddit }}</span>
-          <span
-            v-if="opp.triage?.bucket"
-            class="pill"
-            :class="bucketMeta(opp.triage.bucket).cls"
-            :title="bucketMeta(opp.triage.bucket).tip"
-          >{{ bucketMeta(opp.triage.bucket).label }}</span>
-          <span v-if="isStaleDirect(opp)" class="pill bad" title="DIRECT_ASK posted >1h ago — visibility window closing">⏰ stale</span>
-          <span v-if="opp.draft?.body" class="pill good">drafted</span>
-          <span v-if="opp.decision !== 'pending'" class="pill" style="background:#444">{{ opp.decision }}</span>
-        </div>
-        <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">
-          {{ ageStr(opp.postedAt) }} ago · u/{{ opp.authorUsername }} · {{ opp.postCommentCount }} comments
-        </span>
+      <header class="post-meta">
+        <span class="post-meta__sub">r/{{ opp.subreddit }}</span>
+        <span class="post-meta__sep">·</span>
+        <span class="post-meta__user">Posted by u/{{ opp.authorUsername }}</span>
+        <span class="post-meta__sep">·</span>
+        <span class="post-meta__time">{{ ageStr(opp.postedAt) }} ago</span>
+        <span class="post-meta__sep">·</span>
+        <span class="post-meta__time">{{ opp.postCommentCount }} comments</span>
+      </header>
+
+      <h2 class="post-title">{{ opp.title }}</h2>
+
+      <div class="post-pills">
+        <span
+          v-if="opp.triage?.bucket"
+          class="pill"
+          :class="bucketMeta(opp.triage.bucket).cls"
+          :title="bucketMeta(opp.triage.bucket).tip"
+        >{{ bucketMeta(opp.triage.bucket).label }}</span>
+        <span v-if="isStaleDirect(opp)" class="pill bad" title="DIRECT_ASK posted >1h ago — visibility window closing">⏰ stale</span>
+        <span v-if="opp.draft?.body" class="pill good">drafted</span>
+        <span v-if="opp.decision !== 'pending'" class="pill" style="background:#444">{{ opp.decision }}</span>
       </div>
 
-      <strong style="font-size:14px;display:block;margin-bottom:4px">{{ opp.title }}</strong>
+      <div v-if="opp.postExcerpt" class="post-body">{{ opp.postExcerpt }}</div>
 
-      <p
-        v-if="opp.triage?.because"
-        style="margin:0 0 6px;font-size:12px;color:var(--text-dim);font-style:italic"
-      >
-        ↳ {{ opp.triage.because }}
-      </p>
+      <aside v-if="opp.triage?.because" class="triage-note">
+        <span class="triage-note__label">Why surfaced</span>
+        <span class="triage-note__text">{{ opp.triage.because }}</span>
+      </aside>
 
-      <p
-        v-if="opp.postExcerpt"
-        style="margin:6px 0 0;font-size:13px;line-height:1.45;color:var(--text)"
-      >
-        {{ opp.postExcerpt.slice(0, 320) }}{{ opp.postExcerpt.length > 320 ? '…' : '' }}
-      </p>
+      <section v-if="opp.draft?.body" class="draft-preview">
+        <header class="draft-preview__label">Draft preview</header>
+        <p class="draft-preview__body">{{ opp.draft.body.slice(0, 360) }}{{ opp.draft.body.length > 360 ? '…' : '' }}</p>
+      </section>
 
-      <div
-        v-if="opp.draft?.body"
-        style="margin-top:8px;padding:8px;background:var(--panel-2);border-radius:4px;border-left:2px solid var(--good, #4caf50)"
-      >
-        <strong style="font-size:11px;color:var(--text-dim)">Draft preview</strong>
-        <p style="margin:2px 0 0;font-size:13px;white-space:pre-wrap;line-height:1.45">
-          {{ opp.draft.body.slice(0, 360) }}{{ opp.draft.body.length > 360 ? '…' : '' }}
-        </p>
-      </div>
-
-      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      <div class="post-actions">
         <button v-if="opp.decision === 'pending'" class="btn" @click.stop="pass(opp)" title="p — never show again">Pass</button>
         <button v-if="opp.decision === 'pending'" class="btn" @click.stop="save(opp)" title="s — snooze for later">Save</button>
         <button v-if="opp.decision === 'passed'" class="btn" @click.stop="unpass(opp)">Un-pass</button>
-        <button v-if="opp.decision === 'pending' && !opp.draft && opp.triage" class="btn primary" @click.stop="draft(opp)" title="d — generate AI draft">Draft</button>
-        <button v-if="opp.draft?.body" class="btn primary" @click.stop="openDetail(opp)">Edit draft</button>
+        <button v-if="opp.decision === 'pending'" class="btn primary" @click.stop="openDetail(opp)">{{ opp.draft?.body ? 'Edit draft' : 'Draft reply' }}</button>
         <button v-if="opp.decision === 'pending'" class="btn" @click.stop="openOnReddit(opp)" title="r — open in reddit">Open</button>
         <button v-if="opp.decision === 'pending'" class="btn" @click.stop="markPosted(opp)" title="m — mark replied">Mark posted</button>
       </div>
-    </div>
+    </article>
   </div>
 </template>
 
@@ -275,5 +257,140 @@ kbd {
   padding: 1px 4px;
   font-family: monospace;
   font-size: 10px;
+}
+
+.feed-wrap {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.feed-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.kbd-hints {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.post {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+.post:hover { border-color: #4a525e; }
+.post--active {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.post-meta__sub {
+  color: var(--text);
+  font-weight: 600;
+}
+.post-meta__user {
+  color: var(--text-dim);
+}
+.post-meta__sep {
+  opacity: 0.6;
+}
+
+.post-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0 0 8px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.post-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.post-body {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0 0 12px;
+}
+
+.triage-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+}
+.triage-note__label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.triage-note__text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.draft-preview {
+  background: var(--panel-2);
+  border-left: 2px solid var(--good);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+.draft-preview__label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.draft-preview__body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.post-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
 }
 </style>

@@ -55,6 +55,10 @@ export function buildAgentRunner({ config, models, prompts, usage, logger, llm, 
       userPrompt: JSON.stringify(context),
       model,
       maxTurns: 1,
+      // If the prompt declares a JSON output schema, hand it to the
+      // adapter so the underlying API constrains output. Cuts the
+      // entire "regex-hunt for JSON in freeform text" failure mode.
+      jsonSchema: promptDecl?.outputSchema,
     })) {
       if (event.type === 'text') lastText = event.text;
       if (event.type === 'done') {

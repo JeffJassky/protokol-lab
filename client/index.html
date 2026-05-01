@@ -94,6 +94,14 @@
     <script src="/theme-init.js"></script>
 
     <!-- Google tag (gtag.js) -->
+    <script>
+      // Disable GA on non-prod hostnames (localhost dev, e2e, prerender) and
+      // automated browsers (Playwright synthetic + post-deploy smoke set
+      // navigator.webdriver=true). Must run before gtag.js loads.
+      if (location.hostname !== 'protokollab.com' || navigator.webdriver) {
+        window['ga-disable-G-45RY2J3PX4'] = true;
+      }
+    </script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-45RY2J3PX4"></script>
     <script>
       window.dataLayer = window.dataLayer || [];

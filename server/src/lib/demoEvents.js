@@ -33,6 +33,11 @@ export function emitDemoEvent(req, name, props = {}) {
   };
   (req?.log || log).info(base, name);
 
+  // Synthetic / post-deploy smoke probes carry x-synthetic-probe. Keep
+  // the Pino line above (observability), but skip the FunnelEvent insert
+  // so prod aggregations aren't inflated by bot traffic.
+  if (req?.headers?.['x-synthetic-probe']) return;
+
   // Persist to the in-app analytics store. Best-effort; insertFunnelEvent
   // swallows its own errors so a Mongo blip can never break the funnel
   // event emit.
