@@ -7,7 +7,9 @@ const theme = useTheme();
 <template>
   <div class="appearance-page">
     <div class="head">
-      <router-link to="/profile" class="back-link" aria-label="Back">‹ Profile</router-link>
+      <router-link to="/profile" class="back-link" aria-label="Back"
+        >‹ Profile</router-link
+      >
       <h2 class="page-title">Appearance</h2>
     </div>
 
@@ -20,19 +22,25 @@ const theme = useTheme();
             class="theme-option"
             :class="{ active: theme === 'light' }"
             @click="theme = 'light'"
-          >Light</button>
+          >
+            Light
+          </button>
           <button
             type="button"
             class="theme-option"
             :class="{ active: theme === 'dark' }"
             @click="theme = 'dark'"
-          >Dark</button>
+          >
+            Dark
+          </button>
           <button
             type="button"
             class="theme-option"
             :class="{ active: theme === 'auto' }"
             @click="theme = 'auto'"
-          >System</button>
+          >
+            System
+          </button>
         </div>
       </div>
     </div>
@@ -55,7 +63,8 @@ const theme = useTheme();
   padding: var(--space-1) 0;
 }
 .back-link:hover { color: var(--text); }
-.page-title { margin: 0; }
+
+.page-title { margin: 0; text-align: center; }
 
 .card {
   background: var(--surface);

@@ -133,16 +133,46 @@ const routes = [
   { path: '/symptoms', redirect: '/log' },
 ];
 
+// Desktop app routes scroll inside `.content` (the AppLayout's inner pane),
+// not the window. Vue Router's `saved` only restores window scroll, so we
+// track inner-container scrollTop ourselves keyed by fullPath and restore on
+// back/forward (popstate). Mobile app routes and marketing pages scroll the
+// window, which the returned scroll position handles.
+const innerScrollPositions = new Map();
+
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  // Scroll to top on navigation between marketing pages so new SEO-page heads
-  // aren't landed at mid-page from the previous scroll position.
   scrollBehavior(to, from, saved) {
-    if (saved) return saved;
-    if (to.hash) return { el: to.hash, behavior: 'smooth' };
-    return { top: 0, behavior: 'instant' };
+    return new Promise((resolve) => {
+      // Wait one frame so the new view is mounted before we read/scroll.
+      requestAnimationFrame(() => {
+        const content = document.querySelector('main.content');
+        if (content) {
+          if (saved && innerScrollPositions.has(to.fullPath)) {
+            content.scrollTop = innerScrollPositions.get(to.fullPath);
+          } else if (to.hash) {
+            const el = content.querySelector(to.hash);
+            content.scrollTop = el ? el.offsetTop : 0;
+          } else {
+            content.scrollTop = 0;
+          }
+        }
+        if (saved) return resolve(saved);
+        if (to.hash) return resolve({ el: to.hash, behavior: 'smooth' });
+        resolve({ top: 0, behavior: 'instant' });
+      });
+    });
   },
+});
+
+// Capture inner-container scroll before each navigation so we can restore it
+// on back/forward. Runs before the auth guard; returns nothing so it never
+// blocks navigation.
+router.beforeEach((to, from) => {
+  if (!from.fullPath) return;
+  const content = document.querySelector('main.content');
+  if (content) innerScrollPositions.set(from.fullPath, content.scrollTop);
 });
 
 router.beforeEach(async (to) => {

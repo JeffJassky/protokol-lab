@@ -213,13 +213,16 @@ onMounted(async () => {
 <template>
   <div class="compounds-page">
     <div class="head">
-      <router-link to="/profile" class="back-link" aria-label="Back">‹ Profile</router-link>
+      <router-link to="/profile" class="back-link" aria-label="Back"
+        >‹ Profile</router-link
+      >
       <h2 class="page-title">Compounds</h2>
     </div>
 
     <div class="card">
       <p class="lead">
-        Compounds you dose on a schedule. System entries can be enabled or disabled; custom ones are fully editable.
+        Compounds you dose on a schedule. System entries can be enabled or
+        disabled; custom ones are fully editable.
       </p>
 
       <ul class="compound-list">
@@ -230,7 +233,11 @@ onMounted(async () => {
           :class="{ disabled: !c.enabled }"
           :style="c.enabled && c.color ? { borderLeftColor: c.color, borderLeftWidth: '3px' } : null"
         >
-          <label class="switch compound-toggle" :title="c.enabled ? 'Disable' : 'Enable'" @click.stop>
+          <label
+            class="switch compound-toggle"
+            :title="c.enabled ? 'Disable' : 'Enable'"
+            @click.stop
+          >
             <input
               type="checkbox"
               :checked="c.enabled"
@@ -242,7 +249,10 @@ onMounted(async () => {
             <div class="compound-lead">
               <div class="compound-identity">
                 <div class="compound-name-row">
-                  <span class="compound-name">{{ displayCompoundNames(c) }}</span>
+                  <span
+                    class="compound-name"
+                    >{{ displayCompoundNames(c) }}</span
+                  >
                   <svg
                     v-if="c.isSystem"
                     class="compound-lock"
@@ -263,7 +273,8 @@ onMounted(async () => {
                   v-if="c.enabled"
                   class="compound-next"
                   :class="`status-${nextDoseInfo(c).status}`"
-                >{{ nextDoseInfo(c).label }}</span>
+                  >{{ nextDoseInfo(c).label }}</span
+                >
               </div>
               <button
                 v-if="!c.isSystem"
@@ -271,7 +282,9 @@ onMounted(async () => {
                 class="compound-del"
                 @click.stop="handleDeleteCompound(c)"
                 title="Delete compound"
-              >×</button>
+              >
+                ×
+              </button>
             </div>
             <div v-if="draftFor(c._id) && c.enabled" class="compound-params">
               <label class="param-chip">
@@ -309,20 +322,37 @@ onMounted(async () => {
                     v-model="draftFor(c._id).kineticsShape"
                     @change="saveCompoundDraft(c)"
                   >
-                    <option v-for="s in KINETICS_SHAPES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                    <option
+                      v-for="s in KINETICS_SHAPES"
+                      :key="s.value"
+                      :value="s.value"
+                    >
+                      {{ s.label }}
+                    </option>
                   </select>
                 </div>
                 <template #popper>
                   <div class="popover profile-pop">
                     <h4 class="profile-pop-title">PK profile</h4>
                     <p class="profile-pop-lede">
-                      Half-life sets how fast the dose clears. The profile sets how
-                      it gets there — instant peak vs. gradual rise from absorption.
+                      Half-life sets how fast the dose clears. The profile sets
+                      how it gets there — instant peak vs. gradual rise from
+                      absorption.
                     </p>
                     <ul class="profile-pop-list">
                       <li v-for="s in KINETICS_SHAPES" :key="s.value">
-                        <svg class="profile-spark" viewBox="0 0 96 28" preserveAspectRatio="none" aria-hidden="true">
-                          <path :d="profileSparkline(s.value)" fill="none" stroke="currentColor" stroke-width="1.5" />
+                        <svg
+                          class="profile-spark"
+                          viewBox="0 0 96 28"
+                          preserveAspectRatio="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            :d="profileSparkline(s.value)"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                          />
                         </svg>
                         <div class="profile-pop-name">{{ s.label }}</div>
                         <div class="profile-pop-blurb">{{ s.blurb }}</div>
@@ -350,15 +380,20 @@ onMounted(async () => {
               <span
                 v-if="compoundSaveState[c._id] === 'saved'"
                 class="compound-status ok"
-              >saved</span>
+                >saved</span
+              >
               <span
                 v-else-if="compoundSaveState[c._id] === 'saving'"
                 class="compound-status"
-              >saving...</span>
+                >saving...</span
+              >
             </div>
 
             <div v-if="draftFor(c._id) && c.enabled" class="compound-reminder">
-              <label class="switch" :title="draftFor(c._id).reminderEnabled ? 'Reminder on' : 'Reminder off'">
+              <label
+                class="switch"
+                :title="draftFor(c._id).reminderEnabled ? 'Reminder on' : 'Reminder off'"
+              >
                 <input
                   type="checkbox"
                   v-model="draftFor(c._id).reminderEnabled"
@@ -389,29 +424,41 @@ onMounted(async () => {
             clickable
           />
         </h4>
-        <p
-          v-if="compoundsAtCap"
-          class="field-hint"
-        >
+        <p v-if="compoundsAtCap" class="field-hint">
           <template v-if="customCompoundCap === 0">
             Custom compounds aren't included on your plan.
           </template>
           <template v-else>
-            You've used {{ customCompoundCount }} of {{ customCompoundCap }} custom compounds on your plan.
+            You've used {{ customCompoundCount }} of
+            {{ customCompoundCap }} custom compounds on your plan.
           </template>
         </p>
         <div class="compound-add-grid">
           <label class="compound-field">
             <span>Name</span>
-            <input type="text" v-model="newCompound.name" placeholder="Compound name" />
+            <input
+              type="text"
+              v-model="newCompound.name"
+              placeholder="Compound name"
+            />
           </label>
           <label class="compound-field">
             <span>Half-life (days)</span>
-            <input type="number" step="0.25" min="0.1" v-model.number="newCompound.halfLifeDays" />
+            <input
+              type="number"
+              step="0.25"
+              min="0.1"
+              v-model.number="newCompound.halfLifeDays"
+            />
           </label>
           <label class="compound-field">
             <span>Interval (days)</span>
-            <input type="number" step="0.5" min="0.5" v-model.number="newCompound.intervalDays" />
+            <input
+              type="number"
+              step="0.5"
+              min="0.5"
+              v-model.number="newCompound.intervalDays"
+            />
           </label>
           <label class="compound-field">
             <span>Unit</span>
@@ -425,7 +472,13 @@ onMounted(async () => {
           <label class="compound-field">
             <span>Shape</span>
             <select v-model="newCompound.kineticsShape">
-              <option v-for="s in KINETICS_SHAPES" :key="s.value" :value="s.value">{{ s.label }}</option>
+              <option
+                v-for="s in KINETICS_SHAPES"
+                :key="s.value"
+                :value="s.value"
+              >
+                {{ s.label }}
+              </option>
             </select>
           </label>
           <label class="compound-field small">
@@ -433,7 +486,9 @@ onMounted(async () => {
             <input type="color" v-model="newCompound.color" />
           </label>
         </div>
-        <button type="button" class="btn-secondary" @click="handleAddCompound">Add compound</button>
+        <button type="button" class="btn-secondary" @click="handleAddCompound">
+          Add compound
+        </button>
       </div>
       <p v-if="compoundsError" class="error">{{ compoundsError }}</p>
     </div>
@@ -456,7 +511,8 @@ onMounted(async () => {
   padding: var(--space-1) 0;
 }
 .back-link:hover { color: var(--text); }
-.page-title { margin: 0; }
+
+.page-title { margin: 0; text-align: center; }
 
 .card {
   background: var(--surface);
@@ -729,8 +785,14 @@ onMounted(async () => {
 .switch-track {
   position: absolute;
   inset: 0;
-  background: var(--border);
-  border-radius: var(--radius-pill);
+  /* Off state uses --bg (the "recessed" tone) so the switch reads as a
+     distinct control against the --surface compound card. Just --border
+     blended into the surrounding card background. */
+  background: var(--bg);
+  /* Hardcoded radius — the global radius tokens are intentionally 0 across the
+     app's sharp-edged design language, but a toggle switch needs to read as a
+     pill to be recognizable. */
+  border-radius: 999px;
   transition: background var(--transition-fast);
 }
 .switch-thumb {
@@ -783,7 +845,7 @@ onMounted(async () => {
 .compound-field input[type="text"],
 .compound-field select {
   padding: 0.3rem 0.5rem;
-  background: var(--surface);
+  background: var(--bg);
   font-size: var(--font-size-s);
   width: 110px;
 }

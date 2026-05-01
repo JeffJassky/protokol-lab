@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import WaistLog from '../models/WaistLog.js';
 import { childLogger } from '../lib/logger.js';
+import { parseLogDate } from '../lib/date.js';
 
 const log = childLogger('waist');
 const router = Router();
@@ -27,7 +28,7 @@ router.post('/', async (req, res) => {
   const entry = await WaistLog.create({
     userId: req.userId,
     waistInches: Number(waistInches),
-    date: new Date(date),
+    date: parseLogDate(date),
   });
   (req.log || log).info({ entryId: String(entry._id), waistInches, date }, 'waist: logged');
   res.status(201).json({ entry });

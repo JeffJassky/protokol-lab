@@ -143,10 +143,6 @@ watch(
 
 <template>
   <div class="profile-page">
-    <div class="profile-head">
-      <h2 class="page-title">Profile</h2>
-    </div>
-
     <form @submit.prevent>
       <div class="card">
         <h3>Profile</h3>
@@ -155,23 +151,44 @@ watch(
           <label class="stat-cell">
             <span class="stat-label">Current</span>
             <span class="stat-value-wrap">
-              <input type="number" v-model.number="currentWeightLbs" step="0.1" required class="stat-input" />
+              <input
+                type="number"
+                v-model.number="currentWeightLbs"
+                step="0.1"
+                required
+                class="stat-input"
+              />
               <span class="stat-unit">lbs</span>
             </span>
           </label>
           <label class="stat-cell">
             <span class="stat-label">Goal</span>
             <span class="stat-value-wrap">
-              <input type="number" v-model.number="goalWeightLbs" step="0.1" class="stat-input" placeholder="—" />
+              <input
+                type="number"
+                v-model.number="goalWeightLbs"
+                step="0.1"
+                class="stat-input"
+                placeholder="—"
+              />
               <span class="stat-unit">lbs</span>
             </span>
           </label>
           <label class="stat-cell">
-            <span class="stat-label">TDEE
-              <span v-if="tdeeComputed && !tdee" class="stat-hint">auto: {{ tdeeComputed }}</span>
+            <span class="stat-label"
+              >TDEE
+              <span v-if="tdeeComputed && !tdee" class="stat-hint"
+                >auto: {{ tdeeComputed }}</span
+              >
             </span>
             <span class="stat-value-wrap">
-              <input type="number" v-model.number="tdee" step="1" class="stat-input" :placeholder="tdeeComputed || '—'" />
+              <input
+                type="number"
+                v-model.number="tdee"
+                step="1"
+                class="stat-input"
+                :placeholder="tdeeComputed || '—'"
+              />
               <span class="stat-unit">kcal/day</span>
             </span>
           </label>
@@ -180,7 +197,8 @@ watch(
         <p v-if="bmrComputed" class="bmr-readout">
           BMR (resting): <strong>{{ bmrComputed }}</strong> kcal/day
           <span class="bmr-readout-sub">
-            — auto-calculated from sex, age, height, and weight (Mifflin-St Jeor).
+            — auto-calculated from sex, age, height, and weight (Mifflin-St
+            Jeor).
           </span>
         </p>
 
@@ -188,23 +206,56 @@ watch(
           <div class="bio-group">
             <span class="bio-label">Sex</span>
             <div class="seg-control">
-              <button type="button" class="seg-btn" :class="{ active: sex === 'male' }" @click="sex = 'male'">Male</button>
-              <button type="button" class="seg-btn" :class="{ active: sex === 'female' }" @click="sex = 'female'">Female</button>
+              <button
+                type="button"
+                class="seg-btn"
+                :class="{ active: sex === 'male' }"
+                @click="sex = 'male'"
+              >
+                Male
+              </button>
+              <button
+                type="button"
+                class="seg-btn"
+                :class="{ active: sex === 'female' }"
+                @click="sex = 'female'"
+              >
+                Female
+              </button>
             </div>
           </div>
           <div class="bio-group">
             <span class="bio-label">Age</span>
             <div class="bio-inline">
-              <input type="number" v-model.number="age" min="13" max="120" class="bio-input" placeholder="—" />
+              <input
+                type="number"
+                v-model.number="age"
+                min="13"
+                max="120"
+                class="bio-input"
+                placeholder="—"
+              />
               <span class="bio-unit">yrs</span>
             </div>
           </div>
           <div class="bio-group">
             <span class="bio-label">Height</span>
             <div class="bio-inline">
-              <input type="number" v-model.number="heightFeet" min="3" max="8" class="bio-input" />
+              <input
+                type="number"
+                v-model.number="heightFeet"
+                min="3"
+                max="8"
+                class="bio-input"
+              />
               <span class="bio-unit">ft</span>
-              <input type="number" v-model.number="heightInches" min="0" max="11" class="bio-input" />
+              <input
+                type="number"
+                v-model.number="heightInches"
+                min="0"
+                max="11"
+                class="bio-input"
+              />
               <span class="bio-unit">in</span>
             </div>
           </div>
@@ -215,7 +266,11 @@ watch(
             <span class="bio-label">Activity level</span>
             <select v-model="activityLevel" class="bio-select">
               <option value="">—</option>
-              <option v-for="lvl in ACTIVITY_LEVELS" :key="lvl.value" :value="lvl.value">
+              <option
+                v-for="lvl in ACTIVITY_LEVELS"
+                :key="lvl.value"
+                :value="lvl.value"
+              >
                 {{ lvl.label }} (×{{ lvl.multiplier }})
               </option>
             </select>
@@ -224,7 +279,9 @@ watch(
             <span class="bio-label">Goal rate</span>
             <select v-model="goalRateLbsPerWeek" class="bio-select">
               <option :value="null">—</option>
-              <option v-for="r in GOAL_RATES" :key="r.value" :value="r.value">{{ r.label }}</option>
+              <option v-for="r in GOAL_RATES" :key="r.value" :value="r.value">
+                {{ r.label }}
+              </option>
             </select>
           </div>
         </div>
@@ -249,14 +306,20 @@ watch(
           <div v-if="calorieDelta != null" class="cal-hero-aside">
             <div class="cal-stat">
               <span class="cal-stat-label">vs TDEE</span>
-              <span class="cal-stat-value" :class="calorieDelta < 0 ? 'neg' : 'pos'">
+              <span
+                class="cal-stat-value"
+                :class="calorieDelta < 0 ? 'neg' : 'pos'"
+              >
                 {{ signed(calorieDelta) }}
                 <span class="cal-stat-unit">kcal</span>
               </span>
             </div>
             <div class="cal-stat">
               <span class="cal-stat-label">Projected</span>
-              <span class="cal-stat-value" :class="weeklyLbs < 0 ? 'neg' : 'pos'">
+              <span
+                class="cal-stat-value"
+                :class="weeklyLbs < 0 ? 'neg' : 'pos'"
+              >
                 {{ signed(weeklyLbs, 2) }}
                 <span class="cal-stat-unit">lbs/wk</span>
               </span>
@@ -270,15 +333,27 @@ watch(
                   muted: timeToGoal.state !== 'ok' && timeToGoal.state !== 'at',
                 }"
               >
-                <template v-if="timeToGoal.state === 'ok'">{{ timeToGoal.label }}</template>
-                <template v-else-if="timeToGoal.state === 'at'">At goal</template>
-                <template v-else-if="timeToGoal.state === 'wrong'">Wrong way</template>
-                <template v-else-if="timeToGoal.state === 'steady'">Steady</template>
+                <template
+                  v-if="timeToGoal.state === 'ok'"
+                  >{{ timeToGoal.label }}</template
+                >
+                <template v-else-if="timeToGoal.state === 'at'"
+                  >At goal</template
+                >
+                <template v-else-if="timeToGoal.state === 'wrong'"
+                  >Wrong way</template
+                >
+                <template v-else-if="timeToGoal.state === 'steady'"
+                  >Steady</template
+                >
                 <template v-else>Set goal</template>
               </span>
             </div>
           </div>
-          <p v-else class="cal-hero-hint">Set TDEE above (or fill in age + activity level) to see deficit + projected weekly change.</p>
+          <p v-else class="cal-hero-hint">
+            Set TDEE above (or fill in age + activity level) to see deficit +
+            projected weekly change.
+          </p>
         </div>
 
         <MacroAllocator
@@ -301,7 +376,10 @@ watch(
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
-    <router-link to="/profile/settings/notifications" class="card settings-link">
+    <router-link
+      to="/profile/settings/notifications"
+      class="card settings-link"
+    >
       <span class="settings-link-text">
         <span class="settings-link-label">Notifications</span>
         <span class="settings-link-sub">Push reminders + daily tracking</span>
@@ -327,14 +405,6 @@ watch(
 
 <style scoped>
 .profile-page { max-width: 560px; }
-.profile-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: var(--space-5) var(--space-5) 0;
-  margin-bottom: var(--space-4);
-}
-.profile-head h2 { margin: 0; }
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

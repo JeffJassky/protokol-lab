@@ -3,9 +3,11 @@ import { ref, onMounted, watch } from 'vue';
 import { useAuthStore } from '../stores/auth.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { usePushStore } from '../stores/push.js';
+import { useChatStarterStore } from '../stores/chatStarter.js';
 import { useTheme } from '../composables/useTheme.js';
 import ChatDrawer from './ChatDrawer.vue';
 import OnboardingBanner from './OnboardingBanner.vue';
+import OnboardingChecklist from './OnboardingChecklist.vue';
 import DemoBanner from './DemoBanner.vue';
 import ProfileFieldsModal from './ProfileFieldsModal.vue';
 import BrandLockup from './BrandLockup.vue';
@@ -14,8 +16,22 @@ import BugReportFab from './BugReportFab.vue';
 const auth = useAuthStore();
 const onboarding = useOnboardingStore();
 const pushStore = usePushStore();
+const chatStarter = useChatStarterStore();
 
 const showChat = ref(false);
+
+// Two-way sync with the chatStarter store so any component (e.g., the
+// Insights "Explain" button on the dashboard) can pop open the drawer.
+watch(
+  () => chatStarter.isOpen,
+  (v) => { if (v !== showChat.value) showChat.value = v; },
+);
+watch(showChat, (v) => {
+  if (v !== chatStarter.isOpen) {
+    if (v) chatStarter.isOpen = true;
+    else chatStarter.close();
+  }
+});
 
 const theme = useTheme();
 function toggleTheme() {
@@ -165,6 +181,10 @@ watch(() => auth.user, (u) => {
     </nav>
     <div class="main-area" :class="{ 'chat-open': showChat }">
       <main class="content">
+        <!-- App-wide setup checklist — persistent on every authed page until
+             every step is complete. The component self-hides in demo mode
+             and once allDone, so no v-if needed at the call site. -->
+        <OnboardingChecklist />
         <router-view />
       </main>
 
@@ -272,7 +292,9 @@ watch(() => auth.user, (u) => {
 .content {
   flex: 1;
   min-width: 0;
-  padding: var(--space-6);
+  /* Extra bottom whitespace so the last card on a page doesn't sit flush
+     against the viewport edge — gives a comfortable scroll-past gutter. */
+  padding: var(--space-6) var(--space-6) calc(var(--space-6) + 70px);
   overflow-y: auto;
 }
 .content > :deep(*) {
@@ -319,8 +341,22 @@ watch(() => auth.user, (u) => {
    - Bottom-safe-area inset keeps iOS home indicator clear.
    ─────────────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  /* Single scroll container = window. Drop the locked-shell + inner-scroll
+     model used on desktop so iOS rubber-band and content scroll don't fight. */
   .app-layout {
-    height: 100dvh; /* dvh handles iOS URL-bar height changes */
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    /* Bottom nav clearance + 70px scroll-past gutter so the last card has
+       breathing room above the nav bar. */
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0) + 70px);
+  }
+  .main-area {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .content {
+    overflow: visible;
   }
 
   .top-nav .theme-toggle {
@@ -387,11 +423,6 @@ watch(() => auth.user, (u) => {
     padding: 12px 14px;
     width: auto;
     height: auto;
-  }
-
-  /* Reserve space for the bottom nav so content isn't covered. */
-  .main-area {
-    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
   }
 
   /* Edge-to-edge content; per-page cards keep their own padding. */

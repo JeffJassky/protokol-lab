@@ -52,7 +52,10 @@ export async function loginViaUi(page, email, password = PASSWORD) {
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: /log in|sign in/i }).click();
+  // Scope to the form's submit button — matching by name regex would also
+  // hit the "Sign in with Google" button on the same page (strict-mode
+  // violation) once the Google Sign-In iframe finishes loading.
+  await page.locator('form button[type="submit"]').click();
 }
 
 export async function logoutViaApi(page) {

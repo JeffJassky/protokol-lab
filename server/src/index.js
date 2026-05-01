@@ -87,6 +87,18 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 // (and any env that sets MONGODB_URI) keeps the real connection path.
 async function startMemMongoIfRequested() {
   if (process.env.USE_MEM_MONGO !== '1') return;
+  // Apple Silicon workaround — see test/setup.js for the long version.
+  // Mongo 8.x crashes with SIGILL under Rosetta on M1/M2/M3; pin to
+  // 6.0.14 when the host CPU is Apple Silicon (regardless of whether
+  // Node itself is running native arm64 or x64 under Rosetta). Set the
+  // env var BEFORE the dynamic import so mongodb-memory-server reads it.
+  const os = await import('node:os');
+  const isAppleSilicon =
+    os.platform() === 'darwin' &&
+    (os.arch() === 'arm64' || /Apple M[1-9]/.test(os.cpus()[0]?.model || ''));
+  if (isAppleSilicon) {
+    process.env.MONGOMS_VERSION = process.env.MONGOMS_VERSION || '6.0.14';
+  }
   const { MongoMemoryServer } = await import('mongodb-memory-server');
   const mem = await MongoMemoryServer.create();
   process.env.MONGODB_URI = mem.getUri('protokol-e2e');

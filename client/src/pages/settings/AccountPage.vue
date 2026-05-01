@@ -42,7 +42,9 @@ onMounted(async () => {
 <template>
   <div class="account-page">
     <div class="head">
-      <router-link to="/profile" class="back-link" aria-label="Back">‹ Profile</router-link>
+      <router-link to="/profile" class="back-link" aria-label="Back"
+        >‹ Profile</router-link
+      >
       <h2 class="page-title">Account</h2>
     </div>
 
@@ -55,7 +57,10 @@ onMounted(async () => {
     </div>
 
     <!-- Subscription summary + manage link -->
-    <router-link to="/profile/settings/account/subscription" class="card link-card">
+    <router-link
+      to="/profile/settings/account/subscription"
+      class="card link-card"
+    >
       <div class="link-card-text">
         <span class="link-card-label">Subscription</span>
         <span v-if="subLoading" class="link-card-sub">Loading…</span>
@@ -65,7 +70,8 @@ onMounted(async () => {
             · trial ends {{ trialEndsAt.toLocaleDateString() }}
           </template>
           <template v-else-if="subscription?.planExpiresAt">
-            · renews {{ new Date(subscription.planExpiresAt).toLocaleDateString() }}
+            · renews
+            {{ new Date(subscription.planExpiresAt).toLocaleDateString() }}
           </template>
         </span>
       </div>
@@ -73,7 +79,11 @@ onMounted(async () => {
     </router-link>
 
     <div class="card signout-card">
-      <button type="button" class="btn-secondary signout-btn" @click="handleLogout">
+      <button
+        type="button"
+        class="btn-secondary signout-btn"
+        @click="handleLogout"
+      >
         Sign out
       </button>
     </div>
@@ -96,7 +106,7 @@ onMounted(async () => {
   padding: var(--space-1) 0;
 }
 .back-link:hover { color: var(--text); }
-.page-title { margin: 0; }
+.page-title { margin: 0; text-align: center; }
 
 .card {
   background: var(--surface);

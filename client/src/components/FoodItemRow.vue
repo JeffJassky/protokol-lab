@@ -1,9 +1,11 @@
 <script setup>
-import { computed } from 'vue';
 import EmojiPickerButton from './EmojiPickerButton.vue';
 
-const props = defineProps({
+defineProps({
   food: { type: Object, required: true },
+  // showSource / isFavorite / isRecent are accepted for backward compatibility
+  // with existing call sites, but tags have been removed entirely from the
+  // row UI. The flags are no longer rendered.
   showSource: { type: Boolean, default: false },
   editableEmoji: { type: Boolean, default: false },
   isFavorite: { type: Boolean, default: false },
@@ -11,17 +13,6 @@ const props = defineProps({
 });
 
 defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
-
-// One pill per row. Priority: MEAL > FAV > RECENT > source (local/openfoodfacts).
-const tag = computed(() => {
-  if (props.food.source === 'meal') return { label: 'MEAL',   kind: 'meal'   };
-  if (props.isFavorite)              return { label: 'FAV',    kind: 'fav'    };
-  if (props.isRecent)                return { label: 'RECENT', kind: 'recent' };
-  if (props.showSource && props.food.source) {
-    return { label: props.food.source.toUpperCase(), kind: props.food.source };
-  }
-  return null;
-});
 </script>
 
 <template>
@@ -49,7 +40,6 @@ const tag = computed(() => {
       <span class="macro macro-f">{{ food.fatPer }}f</span>
       <span class="macro macro-c">{{ food.carbsPer }}c</span>
     </div>
-    <span v-if="tag" class="row-tag" :class="`kind-${tag.kind}`">{{ tag.label }}</span>
     <button class="row-add-btn" type="button" aria-label="Add" @click.stop="$emit('select', food)">+</button>
     <slot name="actions" />
   </div>
@@ -97,26 +87,6 @@ const tag = computed(() => {
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
 }
-/* Unified pill for MEAL / FAV / RECENT / LOCAL / OPENFOODFACTS tags.
-   Bordered-uppercase style lifted from the marketing food row so a single
-   visual language covers every "why am I seeing this food" state. */
-.row-tag {
-  flex-shrink: 0;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  padding: 0.1rem 0.4rem;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-small);
-  line-height: 1.2;
-  color: var(--text-tertiary);
-}
-.row-tag.kind-meal,
-.row-tag.kind-fav,
-.row-tag.kind-recent,
-.row-tag.kind-local,
-.row-tag.kind-openfoodfacts { color: var(--text-tertiary); opacity: 0.7; }
 .food-macros {
   display: flex;
   gap: var(--space-2);

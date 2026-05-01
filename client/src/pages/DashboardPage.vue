@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { Line } from 'vue-chartjs';
 import {
   Chart as ChartJS,
+  Interaction,
   LineElement,
   PointElement,
   LinearScale,
@@ -24,17 +25,51 @@ import { usePhotosStore } from '../stores/photos.js';
 import { computeNutritionScore } from '../utils/nutritionScore.js';
 import { contrastText } from '../utils/contrast.js';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
-import OnboardingChecklist from '../components/OnboardingChecklist.vue';
-import { useDemoStore } from '../stores/demo.js';
+import InsightsCard from '../components/InsightsCard.vue';
 import PhotoTimelineCard from '../components/PhotoTimelineCard.vue';
 import UpgradeBadge from '../components/UpgradeBadge.vue';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
+import { localYmd } from '../utils/date.js';
 
 ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Filler, Legend);
 
+// Custom interaction mode: for each dataset, find the single point whose
+// x-coordinate is closest to the cursor. Built-in modes don't handle our
+// mixed cadence well — `mode: 'index'` assumes a shared x array (breaks
+// with dense PK curves alongside sparse weigh-ins), and `mode: 'x'` returns
+// all points intersecting the x band (duplicates from dense series, drops
+// sparse series with no point in range). This guarantees one item per
+// dataset, regardless of cadence.
+Interaction.modes.nearestX = function nearestX(chart, e, options, useFinalPosition) {
+  const eventX = e?.x ?? 0;
+  const items = [];
+  chart.data.datasets.forEach((_ds, datasetIndex) => {
+    if (!chart.isDatasetVisible(datasetIndex)) return;
+    const meta = chart.getDatasetMeta(datasetIndex);
+    if (!meta?.data?.length) return;
+    let closestIndex = -1;
+    let minDist = Infinity;
+    meta.data.forEach((el, i) => {
+      const props = el.getProps(['x'], useFinalPosition);
+      const d = Math.abs(props.x - eventX);
+      if (d < minDist) {
+        minDist = d;
+        closestIndex = i;
+      }
+    });
+    if (closestIndex >= 0) {
+      items.push({
+        element: meta.data[closestIndex],
+        datasetIndex,
+        index: closestIndex,
+      });
+    }
+  });
+  return items;
+};
+
 const router = useRouter();
-const demo = useDemoStore();
 const weightStore = useWeightStore();
 const foodLogStore = useFoodLogStore();
 const settingsStore = useSettingsStore();
@@ -154,11 +189,39 @@ const symptomSeries = computed(() => {
   }));
 });
 
-const allSeries = computed(() => [
-  ...CORE_SERIES.value,
-  ...compoundSeries.value,
-  ...symptomSeries.value,
-]);
+// For any series, build a sibling "trend" def — same color/category/axis,
+// dashed best-fit line. Compounds get one too even though their PK curve
+// is modeled rather than measured — the regression slope still tells the
+// user whether their average active level is trending up or down across
+// the selected range.
+function makeTrendDef(source) {
+  return {
+    id: `${source.id}-trend`,
+    label: `${source.label} trend`,
+    color: source.color,
+    cat: source.cat,
+    axis: source.axis,
+    unit: source.unit,
+    isTrend: true,
+    sourceSeriesId: source.id,
+  };
+}
+
+// Interleave each value series with its trend companion so the popover
+// groups them adjacent within their category ("Weight, Weight trend,
+// Waist, Waist trend, …").
+const allSeries = computed(() => {
+  const out = [];
+  for (const s of [
+    ...CORE_SERIES.value,
+    ...compoundSeries.value,
+    ...symptomSeries.value,
+  ]) {
+    out.push(s);
+    out.push(makeTrendDef(s));
+  }
+  return out;
+});
 
 // Group series by category for the popover.
 const seriesByCategory = computed(() => {
@@ -173,7 +236,9 @@ const seriesByCategory = computed(() => {
 // ---- Active series (persisted to localStorage) --------------------------
 
 const STORAGE_KEY = 'dashboard-active-series';
-const DEFAULT_ACTIVE = ['weight', 'calories', 'dosage'];
+const LAYOUT_KEY = 'dashboard-chart-layout';
+const DEFAULT_ACTIVE = ['weight', 'weight-trend', 'calories', 'dosage'];
+const LAYOUTS = ['overlay', 'stacked'];
 
 function loadActive() {
   try {
@@ -185,6 +250,18 @@ function loadActive() {
 function saveActive(s) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...s]));
 }
+
+function loadLayout() {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY);
+    if (raw && LAYOUTS.includes(raw)) return raw;
+  } catch { /* ignore */ }
+  return 'overlay';
+}
+const chartLayout = ref(loadLayout());
+watch(chartLayout, (v) => {
+  try { localStorage.setItem(LAYOUT_KEY, v); } catch { /* ignore */ }
+});
 
 const activeSeries = reactive(loadActive());
 
@@ -231,9 +308,14 @@ const pillLabelsPlugin = {
     const ctx = chart.ctx;
 
     // Dose pills — one set per active compound, stacked vertically from the
-    // top of the chart area so rows don't overlap when multiple compounds are
-    // active at once.
-    const compoundDefs = activeSeriesDefs.value.filter((d) => d.compoundId);
+    // top of the chart area. In stacked layout each chart only contains one
+    // compound's `_injection` dataset, so we filter to only those defs whose
+    // dataset is actually in this chart — otherwise rows would offset based
+    // on the global compound count and pills would float in empty space.
+    const allCompoundDefs = activeSeriesDefs.value.filter((d) => d.compoundId);
+    const compoundDefs = allCompoundDefs.filter((def) =>
+      chart.data.datasets.some((d) => d?.label === `_injection:${def.compoundId}`),
+    );
     const topBase = chart.chartArea.top + 14;
     compoundDefs.forEach((def, row) => {
       const injLabel = `_injection:${def.compoundId}`;
@@ -390,6 +472,135 @@ const endpointLabelsPlugin = {
   },
 };
 
+// ---- Synchronized crosshair across charts -------------------------------
+// Tracks one shared time value (ms since epoch) so that hovering or tapping
+// any chart draws a vertical reference line at the same x on every chart in
+// stacked layout, and propagates the tooltip activation to peer charts so
+// the user sees readouts for every series at the same date — not just the
+// chart they're directly hovering. The plugin tracks chart instances in a
+// Set; when the shared value changes we manually call draw() on each peer
+// (Chart.js doesn't auto-redraw siblings on a reactive change).
+const crosshairTime = ref(null);
+const crosshairCharts = new Set();
+
+// Find the index in each visible dataset whose x is closest to time `t`.
+// Used to drive peer-chart tooltips programmatically. Skips hidden helper
+// datasets (`_injection:`) since the tooltip would filter them anyway.
+function nearestItemsAtTime(chart, t) {
+  const items = [];
+  chart.data.datasets.forEach((ds, datasetIndex) => {
+    if (!chart.isDatasetVisible(datasetIndex)) return;
+    if (String(ds?.label || '').startsWith('_injection')) return;
+    if (!ds.data?.length) return;
+    let closestIndex = -1;
+    let minDist = Infinity;
+    ds.data.forEach((pt, i) => {
+      const ptT = pt?.x instanceof Date ? pt.x.getTime() : pt?.x;
+      if (!Number.isFinite(ptT)) return;
+      const d = Math.abs(ptT - t);
+      if (d < minDist) {
+        minDist = d;
+        closestIndex = i;
+      }
+    });
+    if (closestIndex >= 0) items.push({ datasetIndex, index: closestIndex });
+  });
+  return items;
+}
+
+// Activate (or clear) a peer chart's tooltip at the shared crosshair time.
+// The originating chart is left alone — Chart.js's native interaction
+// resolves its own tooltip from the actual mouse event, and overwriting
+// active elements there fights with that handler.
+function syncPeerTooltip(chart, t) {
+  if (!chart.tooltip?.setActiveElements) return;
+  if (t == null) {
+    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    return;
+  }
+  const items = nearestItemsAtTime(chart, t);
+  const xScale = chart.scales.x;
+  if (!items.length || !xScale) {
+    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    return;
+  }
+  const px = xScale.getPixelForValue(t);
+  const firstMeta = chart.getDatasetMeta(items[0].datasetIndex);
+  const firstEl = firstMeta?.data?.[items[0].index];
+  const py = firstEl?.y ?? chart.chartArea.top + 20;
+  chart.tooltip.setActiveElements(items, { x: px, y: py });
+}
+
+function setCrosshair(t, origin) {
+  if (crosshairTime.value === t) return;
+  crosshairTime.value = t;
+  // Schedule peer updates so the originating chart's event handler can
+  // finish before re-entering its render cycle. Peers use `update('none')`
+  // (no animation, but a full update pass) — `draw()` alone only repaints
+  // the current state and doesn't drive the tooltip controller through
+  // show/move/hide, which causes peer tooltips to:
+  //   - not appear on the first hover (controller never kicks in)
+  //   - drift out of sync after the cursor pauses (caret never refreshes)
+  //   - fail to clear on mouseout (hidden state never renders)
+  // The originating chart only needs a redraw — Chart.js's native event
+  // flow has already updated its tooltip from the real mouse event.
+  requestAnimationFrame(() => {
+    for (const c of crosshairCharts) {
+      if (c === origin) {
+        c.draw();
+      } else {
+        syncPeerTooltip(c, t);
+        c.update('none');
+      }
+    }
+  });
+}
+
+const crosshairPlugin = {
+  id: 'crosshair',
+  install(chart) {
+    crosshairCharts.add(chart);
+  },
+  uninstall(chart) {
+    crosshairCharts.delete(chart);
+  },
+  afterEvent(chart, args) {
+    const event = args.event;
+    if (!event) return;
+    const xScale = chart.scales.x;
+    if (!xScale) return;
+    const move = ['mousemove', 'touchmove', 'touchstart', 'pointermove', 'pointerdown'];
+    const exit = ['mouseout', 'mouseleave', 'touchend', 'touchcancel', 'pointerleave'];
+    if (move.includes(event.type)) {
+      // event.x is canvas-relative; clamp to plot area so the cursor doesn't
+      // produce a value outside the chart bounds.
+      const px = Math.max(chart.chartArea.left, Math.min(chart.chartArea.right, event.x));
+      const v = xScale.getValueForPixel(px);
+      if (Number.isFinite(v)) setCrosshair(v, chart);
+    } else if (exit.includes(event.type)) {
+      setCrosshair(null, chart);
+    }
+  },
+  afterDraw(chart) {
+    if (crosshairTime.value == null) return;
+    const xScale = chart.scales.x;
+    if (!xScale) return;
+    const px = xScale.getPixelForValue(crosshairTime.value);
+    if (!Number.isFinite(px)) return;
+    if (px < chart.chartArea.left || px > chart.chartArea.right) return;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.strokeStyle = cssVar('--text-tertiary', '#9ca3af');
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, chart.chartArea.top);
+    ctx.lineTo(px, chart.chartArea.bottom);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
 function drawPill(ctx, label, x, y, color, showTick, tickBottom) {
   ctx.save();
   const monoFamily = cssVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace');
@@ -439,7 +650,7 @@ function rangeDates(days) {
   const from = new Date();
   if (days) from.setDate(from.getDate() - days);
   else from.setFullYear(from.getFullYear() - 5);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  return { from: localYmd(from), to: localYmd(to) };
 }
 
 // ---- Range + data loading -----------------------------------------------
@@ -462,6 +673,11 @@ async function loadRangeData() {
   ]);
 }
 
+// Gate the chart on the first data load so we don't paint cached store
+// values, then animate again when fresh data arrives. The chart only
+// renders after every fetch in the Promise.all below has resolved.
+const dataReady = ref(false);
+
 onMounted(async () => {
   await Promise.all([
     weightStore.fetchEntries(),
@@ -476,6 +692,7 @@ onMounted(async () => {
     loadRangeData(),
     settingsStore.loaded ? Promise.resolve() : settingsStore.fetchSettings(),
   ]);
+  dataReady.value = true;
 
   if (!settingsStore.settings) {
     router.push('/profile');
@@ -611,11 +828,82 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Rebuild chartData using the clean helper:
-const chartDataClean = computed(() => {
+// Magnitude-aware rounding so trend tooltip values aren't drowning in
+// decimals. Larger magnitudes get fewer decimals; small values keep two.
+//   ≥ 1000  → 0 decimals (e.g., 2,480)
+//   ≥ 100   → 1 decimal  (e.g., 215.3)
+//   <  100  → 2 decimals (e.g., 12.34)
+function smartRoundForTooltip(v) {
+  if (!Number.isFinite(v)) return '';
+  const abs = Math.abs(v);
+  if (abs >= 1000) return Math.round(v).toLocaleString();
+  if (abs >= 100) return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+// Linear-regression best-fit line across the series data, returned as a
+// Chart.js dataset configured with a dashed style. Returns null if there
+// aren't enough points to fit a line.
+//
+// We emit a trend point at every x in the source series (not just the two
+// endpoints) so Chart.js's index-mode tooltip can pair a trend value with
+// every hover position. With `tension: 0` the line is straight, so this is
+// visually identical to a two-endpoint version.
+function buildTrendLineDataset(data, { color, label, yAxisID }) {
+  if (data.length < 2) return null;
+  const t0 = data[0].x.getTime();
+  const n = data.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  for (const pt of data) {
+    const x = (pt.x.getTime() - t0) / 86400000; // days from first point
+    sumX += x;
+    sumY += pt.y;
+    sumXY += x * pt.y;
+    sumXX += x * x;
+  }
+  const denom = n * sumXX - sumX * sumX;
+  if (denom === 0) return null; // all x identical → no slope
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+  const trendData = data.map((pt) => {
+    const x = (pt.x.getTime() - t0) / 86400000;
+    return { x: pt.x, y: intercept + slope * x };
+  });
+  return {
+    label,
+    data: trendData,
+    borderColor: color,
+    backgroundColor: 'transparent',
+    fill: false,
+    tension: 0,
+    pointRadius: 0,
+    borderWidth: 2,
+    borderDash: [6, 4],
+    yAxisID,
+  };
+}
+
+// Build datasets for the given list of series defs. Trend defs render as
+// dashed best-fit lines pulled from their source series's data; value defs
+// render as the standard line/area dataset. Compound injection markers
+// follow at the end so the pill plugin can find their data.
+function buildChartData(defs) {
   const datasets = [];
 
-  for (const def of activeSeriesDefs.value) {
+  for (const def of defs) {
+    if (def.isTrend) {
+      const source = allSeries.value.find((s) => s.id === def.sourceSeriesId);
+      if (!source) continue;
+      const data = getSeriesDataPoints(source);
+      const trend = buildTrendLineDataset(data, {
+        color: def.color,
+        label: `${source.label} trend`,
+        yAxisID: def.axis,
+      });
+      if (trend) datasets.push(trend);
+      continue;
+    }
+
     const data = getSeriesDataPoints(def);
     if (!data.length) continue;
 
@@ -633,43 +921,12 @@ const chartDataClean = computed(() => {
       borderDash: def.dash || [],
       yAxisID: def.axis,
     });
-
-    // Add avg weight loss trend line when weight is active.
-    if (def.id === 'weight' && data.length >= 2) {
-      const t0 = data[0].x.getTime();
-      const n = data.length;
-      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-      for (const pt of data) {
-        const x = (pt.x.getTime() - t0) / 86400000; // days from first point
-        sumX += x;
-        sumY += pt.y;
-        sumXY += x * pt.y;
-        sumXX += x * x;
-      }
-      const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-      const intercept = (sumY - slope * sumX) / n;
-      const trendData = [
-        { x: data[0].x, y: intercept },
-        { x: data[data.length - 1].x, y: intercept + slope * ((data[data.length - 1].x.getTime() - t0) / 86400000) },
-      ];
-      datasets.push({
-        label: 'Avg Weight Loss',
-        data: trendData,
-        borderColor: cssVar('--color-weight', '#4f46e5'),
-        backgroundColor: 'transparent',
-        fill: false,
-        tension: 0,
-        pointRadius: 0,
-        borderWidth: 2,
-        borderDash: [6, 4],
-        yAxisID: 'y',
-      });
-    }
   }
 
-  // Injection markers — one hidden dataset per active compound so the pill
-  // plugin can draw the correct value/unit at each dose point.
-  for (const def of activeSeriesDefs.value) {
+  // Injection markers — one hidden dataset per compound so the pill plugin
+  // can draw value/unit annotations at each dose point.
+  for (const def of defs) {
+    if (def.isTrend) continue;
     if (!def.compoundId) continue;
     const doses = filteredDosesFor(def.compoundId);
     if (!doses.length) continue;
@@ -690,7 +947,9 @@ const chartDataClean = computed(() => {
   }
 
   return { datasets };
-});
+}
+
+const chartDataClean = computed(() => buildChartData(activeSeriesDefs.value));
 
 // ---- Dynamic chart options ----------------------------------------------
 
@@ -698,20 +957,77 @@ const hasActiveCompound = computed(() =>
   activeSeriesDefs.value.some((s) => s.compoundId),
 );
 
-const chartOptions = computed(() => {
-  const usedAxes = new Set(activeSeriesDefs.value.map((s) => s.axis));
+// Build chart options for the given list of series defs. Like buildChartData
+// this is callable per-series (stacked layout) or with the full active list
+// (overlay). `hideXAxis` skips x-axis ticks/border so stacked charts can hide
+// duplicate date labels and only show them on the bottom chart. `stacked`
+// switches the y-axis to a single right-aligned axis with grid + ticks
+// (regardless of which series uses which `axis` id internally).
+function buildChartOptions(defs, { hideXAxis = false, stacked = false } = {}) {
+  const usedAxes = new Set(defs.map((s) => s.axis));
+  const hasCompoundLocal = defs.some((s) => s.compoundId);
+  const hasCaloriesLocal = defs.some((s) => s.id === 'calories');
   // Injection markers ride on yCal so they stay pinned at y=0 regardless of
   // the dose curve's own y-scale.
-  if (hasActiveCompound.value) usedAxes.add('yCal');
+  if (hasCompoundLocal) usedAxes.add('yCal');
 
-  // Reserve vertical headroom for one row of dose pills per active compound.
-  const compoundRows = activeSeriesDefs.value.filter((s) => s.compoundId).length;
+  // Reserve vertical headroom for one row of dose pills per compound IN THIS
+  // CHART (in stacked layout each chart gets its own headroom).
+  const compoundRows = defs.filter((s) => s.compoundId).length;
   const topPadding = compoundRows ? 24 + (compoundRows - 1) * 18 : 4;
 
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+    // Custom `nearestX` mode (registered above): one point per dataset,
+    // nearest by x. Built-in `'index'` breaks with mismatched cadences
+    // (dense PK curve indices outrun sparse weigh-in indices), and `'x'`
+    // returns multiple points from dense series while skipping sparse ones
+    // entirely.
+    interaction: { mode: 'nearestX', intersect: false },
+    // Multi-series time chart animation: snap x immediately so range/series
+    // toggles don't slide points sideways (the default 1s easeOutQuart on x
+    // makes lines warp as some points move horizontally before others). Only
+    // y interpolates, with a short color tween for theme swaps. Hover and
+    // resize stay instant.
+    //
+    // Stagger by datasetIndex so series cascade in instead of animating all
+    // at once. Animation order = dataset order in `chartDataClean`, which
+    // follows `activeSeriesDefs` order (driven by CORE_SERIES → compound →
+    // symptom). To make a different series animate first, reorder CORE_SERIES
+    // in this file. The stagger only applies to data updates (`mode:
+    // 'default'`) — hover, resize, and theme color tweens stay synchronous.
+    animation: {
+      duration: 400,
+      easing: 'easeOutQuart',
+    },
+    animations: {
+      x: { duration: 0 },
+      y: {
+        duration: 400,
+        easing: 'easeOutQuart',
+        // Two-axis stagger: dataset-level (Cal → Pro → Fat → ...) plus
+        // point-level so each series waves in left-to-right rather than
+        // all points snapping together. Per-point step is capped so dense
+        // PK curves (~150 points) don't drag past ~500ms total wave time;
+        // short series (a few weigh-ins) still get a noticeable cascade.
+        delay: (ctx) => {
+          if (ctx.type !== 'data' || ctx.mode !== 'default') return 0;
+          const n = ctx.chart.data.datasets[ctx.datasetIndex]?.data?.length || 1;
+          const perPoint = Math.min(15, 500 / n);
+          // Overlay needs more space between series so the cascade reads as
+          // distinct lines arriving one after another. Stacked charts each
+          // contain just a main + trend dataset, so a small stagger is plenty.
+          const datasetStagger = stacked ? 40 : 200;
+          return ctx.datasetIndex * datasetStagger + ctx.dataIndex * perPoint;
+        },
+      },
+      colors: { duration: 250 },
+    },
+    transitions: {
+      active: { animation: { duration: 0 } },
+      resize: { animation: { duration: 0 } },
+    },
     layout: {
       padding: {
         top: topPadding,
@@ -724,26 +1040,94 @@ const chartOptions = computed(() => {
         time: { unit: 'day', tooltipFormat: 'MMM d, yyyy' },
         grid: { display: false },
         ticks: {
+          display: !hideXAxis,
           // Cap tick density so the x-axis doesn't read as a wall of dates.
           // Mobile is tighter (4) since labels are rotated and plot width is
           // already constrained.
           maxTicksLimit: isMobile.value ? 4 : 8,
           autoSkipPadding: 16,
         },
+        border: { display: !hideXAxis },
       },
     },
     plugins: {
       legend: { display: false }, // We use the chip bar instead.
       tooltip: {
-        mode: 'index',
+        mode: 'nearestX',
         intersect: false,
         filter: (item) => !String(item.dataset?.label || '').startsWith('_injection'),
+        callbacks: {
+          // Smart-round trend lines so the regression's full-precision
+          // floating-point output doesn't blow up the tooltip ("215.4837..."
+          // → "215.5"). Real-data series keep the default localized format
+          // since their values are already rounded by the store/server.
+          label(item) {
+            const label = String(item.dataset?.label || '');
+            const v = item.parsed?.y;
+            if (v == null) return label;
+            const isTrend = label.endsWith('trend');
+            const formatted = isTrend
+              ? smartRoundForTooltip(v)
+              : (typeof v === 'number' ? v.toLocaleString() : String(v));
+            return `${label}: ${formatted}`;
+          },
+        },
       },
     },
   };
 
   const monoFamily = cssVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace');
 
+  // ===== STACKED MODE =====
+  // Single primary y-axis on the right with tick labels rendered INSIDE the
+  // chart area so the line/area can extend edge-to-edge. `mirror: true` flips
+  // labels from outside-right to inside-right; we hide the border and tick
+  // marks so there's no axis "rail" visible. Title suppressed — each chart
+  // has its own labeled heading above it.
+  if (stacked && defs[0]) {
+    const primary = defs[0].axis;
+    const primaryAxisConfig = {
+      position: 'right',
+      title: { display: false },
+      ticks: {
+        display: !isMobile.value,
+        font: { family: monoFamily },
+        maxTicksLimit: 6,
+        mirror: true,
+        padding: 6,
+        z: 1,
+      },
+      grid: {
+        color: cssVar('--chart-grid', '#f3f4f6'),
+        drawTicks: false,
+        drawOnChartArea: true,
+      },
+      border: { display: false },
+    };
+    if (primary !== 'y' && primary !== 'yWaist') primaryAxisConfig.min = 0;
+    if (primary === 'ySymptom') primaryAxisConfig.max = 10;
+    if (primary === 'yScore') primaryAxisConfig.max = 100;
+    if (primary === 'yCal' && tdee.value) {
+      const cals = filteredNutrition.value.map((d) => d.calories);
+      const maxCal = cals.length ? Math.max(...cals) : 0;
+      primaryAxisConfig.max = Math.max(tdee.value + 100, maxCal + 100);
+    }
+    opts.scales[primary] = primaryAxisConfig;
+
+    // Auxiliary axes — hidden, just there to satisfy datasets that reference
+    // them (e.g., injection markers pinned to yCal at y=0).
+    for (const ax of usedAxes) {
+      if (ax === primary) continue;
+      const aux = { position: 'right', display: false, grid: { drawOnChartArea: false } };
+      if (ax !== 'y' && ax !== 'yWaist') aux.min = 0;
+      if (ax === 'ySymptom') aux.max = 10;
+      if (ax === 'yScore') aux.max = 100;
+      opts.scales[ax] = aux;
+    }
+    return opts;
+  }
+
+  // ===== OVERLAY MODE =====
   // Left axis: weight (visible only when weight is active). On mobile, hide
   // the tick column + title; endpointLabelsPlugin draws first/last values
   // inline to free up horizontal plot width.
@@ -757,12 +1141,12 @@ const chartOptions = computed(() => {
     };
   }
 
-  // Right axis: calories (visible when calories is active).
+  // Right axis: calories (visible when calories is in this chart).
   if (usedAxes.has('yCal')) {
     opts.scales.yCal = {
       position: 'right',
       title: {
-        display: !isMobile.value && activeSeries.has('calories'),
+        display: !isMobile.value && hasCaloriesLocal,
         text: 'Calories',
         color: cssVar('--color-cal', '#3b82f6'),
       },
@@ -771,7 +1155,7 @@ const chartOptions = computed(() => {
       border: { display: !isMobile.value },
       min: 0,
     };
-    if (tdee.value && activeSeries.has('calories')) {
+    if (tdee.value && hasCaloriesLocal) {
       const cals = filteredNutrition.value.map((d) => d.calories);
       const maxCal = cals.length ? Math.max(...cals) : 0;
       opts.scales.yCal.max = Math.max(tdee.value + 100, maxCal + 100);
@@ -796,6 +1180,40 @@ const chartOptions = computed(() => {
   }
 
   return opts;
+}
+
+const chartOptions = computed(() => buildChartOptions(activeSeriesDefs.value));
+
+// Stacked layout: one chart per active series, with x-axis labels only on
+// the bottom-most chart so the dates don't repeat through the column.
+// Stacked layout grouping: an active trend pairs onto its source series's
+// chart so they render together (just like the previous auto-trend
+// behavior). Trends whose source isn't active become their own chart.
+const stackedCharts = computed(() => {
+  const defs = activeSeriesDefs.value;
+  const valueDefs = defs.filter((d) => !d.isTrend);
+  const trendDefs = defs.filter((d) => d.isTrend);
+  const valueIds = new Set(valueDefs.map((d) => d.id));
+
+  const charts = [];
+  for (const def of valueDefs) {
+    const trend = trendDefs.find((t) => t.sourceSeriesId === def.id);
+    charts.push({ def, defs: trend ? [def, trend] : [def] });
+  }
+  for (const trend of trendDefs) {
+    if (!valueIds.has(trend.sourceSeriesId)) {
+      charts.push({ def: trend, defs: [trend] });
+    }
+  }
+
+  return charts.map((c, i) => ({
+    def: c.def,
+    data: buildChartData(c.defs),
+    options: buildChartOptions([c.def], {
+      stacked: true,
+      hideXAxis: i < charts.length - 1,
+    }),
+  }));
 });
 
 const hasAnyData = computed(() => chartDataClean.value.datasets.length > 0);
@@ -920,13 +1338,6 @@ function bmiClass(bmi) {
 
 <template>
   <div class="dashboard">
-    <h2 class="page-title">Dashboard</h2>
-
-    <!-- Hide install/notification setup in demo mode — sandboxes can't
-         receive push and there's nothing to "install" until the visitor
-         creates a real account. -->
-    <OnboardingChecklist v-if="!demo.inDemo" />
-
     <!-- Weight stats grid -->
     <div v-if="weightStore.stats" class="stats-grid">
       <div class="stat-card">
@@ -950,6 +1361,8 @@ function bmiClass(bmi) {
           :class="goalDirectionClass(weightStore.stats.totalChange)"
         >
           {{ weightStore.stats.totalChange > 0 ? '+' : ''
+
+
 
 
 
@@ -991,6 +1404,8 @@ function bmiClass(bmi) {
           :class="goalDirectionClass(weightStore.stats.trendLbsPerWeek)"
         >
           {{ weightStore.stats.trendLbsPerWeek > 0 ? '+' : ''
+
+
 
 
 
@@ -1056,6 +1471,22 @@ function bmiClass(bmi) {
             {{ r.label }}
           </button>
         </div>
+        <div class="range-buttons layout-toggle">
+          <button
+            :class="{ active: chartLayout === 'overlay' }"
+            title="Show all series on a single chart"
+            @click="chartLayout = 'overlay'"
+          >
+            Overlay
+          </button>
+          <button
+            :class="{ active: chartLayout === 'stacked' }"
+            title="Show each series on its own chart"
+            @click="chartLayout = 'stacked'"
+          >
+            Stacked
+          </button>
+        </div>
       </div>
 
       <!-- Active series chips -->
@@ -1066,7 +1497,13 @@ function bmiClass(bmi) {
           class="chip"
           @click="toggleSeries(def.id)"
         >
-          <span class="chip-dot" :style="{ background: def.color }" />
+          <span
+            class="chip-dot"
+            :class="{ 'chip-dot-trend': def.isTrend }"
+            :style="def.isTrend
+              ? { borderColor: def.color }
+              : { background: def.color }"
+          />
           {{ def.label }}
           <span class="chip-x">×</span>
         </button>
@@ -1104,7 +1541,13 @@ function bmiClass(bmi) {
                     :checked="activeSeries.has(s.id)"
                     @change="toggleSeries(s.id)"
                   />
-                  <span class="pop-dot" :style="{ background: s.color }" />
+                  <span
+                    class="pop-dot"
+                    :class="{ 'pop-dot-trend': s.isTrend }"
+                    :style="s.isTrend
+                      ? { borderColor: s.color }
+                      : { background: s.color }"
+                  />
                   {{ s.label }}
                 </label>
               </div>
@@ -1113,17 +1556,20 @@ function bmiClass(bmi) {
         </VDropdown>
       </div>
 
+      <!-- Overlay: single multi-series chart. -->
       <div
+        v-if="chartLayout === 'overlay'"
         class="chart-container"
         @mousemove="onChartMouseMove"
         @mouseleave="onChartMouseLeave"
       >
         <Line
-          v-if="hasAnyData"
+          v-if="dataReady && hasAnyData"
           :data="chartDataClean"
           :options="chartOptions"
-          :plugins="[pillLabelsPlugin, noteIconsPlugin, endpointLabelsPlugin]"
+          :plugins="[pillLabelsPlugin, noteIconsPlugin, endpointLabelsPlugin, crosshairPlugin]"
         />
+        <p v-else-if="!dataReady" class="empty">Loading…</p>
         <p v-else class="empty">Select a series above to view data.</p>
         <div
           v-if="hoveredNote"
@@ -1136,7 +1582,44 @@ function bmiClass(bmi) {
           <div class="note-pop-text">{{ hoveredNote.text }}</div>
         </div>
       </div>
+
+      <!-- Stacked: one chart per active series, sharing the date range. -->
+      <div v-else class="stacked-charts">
+        <p v-if="!dataReady" class="empty">Loading…</p>
+        <p v-else-if="!stackedCharts.length" class="empty">
+          Select a series above to view data.
+        </p>
+        <div
+          v-for="(c, i) in stackedCharts"
+          :key="c.def.id"
+          v-show="dataReady"
+          class="stacked-chart"
+        >
+          <div class="stacked-chart-head">
+            <span class="chip-dot" :style="{ background: c.def.color }" />
+            <span class="stacked-chart-title">{{ c.def.label }}</span>
+          </div>
+          <div
+            class="chart-container chart-container-small"
+            :class="{ 'chart-container-tail': i === stackedCharts.length - 1 }"
+          >
+            <Line
+              :data="c.data"
+              :options="c.options"
+              :plugins="[pillLabelsPlugin, noteIconsPlugin, endpointLabelsPlugin, crosshairPlugin]"
+            />
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- Insights — engine-default 90d window. Each finding renders its
+         own isolated chart in-place when expanded, so the user sees the
+         exact two series and range backing the claim without us having
+         to mutate the main chart above. Always rendered so users get the
+         "need more data" empty state on day 1 instead of a missing
+         surface. -->
+    <InsightsCard />
 
     <!-- Progress photos timeline -->
     <PhotoTimelineCard />
@@ -1388,6 +1871,8 @@ function bmiClass(bmi) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin-bottom: var(--space-2);
 }
 .range-buttons {
@@ -1446,6 +1931,14 @@ function bmiClass(bmi) {
   border-radius: 50%;
   flex-shrink: 0;
 }
+/* Trend variant: hollow circle with a dashed border in the source's color,
+   echoing the dashed line style. */
+.chip-dot-trend {
+  background: transparent !important;
+  border: 1.5px dashed currentColor;
+  width: 10px;
+  height: 10px;
+}
 .chip-x {
   color: var(--text-secondary);
   font-size: var(--font-size-s);
@@ -1469,7 +1962,6 @@ function bmiClass(bmi) {
   display: flex;
   align-items: center;
   gap: 4px;
-  column-span: all;
 }
 .pop-cap-note.at-cap { color: var(--primary); }
 .pop-item.disabled {
@@ -1483,13 +1975,14 @@ function bmiClass(bmi) {
   box-shadow: var(--shadow-m);
   padding: var(--space-3);
   min-width: 240px;
-  max-height: 400px;
+  /* Two-column layout via CSS `columns: 2` was clipping items past the
+     overflow boundary once each value series got a trend companion (~2x
+     the item count). Switch to a single-column scrollable list — taller
+     popover, but every category is reachable. */
+  max-height: 70vh;
   overflow-y: auto;
-  columns: 2;
-  column-gap: var(--space-4);
 }
 .pop-group {
-  break-inside: avoid;
   margin-bottom: var(--space-2);
 }
 .pop-cat {
@@ -1522,8 +2015,44 @@ function bmiClass(bmi) {
   border-radius: 50%;
   flex-shrink: 0;
 }
+.pop-dot-trend {
+  background: transparent !important;
+  border: 1.5px dashed currentColor;
+  width: 9px;
+  height: 9px;
+}
 
 .chart-container { height: 360px; position: relative; }
+
+/* Stacked layout — one chart per active series. Each chart has a small
+   colored heading + a shorter container. The bottom-most chart keeps its
+   x-axis ticks (set via :hideXAxis in the options builder); the rest hide
+   theirs to avoid date-label repetition. */
+.stacked-charts { display: flex; flex-direction: column; gap: var(--space-3); }
+.stacked-chart-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.stacked-chart-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-bold);
+}
+.chart-container-small { height: 180px; }
+/* The bottom chart shows the x-axis labels, which need an extra ~24px so
+   they don't get clipped. */
+.chart-container-tail { height: 200px; }
+
+/* Right-align the layout (Overlay / Stacked) toggle next to the range
+   buttons. The chart-controls flex container already has space-between, so
+   pushing the toggle to its right edge just needs a left margin to absorb
+   any remaining space. */
+.layout-toggle { margin-left: auto; }
 
 .note-chart-popover {
   position: absolute;

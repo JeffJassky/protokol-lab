@@ -99,7 +99,9 @@ test.describe('Path D — Existing user → Login', () => {
 
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-    await page.getByRole('button', { name: /sign in|log in/i }).click();
+    // Scope to the form's submit — the page also has a "Sign in with Google"
+    // button that would otherwise match this name regex.
+    await page.locator('form button[type="submit"]').click();
     await expect(page).toHaveURL(/\/log|\/dashboard|\/$/);
   });
 });

@@ -3,6 +3,7 @@ import Symptom from '../models/Symptom.js';
 import SymptomLog from '../models/SymptomLog.js';
 import { childLogger, errContext } from '../lib/logger.js';
 import { getEffectivePlanFeatures } from '../lib/planLimits.js';
+import { parseLogDate } from '../lib/date.js';
 
 const log = childLogger('symptoms');
 const router = Router();
@@ -158,7 +159,7 @@ router.put('/logs', async (req, res) => {
     return res.status(400).json({ error: 'symptomId and date required' });
   }
 
-  const day = new Date(date);
+  const day = parseLogDate(date);
 
   if (severity == null) {
     const removed = await SymptomLog.findOneAndDelete({

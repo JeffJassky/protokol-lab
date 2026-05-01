@@ -35,4 +35,7 @@ features:
   - title: Marketing Prerendering
     details: Why marketing pages and blog posts are baked to static HTML at build time, how Puppeteer drives it, and when to rebake.
     link: /prerendering
+  - title: Insights Engine
+    details: How the dashboard ranks correlations, change-points, and projections across the user's series — and the causal-direction priors that decide what gets surfaced.
+    link: /insights
 ---

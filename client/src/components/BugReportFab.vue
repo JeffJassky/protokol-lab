@@ -1,30 +1,101 @@
 <script setup>
-import { ref, computed, watchEffect, nextTick } from 'vue';
+import { ref, computed, watch, watchEffect, nextTick, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { createTicket } from '../api/support.js';
-import { snapshotContext, buildSubject, buildDescription } from '../utils/bugReport.js';
+import { createTicket, createFeature } from '../api/support.js';
+import {
+  snapshotContext,
+  buildSubject,
+  buildDescription,
+  buildFeedbackDescription,
+} from '../utils/bugReport.js';
 
 const route = useRoute();
 const router = useRouter();
+
+// Three FAB modes — one is shown at a time, re-rolled on each route change so
+// the user sees variety. All three save into the existing support pipeline:
+// `bug` and `feedback` create tickets; `suggestion` creates a feature request.
+// Initial mode is fixed (avoids SSR/prerender hydration mismatch from
+// Math.random at setup time); the real roll happens onMounted.
+const MODES = ['bug', 'feedback', 'suggestion'];
+const mode = ref('bug');
+
+function pickMode(exclude) {
+  const pool = exclude ? MODES.filter((m) => m !== exclude) : MODES;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+onMounted(() => {
+  mode.value = pickMode();
+});
+
+// Re-roll on route change (excluding current so it always changes).
+watch(
+  () => route.fullPath,
+  () => {
+    if (open.value) return; // don't swap mid-modal
+    mode.value = pickMode(mode.value);
+  },
+);
+
+const config = computed(() => {
+  if (mode.value === 'feedback') {
+    return {
+      buttonLabel: 'Provide feedback',
+      modalTitle: 'Share your feedback',
+      modalSub: 'Anything you want us to know — good, bad, or in between.',
+      placeholder: "e.g. The new log page feels much faster, but I miss the old summary chart.",
+      submitLabel: 'Send feedback',
+      sendingLabel: 'Sending…',
+    };
+  }
+  if (mode.value === 'suggestion') {
+    return {
+      buttonLabel: 'Got a suggestion?',
+      modalTitle: 'Suggest a feature',
+      modalSub: 'Tell us what would make the app better for you.',
+      submitLabel: 'Submit suggestion',
+      sendingLabel: 'Sending…',
+    };
+  }
+  return {
+    buttonLabel: 'Report a bug',
+    modalTitle: 'Report a bug',
+    modalSub: 'Tell us in your own words.',
+    submitLabel: 'Send report',
+    sendingLabel: 'Sending…',
+  };
+});
 
 const open = ref(false);
 const submitting = ref(false);
 const error = ref(null);
 
+// Bug fields
 const happened = ref('');
 const expected = ref('');
 const doing = ref('');
 
-const happenedRef = ref(null);
+// Feedback (single field)
+const feedback = ref('');
 
-const canSubmit = computed(
-  () => happened.value.trim().length > 0 && !submitting.value,
-);
+// Suggestion (single field — title derived from first line)
+const suggestion = ref('');
+
+const firstFieldRef = ref(null);
+
+const canSubmit = computed(() => {
+  if (submitting.value) return false;
+  if (mode.value === 'bug') return happened.value.trim().length > 0;
+  if (mode.value === 'feedback') return feedback.value.trim().length > 0;
+  if (mode.value === 'suggestion') return suggestion.value.trim().length > 0;
+  return false;
+});
 
 async function openModal() {
   open.value = true;
   await nextTick();
-  happenedRef.value?.focus?.();
+  firstFieldRef.value?.focus?.();
 }
 
 function closeModal() {
@@ -37,6 +108,8 @@ function reset() {
   happened.value = '';
   expected.value = '';
   doing.value = '';
+  feedback.value = '';
+  suggestion.value = '';
   error.value = null;
 }
 
@@ -45,14 +118,35 @@ async function submit() {
   submitting.value = true;
   error.value = null;
   try {
+    if (mode.value === 'suggestion') {
+      const body = suggestion.value.trim();
+      // Title derived from first line so server's 160-char title cap holds
+      // even when the user writes one long blob; full text goes in description.
+      const { feature } = await createFeature({
+        title: buildSubject(body).slice(0, 160),
+        description: body.slice(0, 6000),
+      });
+      open.value = false;
+      reset();
+      // No explicit mode re-roll — the route-change watcher handles it after push.
+      router.push(`/support/features/${feature.id || feature._id}`);
+      return;
+    }
+
     const ctx = snapshotContext(route);
-    const { ticket } = await createTicket({
-      subject: buildSubject(happened.value),
-      description: buildDescription(
+    let subject;
+    let description;
+    if (mode.value === 'feedback') {
+      subject = buildSubject(feedback.value);
+      description = buildFeedbackDescription(feedback.value, ctx);
+    } else {
+      subject = buildSubject(happened.value);
+      description = buildDescription(
         { happened: happened.value, expected: expected.value, doing: doing.value },
         ctx,
-      ),
-    });
+      );
+    }
+    const { ticket } = await createTicket({ subject, description });
     open.value = false;
     reset();
     router.push(`/support/tickets/${ticket.id || ticket._id}`);
@@ -63,10 +157,6 @@ async function submit() {
   }
 }
 
-// Esc-to-close. watchEffect's onCleanup runs both when `open` flips back to
-// false AND when the component unmounts, so the listener is always removed
-// exactly once per open. The previous nested-watch pattern stacked listeners
-// across opens.
 watchEffect((onCleanup) => {
   if (!open.value) return;
   function onKey(e) {
@@ -82,11 +172,13 @@ watchEffect((onCleanup) => {
     type="button"
     class="bug-fab"
     :class="{ 'is-open': open }"
-    aria-label="Report a bug"
-    title="Report a bug"
+    :aria-label="config.buttonLabel"
+    :title="config.buttonLabel"
     @click="openModal"
   >
+    <!-- Bug icon -->
     <svg
+      v-if="mode === 'bug'"
       class="bug-icon"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
@@ -100,9 +192,7 @@ watchEffect((onCleanup) => {
       <path d="m8 2 1.88 1.88" />
       <path d="M14.12 3.88 16 2" />
       <path d="M9 7.13v-1a3.003 3.003 0 0 1 6 0v1" />
-      <path
-        d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"
-      />
+      <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
       <path d="M12 20v-9" />
       <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
       <path d="M6 13H2" />
@@ -111,7 +201,39 @@ watchEffect((onCleanup) => {
       <path d="M22 13h-4" />
       <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
     </svg>
-    <span class="bug-label">Report a bug</span>
+    <!-- Feedback icon (speech bubble) -->
+    <svg
+      v-else-if="mode === 'feedback'"
+      class="bug-icon"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+    <!-- Suggestion icon (lightbulb) -->
+    <svg
+      v-else
+      class="bug-icon"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+    </svg>
+    <span class="bug-label">{{ config.buttonLabel }}</span>
   </button>
 
   <Teleport to="body">
@@ -125,7 +247,7 @@ watchEffect((onCleanup) => {
     >
       <div class="br-card">
         <header class="br-head">
-          <h3 id="br-title" class="br-title">Report a bug</h3>
+          <h3 id="br-title" class="br-title">{{ config.modalTitle }}</h3>
           <button
             type="button"
             class="br-close"
@@ -135,43 +257,74 @@ watchEffect((onCleanup) => {
             ×
           </button>
         </header>
-        <p class="br-sub">Tell us in your own words.</p>
+        <p class="br-sub">{{ config.modalSub }}</p>
 
         <form class="br-form" @submit.prevent="submit">
-          <label class="br-field">
-            <span class="br-label">What happened?</span>
-            <textarea
-              ref="happenedRef"
-              v-model="happened"
-              rows="3"
-              maxlength="2000"
-              required
-              placeholder="e.g. The page went blank after I clicked Save."
-            />
-          </label>
+          <!-- Bug: 3-field form -->
+          <template v-if="mode === 'bug'">
+            <label class="br-field">
+              <span class="br-label">What happened?</span>
+              <textarea
+                ref="firstFieldRef"
+                v-model="happened"
+                rows="3"
+                maxlength="2000"
+                required
+                placeholder="e.g. The page went blank after I clicked Save."
+              />
+            </label>
+            <label class="br-field">
+              <span class="br-label">What did you expect to happen instead?</span>
+              <textarea
+                v-model="expected"
+                rows="2"
+                maxlength="2000"
+                placeholder="e.g. I expected my note to be saved and shown in the list."
+              />
+            </label>
+            <label class="br-field">
+              <span class="br-label"
+                >What were you doing right before?
+                <span class="br-optional">(optional)</span></span
+              >
+              <textarea
+                v-model="doing"
+                rows="2"
+                maxlength="2000"
+                placeholder="e.g. I tapped on a meal, edited the calories, then hit Save."
+              />
+            </label>
+          </template>
 
-          <label class="br-field">
-            <span class="br-label">What did you expect to happen instead?</span>
-            <textarea
-              v-model="expected"
-              rows="2"
-              maxlength="2000"
-              placeholder="e.g. I expected my note to be saved and shown in the list."
-            />
-          </label>
+          <!-- Feedback: single textarea -->
+          <template v-else-if="mode === 'feedback'">
+            <label class="br-field">
+              <span class="br-label">Your feedback</span>
+              <textarea
+                ref="firstFieldRef"
+                v-model="feedback"
+                rows="5"
+                maxlength="2000"
+                required
+                :placeholder="config.placeholder"
+              />
+            </label>
+          </template>
 
-          <label class="br-field">
-            <span class="br-label"
-              >What were you doing right before?
-              <span class="br-optional">(optional)</span></span
-            >
-            <textarea
-              v-model="doing"
-              rows="2"
-              maxlength="2000"
-              placeholder="e.g. I tapped on a meal, edited the calories, then hit Save."
-            />
-          </label>
+          <!-- Suggestion: single textarea (first line becomes the title) -->
+          <template v-else>
+            <label class="br-field">
+              <span class="br-label">Your suggestion</span>
+              <textarea
+                ref="firstFieldRef"
+                v-model="suggestion"
+                rows="5"
+                maxlength="6000"
+                required
+                placeholder="e.g. Let me copy yesterday's meals into today — it's tedious to re-enter the same lunch."
+              />
+            </label>
+          </template>
 
           <p v-if="error" class="br-error">{{ error }}</p>
 
@@ -189,10 +342,10 @@ watchEffect((onCleanup) => {
               class="br-btn br-btn-primary"
               :disabled="!canSubmit"
             >
-              {{ submitting ? 'Sending…' : 'Send report' }}
+              {{ submitting ? config.sendingLabel : config.submitLabel }}
             </button>
           </div>
-          <p class="br-hint">
+          <p v-if="mode === 'bug'" class="br-hint">
             You can add screenshots after the ticket is created.
           </p>
         </form>
@@ -211,7 +364,7 @@ watchEffect((onCleanup) => {
   gap: 8px;
   padding: 10px 14px 10px 12px;
   border-radius: var(--radius-pill, 999px);
-  background: var(--surface);
+  background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
   font: inherit;
@@ -268,7 +421,8 @@ watchEffect((onCleanup) => {
   letter-spacing: 0.06em;
 }
 .br-optional { color: var(--text-secondary); font-weight: 400; text-transform: none; letter-spacing: 0; }
-.br-field textarea {
+.br-field textarea,
+.br-field input[type="text"] {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
@@ -276,10 +430,13 @@ watchEffect((onCleanup) => {
   font: inherit;
   font-size: 14px;
   border-radius: var(--radius-small, 6px);
+}
+.br-field textarea {
   resize: vertical;
   min-height: 64px;
 }
-.br-field textarea:focus { outline: none; border-color: var(--primary); }
+.br-field textarea:focus,
+.br-field input[type="text"]:focus { outline: none; border-color: var(--primary); }
 
 .br-error { color: var(--danger, #d9534f); font-size: 13px; margin: 0; }
 .br-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }

@@ -6,10 +6,13 @@ import { prepPhoto } from '../utils/imagePrep.js';
 import { useAuthStore } from '../stores/auth.js';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
+import { useChatStarterStore } from '../stores/chatStarter.js';
+import { renderChartsInHtml } from '../utils/chatChartRenderer.js';
 
 const authStore = useAuthStore();
 const planLimits = usePlanLimits();
 const upgradeModal = useUpgradeModalStore();
+const chatStarter = useChatStarterStore();
 
 const theme = useTheme();
 const isDark = computed(() => theme.value === 'dark' || (theme.value === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches));
@@ -260,6 +263,43 @@ const shadowStyles = computed(() => {
     line-height: 1.5;
   }
   pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+  /* Inline charts emitted by the agent (\`\`\`chart fenced code blocks
+     get post-processed into <figure class="chat-chart"> after streaming). */
+  figure.chat-chart {
+    margin: 0.8em 0;
+    padding: 8px;
+    border: 1px solid ${p.border};
+    background: ${p.surface};
+    border-radius: 4px;
+  }
+  figure.chat-chart img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+  }
+  figure.chat-chart figcaption {
+    margin-top: 6px;
+    font-size: 12px;
+    color: ${p.textSecondary};
+    text-align: center;
+    font-family: ${p.fontDisplay};
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  figure.chat-chart.chat-chart-error {
+    border-style: dashed;
+    background: transparent;
+    padding: 12px;
+  }
+  figure.chat-chart.chat-chart-error figcaption {
+    color: ${p.danger || p.textSecondary};
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: ${p.fontBody};
+    font-size: 11px;
+  }
 
   blockquote {
     margin: 0.6em 0;
@@ -1205,9 +1245,40 @@ const streamChat = (body, signals) => {
       attachPersistedFilesToLastUserMessage(persistedFiles);
       captureMessages();
       maybeGenerateTitle();
+      // Upgrade any ```chart``` fenced code blocks in the final assistant
+      // message to inline images. Best-effort — a render failure just
+      // leaves the original code block in place rather than blocking the
+      // rest of the chat.
+      upgradeAssistantChartBlocks().catch((err) => {
+        console.warn('[chat] chart upgrade failed', err);
+      });
     }
   })();
 };
+
+// Walks all rendered messages and upgrades any ```chart fenced code
+// blocks into inline images. `mostRecentOnly` short-circuits after the
+// last assistant turn — used right after a fresh stream completes since
+// older messages were already upgraded the first time around.
+async function upgradeAssistantChartBlocks(mostRecentOnly = true) {
+  const el = deepChatRef.value;
+  if (!el?.getMessages) return;
+  const msgs = el.getMessages();
+  let changed = false;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    const isAssistant = m?.role !== 'user' && m?.role !== 'human';
+    if (mostRecentOnly && !isAssistant) break;
+    if (!isAssistant) continue;
+    if (!m?.html || !m.html.includes('language-chart')) continue;
+    const upgraded = await renderChartsInHtml(m.html);
+    if (upgraded === m.html) continue;
+    try { el.updateMessage({ html: upgraded }, i); } catch { /* drawer closed mid-flight */ }
+    changed = true;
+    if (mostRecentOnly) break;
+  }
+  if (changed) captureMessages();
+}
 
 // After the stream returns signed URLs for uploaded photos, graft them onto
 // the last user message inside deep-chat's own message list so captureMessages
@@ -1430,6 +1501,23 @@ const submitFromList = async () => {
   await newThread();
 };
 
+// When something else (e.g., the Insights "Explain" button) seeds a
+// pendingPrompt via the chatStarter store, auto-send it as a fresh thread.
+// We watch the prompt directly rather than only when the drawer mounts so
+// a starter that arrives while the drawer is already open also fires.
+watch(
+  () => chatStarter.pendingPrompt,
+  async (prompt) => {
+    if (!prompt) return;
+    const text = chatStarter.consumePrompt();
+    if (!text) return;
+    listInputText.value = '';
+    pendingMessage.value = text;
+    await newThread();
+  },
+  { immediate: true },
+);
+
 const threadPreview = (t) => {
   const firstUser = t.messages?.find((m) => m.role === 'user');
   if (!firstUser) return '';
@@ -1532,6 +1620,12 @@ watch(activeThreadId, async () => {
   trailObserver = null;
   await nextTick();
   updateChatConnect();
+  // Upgrade ```chart blocks in any historical assistant messages once
+  // deep-chat has rendered them. New messages are upgraded by the stream
+  // pipeline, but reopening an old thread needs this pass.
+  upgradeAssistantChartBlocks(false).catch((err) => {
+    console.warn('[chat] historical chart upgrade failed', err);
+  });
 });
 
 // Pending message → submit after deep-chat mounts

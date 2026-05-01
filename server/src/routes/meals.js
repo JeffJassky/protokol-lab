@@ -3,6 +3,7 @@ import Meal from '../models/Meal.js';
 import FoodLog from '../models/FoodLog.js';
 import { childLogger } from '../lib/logger.js';
 import { evaluateStorageCap } from '../lib/planLimits.js';
+import { parseLogDate } from '../lib/date.js';
 
 const log = childLogger('meals');
 const router = Router();
@@ -182,7 +183,7 @@ router.post('/:id/log', async (req, res) => {
   const docs = meal.items.map((item) => ({
     userId: req.userId,
     foodItemId: item.foodItemId,
-    date: new Date(date),
+    date: parseLogDate(date),
     mealType,
     servingCount: item.servingCount,
     mealId: meal._id,

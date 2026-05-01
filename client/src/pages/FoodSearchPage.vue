@@ -12,6 +12,7 @@ import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { useProfileFieldsGate } from '../composables/useProfileFieldsGate.js';
+import { localYmd } from '../utils/date.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -59,7 +60,7 @@ function isFavoriteFood(food) {
 }
 
 const meal = ref(route.query.meal || 'breakfast');
-const date = ref(route.query.date || new Date().toISOString().slice(0, 10));
+const date = ref(route.query.date || localYmd());
 const validTabs = new Set(['search', 'meals']);
 const initialTab = validTabs.has(route.query.tab) ? route.query.tab : 'search';
 const tab = ref(initialTab);
@@ -112,7 +113,7 @@ async function ensureFoodItemId(food) {
   // OFF item — round-trip through /api/foodlog's upsert-by-barcode path to
   // materialize a FoodItem, then delete the throwaway log entry. Clunky but
   // avoids adding a second upsert endpoint.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localYmd();
   const body = {
     date: today,
     mealType: 'snack',

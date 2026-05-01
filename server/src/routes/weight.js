@@ -2,6 +2,7 @@ import { Router } from 'express';
 import WeightLog from '../models/WeightLog.js';
 import UserSettings from '../models/UserSettings.js';
 import { childLogger } from '../lib/logger.js';
+import { parseLogDate } from '../lib/date.js';
 
 const log = childLogger('weight');
 const router = Router();
@@ -85,7 +86,7 @@ router.post('/', async (req, res) => {
   const entry = await WeightLog.create({
     userId: req.userId,
     weightLbs,
-    date: new Date(date),
+    date: parseLogDate(date),
   });
   (req.log || log).info({ entryId: String(entry._id), weightLbs, date }, 'weight: logged');
   res.status(201).json({ entry });

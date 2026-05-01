@@ -19,6 +19,7 @@ import FoodItemEditModal from '../components/FoodItemEditModal.vue';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import PhotoCaptureCard from '../components/PhotoCaptureCard.vue';
 import UpgradeBadge from '../components/UpgradeBadge.vue';
+import { localYmd } from '../utils/date.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -50,7 +51,7 @@ const dosesStore = useDosesStore();
 const settingsStore = useSettingsStore();
 const photosStore = usePhotosStore();
 
-const date = ref(route.query.date || new Date().toISOString().slice(0, 10));
+const date = ref(route.query.date || localYmd());
 const editingId = ref(null);
 const editServings = ref(1);
 
@@ -528,14 +529,17 @@ function onNoteBlur() {
 </script>
 
 <template>
-  <div class="log-page">
-    <h2 class="page-title">Daily Log</h2>
+  <div class="log-page" data-testid="log-page">
     <DateSelector v-model="date" />
 
     <!-- =========================================================== -->
     <!-- TOP ROW: Nutrition (half) + stacked Weight/Dose (half)       -->
     <!-- =========================================================== -->
-    <div v-if="foodlogStore.summary" id="nutrition" class="meal-card nutrition-card">
+    <div
+      v-if="foodlogStore.summary"
+      id="nutrition"
+      class="meal-card nutrition-card"
+    >
       <div class="meal-header"><h3>Nutrition</h3></div>
       <DailySummary :summary="foodlogStore.summary" />
     </div>
@@ -556,7 +560,8 @@ function onNoteBlur() {
           <UpgradeBadge :tier="rolling7DayUpgradeTier" />
         </span>
         <span class="weekly-upsell-sub">
-          Smooth out weekly variance — over today, under tomorrow, still on plan.
+          Smooth out weekly variance — over today, under tomorrow, still on
+          plan.
         </span>
       </button>
     </div>
@@ -592,12 +597,8 @@ function onNoteBlur() {
             </button>
           </form>
           <div v-else class="logged-row">
-            <span class="logged-value"
-              >{{ todaysWeight.weightLbs }} lbs</span
-            >
-            <button class="delete-btn" @click="handleDeleteWeight">
-              x
-            </button>
+            <span class="logged-value">{{ todaysWeight.weightLbs }} lbs</span>
+            <button class="delete-btn" @click="handleDeleteWeight">x</button>
           </div>
         </div>
         <div class="metric-col" v-tooltip="'Log your waist'">
@@ -633,7 +634,11 @@ function onNoteBlur() {
       </div>
     </div>
 
-    <div v-if="enabledCompounds.length" id="compounds" class="meal-card compact compounds-card">
+    <div
+      v-if="enabledCompounds.length"
+      id="compounds"
+      class="meal-card compact compounds-card"
+    >
       <div
         v-for="compound in enabledCompounds"
         :key="compound._id"
@@ -704,273 +709,368 @@ function onNoteBlur() {
       >
         <div class="meal-section-header">
           <h4>{{ meal.label }}</h4>
-          <button class="add-btn" v-tooltip="`Add to ${meal.label.toLowerCase()}`" @click="addFood(meal.key)">+</button>
+          <button
+            class="add-btn"
+            v-tooltip="`Add to ${meal.label.toLowerCase()}`"
+            @click="addFood(meal.key)"
+          >
+            +
+          </button>
         </div>
-        <table v-if="foodlogStore.entries[meal.key].length" class="meal-table">
-          <thead>
-            <tr>
-              <th class="col-check"></th>
-              <th class="col-name">Item</th>
-              <th class="col-srv">Servings</th>
-              <th class="col-num sortable" @click="toggleSort('cal')">
-                Kcal{{ sortIndicator('cal') }}
-              </th>
-              <th class="col-num col-p sortable" @click="toggleSort('p')">
-                Pro{{ sortIndicator('p') }}
-              </th>
-              <th class="col-num col-f sortable" @click="toggleSort('f')">
-                Fat{{ sortIndicator('f') }}
-              </th>
-              <th class="col-num col-c sortable" @click="toggleSort('c')">
-                Carbs{{ sortIndicator('c') }}
-              </th>
-              <th class="col-del"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <template
-              v-for="(row, rowIdx) in groupedBySlot[meal.key]"
-              :key="row.type === 'group' ? `g-${row.mealId}-${rowIdx}` : `e-${row.entry._id}`"
-            >
-              <tr
-                v-if="row.type === 'entry'"
-                class="entry-row"
-                :class="{ unconsumed: row.entry.consumed === false }"
-              >
-                <td class="col-check">
-                  <input
-                    type="checkbox"
-                    :checked="row.entry.consumed !== false"
-                    v-tooltip="row.entry.consumed !== false ? 'Mark as not yet eaten' : 'Mark as eaten'"
-                    @click.stop
-                    @change="foodlogStore.toggleConsumed(row.entry._id, $event.target.checked)"
-                  />
-                </td>
-                <td class="col-name">
-                  <span
-                    v-if="row.entry.foodItemId?.emoji"
-                    class="entry-emoji"
-                    >{{ row.entry.foodItemId.emoji }}</span
-                  >
-                  <span
-                    class="entry-name"
-                    :class="{ planned: row.entry.consumed === false }"
-                    >{{ row.entry.foodItemId?.name
-                    }}<span
-                      v-if="row.entry.consumed === false"
-                      class="planned-tag"
-                    > (planned)</span></span
-                  >
-                </td>
-                <td class="col-srv">
-                  <template v-if="editingId === row.entry._id">
-                    <input
-                      type="number"
-                      v-model.number="editServings"
-                      min="0.25"
-                      step="0.25"
-                      class="edit-input"
-                      @click.stop
-                      @keyup.enter="saveEdit(row.entry._id)"
-                      @keyup.escape="cancelEdit"
-                    />
-                    <button
-                      class="save-btn"
-                      @click.stop="saveEdit(row.entry._id)"
-                    >
-                      ✓
-                    </button>
-                  </template>
-                  <span
-                    v-else
-                    class="servings"
-                    @click.stop="startEdit(row.entry)"
-                  >
-                    {{ row.entry.servingCount }}
-                  </span>
-                </td>
-                <td class="col-num">{{ entryNutrition(row.entry).cal }}</td>
-                <td class="col-num col-p">{{ entryNutrition(row.entry).p }}</td>
-                <td class="col-num col-f">{{ entryNutrition(row.entry).f }}</td>
-                <td class="col-num col-c">{{ entryNutrition(row.entry).c }}</td>
-                <td class="col-del">
-                  <VDropdown placement="bottom-end" :distance="4" @hide="openSubmenu = null">
-                    <button class="menu-btn">⋯</button>
-                    <template #popper>
-                      <div class="menu">
-                        <button class="menu-item" v-close-popper @click="openEditModal(row.entry)">Edit item</button>
-                        <button class="menu-item" v-close-popper @click="handleDelete(row.entry)">Delete</button>
-                        <button class="menu-item" v-close-popper @click="startCopyEntry(row.entry)">Copy to...</button>
-                        <button class="menu-item" v-close-popper @click="startMoveEntry(row.entry)">Move to...</button>
-                        <button
-                          class="menu-item with-submenu"
-                          @click="openSubmenu = openSubmenu === 'addToMeal' ? null : 'addToMeal'"
-                        >
-                          Add to meal ▸
-                        </button>
-                        <div v-if="openSubmenu === 'addToMeal'" class="submenu">
-                          <button class="menu-item" v-close-popper @click="addEntryToNewMeal(row.entry)">+ New meal...</button>
-                          <button
-                            v-for="m in mealsStore.meals"
-                            :key="m._id"
-                            class="menu-item"
-                            v-close-popper
-                            @click="addEntryToMeal(row.entry, m._id)"
-                          >
-                            {{ m.name }}
-                          </button>
-                          <p v-if="!mealsStore.meals.length" class="menu-empty">No meals yet</p>
-                        </div>
-                      </div>
-                    </template>
-                  </VDropdown>
-                </td>
+        <div
+          v-if="foodlogStore.entries[meal.key].length"
+          class="meal-table-wrap"
+        >
+          <table class="meal-table">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th class="col-name">Item</th>
+                <th class="col-srv">Servings</th>
+                <th class="col-num sortable" @click="toggleSort('cal')">
+                  Kcal{{ sortIndicator('cal') }}
+                </th>
+                <th class="col-num col-p sortable" @click="toggleSort('p')">
+                  Pro{{ sortIndicator('p') }}
+                </th>
+                <th class="col-num col-f sortable" @click="toggleSort('f')">
+                  Fat{{ sortIndicator('f') }}
+                </th>
+                <th class="col-num col-c sortable" @click="toggleSort('c')">
+                  Carb{{ sortIndicator('c') }}
+                </th>
+                <th class="col-del"></th>
               </tr>
-
-              <template v-else>
+            </thead>
+            <tbody>
+              <template
+                v-for="(row, rowIdx) in groupedBySlot[meal.key]"
+                :key="row.type === 'group' ? `g-${row.mealId}-${rowIdx}` : `e-${row.entry._id}`"
+              >
                 <tr
-                  class="meal-group-header"
-                  @click="toggleCollapsed(meal.key, row.mealId)"
+                  v-if="row.type === 'entry'"
+                  class="entry-row"
+                  :class="{ unconsumed: row.entry.consumed === false }"
                 >
-                  <td class="col-check"></td>
+                  <td class="col-check">
+                    <input
+                      type="checkbox"
+                      :checked="row.entry.consumed !== false"
+                      v-tooltip="row.entry.consumed !== false ? 'Mark as not yet eaten' : 'Mark as eaten'"
+                      @click.stop
+                      @change="foodlogStore.toggleConsumed(row.entry._id, $event.target.checked)"
+                    />
+                  </td>
                   <td class="col-name">
                     <span
-                      class="caret"
-                      >{{ isCollapsed(meal.key, row.mealId) ? '▸' : '▾' }}</span
+                      v-if="row.entry.foodItemId?.emoji"
+                      class="entry-emoji"
+                      >{{ row.entry.foodItemId.emoji }}</span
                     >
                     <span
-                      v-if="row.mealEmoji"
-                      class="entry-emoji"
-                      >{{ row.mealEmoji }}</span
-                    >
-                    <span class="group-name">{{ row.mealName }}</span>
-                    <span class="group-count"
-                      >{{ row.entries.length }}
-                      item{{ row.entries.length === 1 ? '' : 's' }}</span
+                      class="entry-name"
+                      :class="{ planned: row.entry.consumed === false }"
+                      >{{ row.entry.foodItemId?.name
+
+
+
+
+                      }}<span
+                        v-if="row.entry.consumed === false"
+                        class="planned-tag"
+                      >
+                        (planned)</span
+                      ></span
                     >
                   </td>
-                  <td class="col-srv"></td>
-                  <td class="col-num">{{ sumNutrition(row.entries).cal }}</td>
+                  <td class="col-srv">
+                    <template v-if="editingId === row.entry._id">
+                      <input
+                        type="number"
+                        v-model.number="editServings"
+                        min="0.25"
+                        step="0.25"
+                        class="edit-input"
+                        @click.stop
+                        @keyup.enter="saveEdit(row.entry._id)"
+                        @keyup.escape="cancelEdit"
+                      />
+                      <button
+                        class="save-btn"
+                        @click.stop="saveEdit(row.entry._id)"
+                      >
+                        ✓
+                      </button>
+                    </template>
+                    <span
+                      v-else
+                      class="servings"
+                      @click.stop="startEdit(row.entry)"
+                    >
+                      {{ row.entry.servingCount }}
+                    </span>
+                  </td>
+                  <td class="col-num">{{ entryNutrition(row.entry).cal }}</td>
                   <td class="col-num col-p">
-                    {{ sumNutrition(row.entries).p }}
+                    {{ entryNutrition(row.entry).p }}
                   </td>
                   <td class="col-num col-f">
-                    {{ sumNutrition(row.entries).f }}
+                    {{ entryNutrition(row.entry).f }}
                   </td>
                   <td class="col-num col-c">
-                    {{ sumNutrition(row.entries).c }}
+                    {{ entryNutrition(row.entry).c }}
                   </td>
                   <td class="col-del">
-                    <VDropdown placement="bottom-end" :distance="4">
-                      <button class="menu-btn" @click.stop>⋯</button>
+                    <VDropdown
+                      placement="bottom-end"
+                      :distance="4"
+                      @hide="openSubmenu = null"
+                    >
+                      <button class="menu-btn">⋯</button>
                       <template #popper>
                         <div class="menu">
-                          <button class="menu-item" v-close-popper @click="handleDeleteGroup(meal.key, row)">Delete group</button>
-                          <button class="menu-item" v-close-popper @click="startCopyGroup(row)">Copy to...</button>
-                          <button class="menu-item" v-close-popper @click="startMoveGroup(row)">Move to...</button>
+                          <button
+                            class="menu-item"
+                            v-close-popper
+                            @click="openEditModal(row.entry)"
+                          >
+                            Update item
+                          </button>
+                          <button
+                            class="menu-item"
+                            v-close-popper
+                            @click="handleDelete(row.entry)"
+                          >
+                            Remove from {{ meal.label }}
+                          </button>
+                          <button
+                            class="menu-item"
+                            v-close-popper
+                            @click="startCopyEntry(row.entry)"
+                          >
+                            Copy to...
+                          </button>
+                          <button
+                            class="menu-item"
+                            v-close-popper
+                            @click="startMoveEntry(row.entry)"
+                          >
+                            Move to...
+                          </button>
+                          <button
+                            class="menu-item with-submenu"
+                            @click="openSubmenu = openSubmenu === 'addToMeal' ? null : 'addToMeal'"
+                          >
+                            Add to meal ▸
+                          </button>
+                          <div
+                            v-if="openSubmenu === 'addToMeal'"
+                            class="submenu"
+                          >
+                            <button
+                              class="menu-item"
+                              v-close-popper
+                              @click="addEntryToNewMeal(row.entry)"
+                            >
+                              + New meal...
+                            </button>
+                            <button
+                              v-for="m in mealsStore.meals"
+                              :key="m._id"
+                              class="menu-item"
+                              v-close-popper
+                              @click="addEntryToMeal(row.entry, m._id)"
+                            >
+                              {{ m.name }}
+                            </button>
+                            <p
+                              v-if="!mealsStore.meals.length"
+                              class="menu-empty"
+                            >
+                              No meals yet
+                            </p>
+                          </div>
                         </div>
                       </template>
                     </VDropdown>
                   </td>
                 </tr>
-                <template v-if="!isCollapsed(meal.key, row.mealId)">
+
+                <template v-else>
                   <tr
-                    v-for="child in sortEntries(row.entries)"
-                    :key="`gc-${child._id}`"
-                    class="entry-row group-child"
-                    :class="{ unconsumed: child.consumed === false }"
+                    class="meal-group-header"
+                    @click="toggleCollapsed(meal.key, row.mealId)"
                   >
-                    <td class="col-check">
-                      <input
-                        type="checkbox"
-                        :checked="child.consumed !== false"
-                        v-tooltip="child.consumed !== false ? 'Mark as not yet eaten' : 'Mark as eaten'"
-                        @click.stop
-                        @change="foodlogStore.toggleConsumed(child._id, $event.target.checked)"
-                      />
-                    </td>
+                    <td class="col-check"></td>
                     <td class="col-name">
                       <span
-                        class="entry-name indent"
-                        :class="{ planned: child.consumed === false }"
+                        class="caret"
+                        >{{ isCollapsed(meal.key, row.mealId) ? '▸' : '▾' }}</span
                       >
-                        <span
-                          v-if="child.foodItemId?.emoji"
-                          class="entry-emoji"
-                          >{{ child.foodItemId.emoji }}</span
-                        >
-                        {{ child.foodItemId?.name
-                        }}<span
-                          v-if="child.consumed === false"
-                          class="planned-tag"
-                        > (planned)</span>
-                      </span>
-                    </td>
-                    <td class="col-srv">
-                      <template v-if="editingId === child._id">
-                        <input
-                          type="number"
-                          v-model.number="editServings"
-                          min="0.25"
-                          step="0.25"
-                          class="edit-input"
-                          @click.stop
-                          @keyup.enter="saveEdit(child._id)"
-                          @keyup.escape="cancelEdit"
-                        />
-                        <button
-                          class="save-btn"
-                          @click.stop="saveEdit(child._id)"
-                        >
-                          ✓
-                        </button>
-                      </template>
                       <span
-                        v-else
-                        class="servings"
-                        @click.stop="startEdit(child)"
+                        v-if="row.mealEmoji"
+                        class="entry-emoji"
+                        >{{ row.mealEmoji }}</span
                       >
-                        {{ child.servingCount }}
-                      </span>
+                      <span class="group-name">{{ row.mealName }}</span>
+                      <span class="group-count"
+                        >{{ row.entries.length }}
+                        item{{ row.entries.length === 1 ? '' : 's' }}</span
+                      >
                     </td>
-                    <td class="col-num">{{ entryNutrition(child).cal }}</td>
-                    <td class="col-num col-p">{{ entryNutrition(child).p }}</td>
-                    <td class="col-num col-f">{{ entryNutrition(child).f }}</td>
-                    <td class="col-num col-c">{{ entryNutrition(child).c }}</td>
+                    <td class="col-srv"></td>
+                    <td class="col-num">{{ sumNutrition(row.entries).cal }}</td>
+                    <td class="col-num col-p">
+                      {{ sumNutrition(row.entries).p }}
+                    </td>
+                    <td class="col-num col-f">
+                      {{ sumNutrition(row.entries).f }}
+                    </td>
+                    <td class="col-num col-c">
+                      {{ sumNutrition(row.entries).c }}
+                    </td>
                     <td class="col-del">
-                      <button
-                        class="delete-btn"
-                        @click.stop="foodlogStore.deleteEntry(child._id)"
-                      >
-                        x
-                      </button>
+                      <VDropdown placement="bottom-end" :distance="4">
+                        <button class="menu-btn" @click.stop>⋯</button>
+                        <template #popper>
+                          <div class="menu">
+                            <button
+                              class="menu-item"
+                              v-close-popper
+                              @click="handleDeleteGroup(meal.key, row)"
+                            >
+                              Remove from {{ meal.label }}
+                            </button>
+                            <button
+                              class="menu-item"
+                              v-close-popper
+                              @click="startCopyGroup(row)"
+                            >
+                              Copy to...
+                            </button>
+                            <button
+                              class="menu-item"
+                              v-close-popper
+                              @click="startMoveGroup(row)"
+                            >
+                              Move to...
+                            </button>
+                          </div>
+                        </template>
+                      </VDropdown>
                     </td>
                   </tr>
+                  <template v-if="!isCollapsed(meal.key, row.mealId)">
+                    <tr
+                      v-for="child in sortEntries(row.entries)"
+                      :key="`gc-${child._id}`"
+                      class="entry-row group-child"
+                      :class="{ unconsumed: child.consumed === false }"
+                    >
+                      <td class="col-check">
+                        <input
+                          type="checkbox"
+                          :checked="child.consumed !== false"
+                          v-tooltip="child.consumed !== false ? 'Mark as not yet eaten' : 'Mark as eaten'"
+                          @click.stop
+                          @change="foodlogStore.toggleConsumed(child._id, $event.target.checked)"
+                        />
+                      </td>
+                      <td class="col-name">
+                        <span
+                          class="entry-name indent"
+                          :class="{ planned: child.consumed === false }"
+                        >
+                          <span
+                            v-if="child.foodItemId?.emoji"
+                            class="entry-emoji"
+                            >{{ child.foodItemId.emoji }}</span
+                          >
+                          {{ child.foodItemId?.name
+
+
+
+
+                          }}<span
+                            v-if="child.consumed === false"
+                            class="planned-tag"
+                          >
+                            (planned)</span
+                          >
+                        </span>
+                      </td>
+                      <td class="col-srv">
+                        <template v-if="editingId === child._id">
+                          <input
+                            type="number"
+                            v-model.number="editServings"
+                            min="0.25"
+                            step="0.25"
+                            class="edit-input"
+                            @click.stop
+                            @keyup.enter="saveEdit(child._id)"
+                            @keyup.escape="cancelEdit"
+                          />
+                          <button
+                            class="save-btn"
+                            @click.stop="saveEdit(child._id)"
+                          >
+                            ✓
+                          </button>
+                        </template>
+                        <span
+                          v-else
+                          class="servings"
+                          @click.stop="startEdit(child)"
+                        >
+                          {{ child.servingCount }}
+                        </span>
+                      </td>
+                      <td class="col-num">{{ entryNutrition(child).cal }}</td>
+                      <td class="col-num col-p">
+                        {{ entryNutrition(child).p }}
+                      </td>
+                      <td class="col-num col-f">
+                        {{ entryNutrition(child).f }}
+                      </td>
+                      <td class="col-num col-c">
+                        {{ entryNutrition(child).c }}
+                      </td>
+                      <td class="col-del">
+                        <button
+                          class="delete-btn"
+                          @click.stop="foodlogStore.deleteEntry(child._id)"
+                        >
+                          x
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
                 </template>
               </template>
-            </template>
-          </tbody>
-          <tfoot>
-            <tr>
-              <td class="col-check"></td>
-              <td class="col-name">Total</td>
-              <td class="col-srv"></td>
-              <td class="col-num">
-                {{ sumNutrition(foodlogStore.entries[meal.key]).cal }}
-              </td>
-              <td class="col-num col-p">
-                {{ sumNutrition(foodlogStore.entries[meal.key]).p }}
-              </td>
-              <td class="col-num col-f">
-                {{ sumNutrition(foodlogStore.entries[meal.key]).f }}
-              </td>
-              <td class="col-num col-c">
-                {{ sumNutrition(foodlogStore.entries[meal.key]).c }}
-              </td>
-              <td class="col-del"></td>
-            </tr>
-          </tfoot>
-        </table>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td class="col-check"></td>
+                <td class="col-name">Total</td>
+                <td class="col-srv"></td>
+                <td class="col-num">
+                  {{ sumNutrition(foodlogStore.entries[meal.key]).cal }}
+                </td>
+                <td class="col-num col-p">
+                  {{ sumNutrition(foodlogStore.entries[meal.key]).p }}
+                </td>
+                <td class="col-num col-f">
+                  {{ sumNutrition(foodlogStore.entries[meal.key]).f }}
+                </td>
+                <td class="col-num col-c">
+                  {{ sumNutrition(foodlogStore.entries[meal.key]).c }}
+                </td>
+                <td class="col-del"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
         <p v-else class="empty">No items.</p>
       </div>
 
@@ -1004,7 +1104,8 @@ function onNoteBlur() {
       </div>
       <p class="hint">
         <template v-if="hasAdvancedSymptoms">
-          Tap a dot to log severity (0 = none, 1-10 = mild → severe). Tap again to clear.
+          Tap a dot to log severity (0 = none, 1-10 = mild → severe). Tap again
+          to clear.
         </template>
         <template v-else>
           Tap to log present (1) or absent (0). Tap again to clear.
@@ -1139,6 +1240,25 @@ function onNoteBlur() {
 
 <style scoped>
 .log-page { max-width: 640px; }
+
+/* Mobile: pin the prev/next/day-name selector to the top of the viewport so
+   it stays reachable while the user scrolls through nutrition, food log,
+   symptoms, etc. Window is the scroll container on mobile (see AppLayout.vue
+   mobile override), so `position: sticky; top: 0` anchors to viewport top.
+   Solid bg keeps scrolled content from bleeding through. */
+@media (max-width: 768px) {
+  .log-page :deep(.date-selector) {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+}
 
 /* The nutrition card uses the same shell as a meal card but its inner padding
    gets a touch more breathing room since the macro bars need vertical space. */
@@ -1335,11 +1455,18 @@ function onNoteBlur() {
 
 .col-name {
   text-align: left;
-  width: auto;
-  max-width: 0;
+  min-width: 140px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* On narrow screens the meal-table is wider than the card. Wrap it so the
+   table can scroll horizontally instead of squeezing the item name to nothing.
+   `-webkit-overflow-scrolling: touch` keeps momentum scroll on iOS. */
+.meal-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .col-srv { text-align: center; width: 3.5rem; }
 .col-num { text-align: right; width: 3rem; padding-left: 0.25rem; padding-right: 0.25rem; }
@@ -1417,38 +1544,45 @@ function onNoteBlur() {
 
 .menu-anchor { position: relative; display: inline-block; }
 .menu {
-  min-width: 140px;
-  background: var(--surface);
+  min-width: 180px;
+  /* 90% opaque so a frosted backdrop-blur shows the page underneath. */
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
   border: 1px solid var(--border);
   border-radius: var(--radius-medium);
   box-shadow: var(--shadow-m);
-  padding: var(--space-1);
+  padding: 0;
+  overflow: hidden;
 }
 .menu-item {
   display: block;
   width: 100%;
   text-align: left;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
   background: none;
   border: none;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   color: var(--text);
   font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
+  transition: background var(--transition-fast);
 }
-.menu-item:hover { background: var(--bg); }
+.menu-item:last-child { border-bottom: none; }
+.menu-item:hover { background: var(--surface); }
 .menu-item.with-submenu { position: relative; }
+/* Submenu sits flush against the with-submenu trigger — the trigger's own
+   border-bottom acts as the divider, so no extra rule needed here. */
 .submenu {
-  border-top: 1px solid var(--border);
-  margin-top: var(--space-1);
-  padding-top: var(--space-1);
   max-height: 240px;
   overflow-y: auto;
 }
 .menu-empty {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
   margin: 0;
 }
 
@@ -1504,6 +1638,7 @@ function onNoteBlur() {
 }
 .metric-col .quick-form .btn-primary,
 .compound-row .quick-form .btn-primary {
+  height: var(--control-height-md);
   padding: 0 var(--space-2);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
+import { ref, watch } from 'vue';
 
 // Persisted in localStorage (per-browser), keyed by userId so different
 // accounts on the same device each get a fresh checklist. Server-side
@@ -28,19 +28,19 @@ function save(userId, state) {
 
 export const useOnboardingStore = defineStore('onboarding', () => {
   const userId = ref(null);
+  // Checklist no longer supports dismiss/restore — it stays visible until
+  // every step is genuinely complete. Only `notificationPromptShown` is
+  // persisted, used to suppress the in-app prompt nag once the user has
+  // already seen it.
   const state = ref({
-    checklistDismissed: false,
     notificationPromptShown: false,
-    dismissedAt: null,
   });
   const bannerDismissed = ref(false);
 
   function hydrate(uid) {
     userId.value = uid;
     state.value = {
-      checklistDismissed: false,
       notificationPromptShown: false,
-      dismissedAt: null,
       ...load(uid),
     };
     try {
@@ -53,18 +53,8 @@ export const useOnboardingStore = defineStore('onboarding', () => {
 
   function clear() {
     userId.value = null;
-    state.value = { checklistDismissed: false, notificationPromptShown: false, dismissedAt: null };
+    state.value = { notificationPromptShown: false };
     bannerDismissed.value = false;
-  }
-
-  function dismissChecklist() {
-    state.value.checklistDismissed = true;
-    state.value.dismissedAt = Date.now();
-  }
-
-  function restoreChecklist() {
-    state.value.checklistDismissed = false;
-    state.value.dismissedAt = null;
   }
 
   function markNotificationPromptShown() {
@@ -78,25 +68,14 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     }
   }
 
-  // Re-show dismissed checklist after 3 days so users who deferred don't
-  // lose the prompt forever — but only if steps remain incomplete.
-  const shouldRestoreAfterCooldown = computed(() => {
-    if (!state.value.checklistDismissed || !state.value.dismissedAt) return false;
-    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-    return Date.now() - state.value.dismissedAt > threeDaysMs;
-  });
-
   watch(state, (v) => save(userId.value, v), { deep: true });
 
   return {
     userId,
     state,
     bannerDismissed,
-    shouldRestoreAfterCooldown,
     hydrate,
     clear,
-    dismissChecklist,
-    restoreChecklist,
     markNotificationPromptShown,
     dismissBanner,
   };

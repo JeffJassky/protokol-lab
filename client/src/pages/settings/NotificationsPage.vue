@@ -87,7 +87,9 @@ onMounted(async () => {
 <template>
   <div class="notifications-page">
     <div class="head">
-      <router-link to="/profile" class="back-link" aria-label="Back">‹ Profile</router-link>
+      <router-link to="/profile" class="back-link" aria-label="Back"
+        >‹ Profile</router-link
+      >
       <h2 class="page-title">Notifications</h2>
     </div>
 
@@ -112,19 +114,32 @@ onMounted(async () => {
           <InstallInstructions />
         </div>
 
-        <div class="notif-hero" :class="{ on: pushStore.enabled, blocked: pushStore.permission === 'denied' }">
+        <div
+          class="notif-hero"
+          :class="{ on: pushStore.enabled, blocked: pushStore.permission === 'denied' }"
+        >
           <div class="notif-hero-main">
             <span class="notif-hero-ind" />
             <div class="notif-hero-text">
               <div class="notif-hero-state">
-                <template v-if="pushStore.enabled">Active on this device</template>
-                <template v-else-if="pushStore.permission === 'denied'">Blocked by browser</template>
+                <template v-if="pushStore.enabled"
+                  >Active on this device</template
+                >
+                <template v-else-if="pushStore.permission === 'denied'"
+                  >Blocked by browser</template
+                >
                 <template v-else>Not enabled</template>
               </div>
               <div class="notif-hero-sub">
-                <template v-if="pushStore.enabled">Push reminders will be delivered here.</template>
-                <template v-else-if="pushStore.permission === 'denied'">Re-enable notifications in your device settings.</template>
-                <template v-else>Turn on to receive dose and tracking reminders.</template>
+                <template v-if="pushStore.enabled"
+                  >Push reminders will be delivered here.</template
+                >
+                <template v-else-if="pushStore.permission === 'denied'"
+                  >Re-enable notifications in your device settings.</template
+                >
+                <template v-else
+                  >Turn on to receive dose and tracking reminders.</template
+                >
               </div>
             </div>
           </div>
@@ -149,7 +164,10 @@ onMounted(async () => {
                 @change="toggleCategory('doseReminder')"
               />
               <span>Dose reminders</span>
-              <span class="notif-cat-sub">Triggered by each compound's schedule (configure per compound under Compounds).</span>
+              <span class="notif-cat-sub"
+                >Triggered by each compound's schedule (configure per compound
+                under Compounds).</span
+              >
             </label>
             <label class="notif-cat">
               <input
@@ -158,14 +176,20 @@ onMounted(async () => {
                 @change="toggleCategory('trackReminder')"
               />
               <span>Daily tracking reminder</span>
-              <span class="notif-cat-sub">Evening nudge if you haven't logged yet.</span>
+              <span class="notif-cat-sub"
+                >Evening nudge if you haven't logged yet.</span
+              >
             </label>
           </div>
 
           <!-- Daily tracking time picker, merged from the old "Daily tracking" card. -->
           <div class="track-row" :class="{ disabled: !pushStore.enabled }">
             <label class="track-toggle">
-              <input type="checkbox" v-model="trackReminderEnabled" :disabled="!pushStore.enabled" />
+              <input
+                type="checkbox"
+                v-model="trackReminderEnabled"
+                :disabled="!pushStore.enabled"
+              />
               <span>Remind me at</span>
             </label>
             <input
@@ -193,8 +217,12 @@ onMounted(async () => {
             >
               {{ testSending ? 'Sending…' : 'Send test notification' }}
             </button>
-            <span v-if="testStatus === 'ok'" class="notif-success">Sent — check your device.</span>
-            <span v-else-if="testStatus === 'err'" class="notif-err">Failed. Check logs.</span>
+            <span v-if="testStatus === 'ok'" class="notif-success"
+              >Sent — check your device.</span
+            >
+            <span v-else-if="testStatus === 'err'" class="notif-err"
+              >Failed. Check logs.</span
+            >
           </div>
         </template>
 
@@ -222,7 +250,8 @@ onMounted(async () => {
   padding: var(--space-1) 0;
 }
 .back-link:hover { color: var(--text); }
-.page-title { margin: 0; }
+
+.page-title { margin: 0; text-align: center; }
 
 .card {
   background: var(--surface);

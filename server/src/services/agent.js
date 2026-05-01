@@ -13,10 +13,21 @@ import Meal from "../models/Meal.js";
 import MealProposal from "../models/MealProposal.js";
 import User from "../models/User.js";
 import { childLogger, errContext } from "../lib/logger.js";
+import { parseLogDate } from "../lib/date.js";
 import { evaluateStorageCap, getEffectiveChatLimits } from "../lib/planLimits.js";
 import { getPlanForUser } from "../../../shared/plans.js";
 import { mockChatStream, isMockAgentEnabled } from "./agent.mock.js";
 import { touchRecent } from "./recentFood.js";
+import {
+  correlate as analysisCorrelate,
+  rankCorrelations as analysisRankCorrelations,
+  partialCorrelate as analysisPartialCorrelate,
+  changePoints as analysisChangePoints,
+  compare as analysisCompare,
+  project as analysisProject,
+  getSeries as analysisGetSeries,
+  insights as analysisInsights,
+} from "../analysis/index.js";
 
 const log = childLogger('agent');
 
@@ -241,6 +252,130 @@ const functionDeclarations = [
         },
       },
       required: ["foodItemId", "date", "mealType"],
+    },
+  },
+  {
+    name: "correlate_series",
+    description:
+      "Compute the linear correlation between two of the user's series (e.g., weight, calories, dosage:<id>, symptom:<id>). Returns Pearson r in [-1, 1] and sample size. Use 'auto' for lag to find the time-shift in days that maximizes |r|.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        a: { type: Type.STRING, description: "First series id (e.g., 'weight')" },
+        b: { type: Type.STRING, description: "Second series id (e.g., 'calories' or 'dosage:<compoundId>')" },
+        from: { type: Type.STRING, description: "Range start (YYYY-MM-DD)" },
+        to: { type: Type.STRING, description: "Range end (YYYY-MM-DD)" },
+        lag: {
+          type: Type.STRING,
+          description: "Days to shift series B vs A. Number string ('0', '7', '-3') or 'auto' to search [-14, +14] for max |r|.",
+        },
+        method: {
+          type: Type.STRING,
+          description: "'pearson' (default, linear) or 'spearman' (rank-based, monotonic non-linear).",
+        },
+      },
+      required: ["a", "b"],
+    },
+  },
+  {
+    name: "rank_correlations",
+    description:
+      "Rank every (or specified) candidate series by how strongly each correlates with a target series. Auto-selects the lag for each pair. Sample-size and relevance filters are applied — only meaningful correlations are returned.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        target: { type: Type.STRING, description: "Target series id (e.g., 'weight')" },
+        from: { type: Type.STRING, description: "Range start (YYYY-MM-DD)" },
+        to: { type: Type.STRING, description: "Range end (YYYY-MM-DD)" },
+        candidates: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "Optional. Defaults to all available series for the user.",
+        },
+        maxLag: { type: Type.NUMBER, description: "Max lag in days to search (default 14)" },
+      },
+      required: ["target"],
+    },
+  },
+  {
+    name: "partial_correlate",
+    description:
+      "Partial correlation between two series, removing the shared variance with one or more control series. Reveals the 'remaining' association after controlling for confounders. Example: protein vs weight controlling for calories asks whether protein adds explanatory power beyond calories.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        a: { type: Type.STRING },
+        b: { type: Type.STRING },
+        controls: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "Series ids to control for, e.g., ['calories']",
+        },
+        from: { type: Type.STRING },
+        to: { type: Type.STRING },
+        lag: { type: Type.NUMBER, description: "Lag in days (default 0)" },
+      },
+      required: ["a", "b", "controls"],
+    },
+  },
+  {
+    name: "series_change_points",
+    description:
+      "Detect dates where the trend in a series shifted significantly (e.g., 'weight loss accelerated 3 weeks ago'). Always uses a 6-month look-back regardless of the requested window since change-points are meaningless when scoped to one side of a shift.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        series: { type: Type.STRING, description: "Series id" },
+        window: { type: Type.NUMBER, description: "Days on each side of candidate split (default 14)" },
+      },
+      required: ["series"],
+    },
+  },
+  {
+    name: "compare_windows",
+    description:
+      "Compare two date windows for one or more series. Returns mean, slope, and total per series in each window plus deltas. Useful for 'before vs after I started X' questions.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        series: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "One or more series ids",
+        },
+        aFrom: { type: Type.STRING },
+        aTo: { type: Type.STRING },
+        bFrom: { type: Type.STRING },
+        bTo: { type: Type.STRING },
+      },
+      required: ["series", "aFrom", "aTo", "bFrom", "bTo"],
+    },
+  },
+  {
+    name: "project_series",
+    description:
+      "Forward-project the recent linear trend of a series, optionally to a target value. Returns slope, projection points, and the date the series is projected to cross the target (if applicable).",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        series: { type: Type.STRING, description: "Series id (typically 'weight')" },
+        target: { type: Type.NUMBER, description: "Optional target value (e.g., goal weight)" },
+      },
+      required: ["series"],
+    },
+  },
+  {
+    name: "get_series_daily",
+    description:
+      "Get the user's daily values for any chartable series (weight, calories, dosage:<id>, symptom:<id>, etc.) over a date range. Returns one point per day where the user has data. Use this when you want to discuss specific values or render a chart inline.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        series: { type: Type.STRING, description: "Series id" },
+        from: { type: Type.STRING, description: "Start date (YYYY-MM-DD)" },
+        to: { type: Type.STRING, description: "End date (YYYY-MM-DD)" },
+      },
+      required: ["series", "from", "to"],
     },
   },
   {
@@ -622,7 +757,7 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
       const entry = await FoodLog.create({
         userId,
         foodItemId: args.foodItemId,
-        date: new Date(args.date + "T12:00:00.000Z"),
+        date: parseLogDate(args.date),
         mealType: args.mealType,
         servingCount: Number(args.servingCount) || 1,
       });
@@ -640,6 +775,67 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
           carbs: Math.round((food.carbsPer || 0) * servings),
         },
       };
+    }
+
+    case "correlate_series": {
+      const lagArg = args.lag;
+      const lag = lagArg === 'auto'
+        ? 'auto'
+        : (lagArg == null ? 0 : Number(lagArg) || 0);
+      return analysisCorrelate(userId, {
+        a: args.a, b: args.b,
+        from: args.from, to: args.to,
+        lag,
+        method: args.method === 'spearman' ? 'spearman' : 'pearson',
+      });
+    }
+
+    case "rank_correlations": {
+      return analysisRankCorrelations(userId, {
+        target: args.target,
+        candidates: Array.isArray(args.candidates) ? args.candidates : undefined,
+        from: args.from, to: args.to,
+        maxLag: Number(args.maxLag) || 14,
+      });
+    }
+
+    case "partial_correlate": {
+      return analysisPartialCorrelate(userId, {
+        a: args.a, b: args.b,
+        controls: Array.isArray(args.controls) ? args.controls : [],
+        from: args.from, to: args.to,
+        lag: Number(args.lag) || 0,
+      });
+    }
+
+    case "series_change_points": {
+      return analysisChangePoints(userId, {
+        series: args.series,
+        window: Number(args.window) || 14,
+      });
+    }
+
+    case "compare_windows": {
+      return analysisCompare(userId, {
+        series: Array.isArray(args.series) ? args.series : [args.series],
+        aFrom: args.aFrom, aTo: args.aTo,
+        bFrom: args.bFrom, bTo: args.bTo,
+      });
+    }
+
+    case "project_series": {
+      return analysisProject(userId, {
+        series: args.series,
+        target: args.target != null ? Number(args.target) : null,
+      });
+    }
+
+    case "get_series_daily": {
+      return analysisGetSeries(userId, {
+        series: args.series,
+        from: args.from,
+        to: args.to,
+      });
     }
 
     case "propose_food_entries": {
@@ -788,6 +984,27 @@ Daily targets: ${settings.targets.calories} cal, ${settings.targets.proteinGrams
     sections.push(`SYMPTOM LOG (last 7 days):\n${rows}`);
   }
 
+  // Top insights from a 90-day analysis window. Embedded in the snapshot
+  // so even free-tier (tools-disabled) chats can reference the patterns,
+  // and so paid-tier chats don't need to re-discover obvious findings via
+  // expensive tool calls. Best-effort — analysis failures don't block the
+  // rest of the snapshot from rendering.
+  try {
+    const result = await analysisInsights(userId, {});
+    if (Array.isArray(result?.findings) && result.findings.length) {
+      const lines = result.findings
+        .slice(0, 3)
+        .map((f) => `- ${f.title} — ${f.claim}`)
+        .join("\n");
+      sections.push(
+        `RECENT INSIGHTS (computed from a 90-day analysis window):\n${lines}\n` +
+          `Use the analysis tools (correlate_series, rank_correlations, partial_correlate, etc.) to dig deeper when the user asks why or what to do about these.`,
+      );
+    }
+  } catch (err) {
+    log.warn({ ...errContext(err), userId: String(userId) }, 'snapshot: insights failed');
+  }
+
   return sections.join("\n\n");
 }
 
@@ -909,6 +1126,23 @@ You already have the last 7 days of user data above. Tool usage:
 - Direct-log tool (log_food_entry) — RARE EXCEPTION ONLY:
   - Only use when the user EXPLICITLY says they want to skip confirmation (e.g. "just log it, don't ask", "no need to confirm"). If you are uncertain, use propose_food_entries instead.
   - Requires a real foodItemId from search_food_items or create_food_item.
+- Inline charts:
+  - When a chart would clarify an answer (showing a trend, comparing two series, pointing at a date), embed a small chart inline using a fenced code block with the \`chart\` language tag. The client will replace the block with a rendered chart image after your reply finishes streaming.
+  - Format (must be valid JSON inside the code fence):
+    \`\`\`chart
+    { "series": ["weight"], "from": "2026-02-01", "to": "2026-04-30", "title": "Weight, Feb–Apr" }
+    \`\`\`
+  - Series ids: weight, waist, calories, protein, fat, carbs, score, dosage:<compoundId>, symptom:<symptomId>.
+  - "from" and "to" must be YYYY-MM-DD. "title" is optional but recommended.
+  - You may include up to ~3 series in one chart when they share a sensible scale, or pair a metric with its compound (e.g., weight + dosage:retaId).
+  - Limit yourself to 1-2 charts per reply — they take real screen space. Skip the chart if a sentence would do.
+  - You do NOT need to call get_series_daily before emitting a chart; the client fetches the data when it expands the block.
+- Analysis tools (correlate_series, rank_correlations, partial_correlate, series_change_points, compare_windows, project_series, get_series_daily):
+  - Use when the user asks "why", "what's causing", "is X working", "what changed", "when did X start", "at this rate when will I…", or any other question that requires comparing series, finding correlations, or detecting trend shifts.
+  - rank_correlations is the cheapest first move when the user asks an open-ended "what affects my X" question — it returns a ranked list of candidates with their lag and r.
+  - Prefer partial_correlate over correlate_series when there's an obvious confounder (e.g., always control for calories when asking about a macro's effect on weight).
+  - series_change_points always uses a 6-month window regardless of the user's chart selection — it's for finding when trends shifted.
+  - The "RECENT INSIGHTS" block in the snapshot above is already a precomputed summary. Reference it directly for the obvious patterns instead of re-running the same analyses.
 - Google Search (built-in):
   - Use when the user asks questions that require external knowledge — research on supplements, medications, studies, recent health news, dosing protocols, exercise science, etc.
   - Use when you need accurate nutrition facts for a food the user wants logged.
@@ -1265,6 +1499,26 @@ function describeToolCall(name, args) {
       const n = Array.isArray(args?.items) ? args.items.length : 0;
       return `Preparing a ${args?.mealType || "meal"} summary (${n} item${n === 1 ? "" : "s"}) for you to confirm`;
     }
+    case "correlate_series": {
+      const lag = args?.lag === 'auto' ? 'auto-lag' : `lag=${args?.lag ?? 0}d`;
+      return `Computing ${args?.method === 'spearman' ? 'Spearman' : 'Pearson'} correlation: ${args?.a || '?'} ↔ ${args?.b || '?'} (${lag})`;
+    }
+    case "rank_correlations":
+      return `Ranking what correlates with ${args?.target || 'target'}`;
+    case "partial_correlate":
+      return `Partial correlation: ${args?.a} ↔ ${args?.b}, controlling for ${
+        Array.isArray(args?.controls) ? args.controls.join(', ') : '—'
+      }`;
+    case "series_change_points":
+      return `Detecting trend shifts in ${args?.series || 'series'}`;
+    case "compare_windows":
+      return `Comparing ${args?.aFrom}–${args?.aTo} vs ${args?.bFrom}–${args?.bTo}`;
+    case "project_series":
+      return args?.target != null
+        ? `Projecting ${args?.series} toward ${args.target}`
+        : `Projecting ${args?.series} forward`;
+    case "get_series_daily":
+      return `Fetching ${args?.series || 'series'} (${args?.from} → ${args?.to})`;
     default:
       return `Running ${name}`;
   }

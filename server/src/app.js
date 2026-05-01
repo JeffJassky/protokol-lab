@@ -25,6 +25,7 @@ import supportRoutes from './routes/support.js';
 import adminSupportRoutes from './routes/adminSupport.js';
 import demoRoutes from './routes/demo.js';
 import trackRoutes from './routes/track.js';
+import analysisRoutes from './routes/analysis.js';
 import testHelperRoutes from './routes/testHelpers.js';
 import * as Sentry from '@sentry/node';
 import { requireAuth, requireAuthUser, requireRealProfile } from './middleware/requireAuth.js';
@@ -165,6 +166,10 @@ export function createApp({ serveClient = true } = {}) {
   app.use('/api/chat', requireAuth, requireRealProfile, chatRoutes);
   app.use('/api/notes', requireAuth, notesRoutes);
   app.use('/api/photos', requireAuth, photosRoutes);
+  // Analysis engine — read-only correlations / change-points / projections
+  // over the user's existing data. Demo sandboxes can use it; real-only
+  // gating happens implicitly because demo data exists in the same shape.
+  app.use('/api/analysis', requireAuth, analysisRoutes);
   // Billing is the real account's, even when the user is toggled into demo.
   app.use('/api/stripe', requireAuth, requireAuthUser, stripeRoutes);
   // Support tickets are tied to the real account.

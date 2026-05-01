@@ -2,6 +2,7 @@ import { Router } from 'express';
 import DoseLog from '../models/DoseLog.js';
 import Compound from '../models/Compound.js';
 import { childLogger } from '../lib/logger.js';
+import { parseLogDate } from '../lib/date.js';
 
 const log = childLogger('doses');
 const router = Router();
@@ -118,7 +119,7 @@ router.post('/', async (req, res) => {
     userId: req.userId,
     compoundId,
     value: Number(value),
-    date: new Date(date),
+    date: parseLogDate(date),
   });
   rlog.info(
     { entryId: String(entry._id), compoundId, compoundName: compound.name, value, date },

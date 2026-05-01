@@ -8,9 +8,39 @@
 //   4. Clean all collections between tests to keep them isolated.
 //   5. Tear everything down after the suite.
 
+import os from 'node:os';
 import { beforeAll, afterAll, afterEach, vi } from 'vitest';
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+
+// Apple Silicon workaround. mongodb-memory-server's default Mongo binary
+// (8.x) crashes with SIGILL on M1/M2/M3, masquerading as the misleading
+// "AVX required" error — Mongo 8.x ships x64 instructions that don't
+// translate cleanly under Rosetta. Pin to 6.0.14 (LTS branch that runs
+// reliably on Apple Silicon under Rosetta and natively).
+//
+// Detection: `os.arch()` reflects the Node binary, not the host CPU —
+// people running an x64 Node under Rosetta on an M1 still need this fix.
+// We check for "Apple M*" in the CPU model when on darwin.
+//
+// CI (linux x64) skips this branch and uses the package default.
+//
+// IMPORTANT: env vars must be set BEFORE mongodb-memory-server is loaded.
+// ESM static imports hoist above expression statements, so the package is
+// imported below via top-level `await import` — any earlier static import
+// would already have read the unset env and chosen the default binary.
+function isAppleSilicon() {
+  if (os.platform() !== 'darwin') return false;
+  if (os.arch() === 'arm64') return true;
+  try {
+    return /Apple M[1-9]/.test(os.cpus()[0]?.model || '');
+  } catch {
+    return false;
+  }
+}
+if (isAppleSilicon()) {
+  process.env.MONGOMS_VERSION = process.env.MONGOMS_VERSION || '6.0.14';
+}
+const { MongoMemoryServer } = await import('mongodb-memory-server');
 // Register every Mongoose model up front. The User cascade hook resolves
 // models by string name; tests that don't import the route surface still
 // need every model registered for the cascade to find them.

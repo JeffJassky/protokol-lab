@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { localYmd } from '../utils/date.js';
 
 const props = defineProps({
   modelValue: { type: String, required: true },
@@ -15,13 +16,13 @@ const displayDate = computed(() => {
   if (diff === 0) return 'Today';
   if (diff === -1) return 'Yesterday';
   if (diff === 1) return 'Tomorrow';
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 });
 
 function shift(days) {
   const d = new Date(props.modelValue + 'T00:00:00');
   d.setDate(d.getDate() + days);
-  emit('update:modelValue', d.toISOString().slice(0, 10));
+  emit('update:modelValue', localYmd(d));
 }
 </script>
 

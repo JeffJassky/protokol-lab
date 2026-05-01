@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 const props = defineProps({
   label: String,
@@ -15,6 +15,24 @@ const props = defineProps({
   // e.g. "459 kcal left today" beside a weekly progress bar.
   note: { type: String, default: '' },
   noteTone: { type: String, default: 'muted' }, // 'muted' | 'over'
+  // Position in a sibling group — used to stagger the width transition so
+  // bars cascade in sequence rather than animating simultaneously.
+  index: { type: Number, default: 0 },
+});
+
+// CSS transitions only fire when a property *changes*, so the initial render
+// at the final width would snap into place with no animation. We render at
+// width 0 first, then flip the gate on the next frame so the browser sees a
+// 0 → finalWidth transition. Double-rAF ensures the zero state actually
+// paints before the update lands. Vue's nextTick alone batches into the
+// same frame, which kills the animation.
+const animateIn = ref(false);
+onMounted(() => {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      animateIn.value = true;
+    });
+  });
 });
 
 const ratio = computed(() => {
@@ -24,12 +42,14 @@ const ratio = computed(() => {
 
 // Width (% of track) up to but not beyond the target line.
 const normalWidth = computed(() => {
+  if (!animateIn.value) return 0;
   const r = Math.min(ratio.value, 1);
   return (r / props.scaleMax) * 100;
 });
 
 // Width (% of track) of the over-target portion.
 const overWidth = computed(() => {
+  if (!animateIn.value) return 0;
   const over = Math.max(0, ratio.value - 1);
   return (over / props.scaleMax) * 100;
 });
@@ -41,7 +61,7 @@ const showTargetLine = computed(() => props.scaleMax > 1);
 </script>
 
 <template>
-  <div class="macro-bar">
+  <div class="macro-bar" :style="{ '--bar-index': index }">
     <div class="macro-header">
       <span class="macro-label">{{ label }}</span>
       <span class="macro-values"
@@ -66,7 +86,6 @@ const showTargetLine = computed(() => props.scaleMax > 1);
         :style="{ width: normalWidth + '%', background: color }"
       />
       <div
-        v-if="overWidth > 0"
         class="bar-over"
         :style="{ left: normalWidth + '%', width: overWidth + '%' }"
       />
@@ -126,13 +145,18 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   border-radius: var(--radius-small);
   overflow: hidden;
 }
+/* Out-quint easing: fast initial extension, soft settle at the final width.
+   Reads as deliberate / data-aware rather than the snappy linear default.
+   Per-bar stagger via --bar-index makes the four macros cascade Cal→Pro→
+   Fat→Carbs instead of snapping simultaneously. */
 .bar-fill {
   position: absolute;
   left: 0;
   top: 0;
   height: 100%;
   border-radius: var(--radius-small);
-  transition: width 0.3s;
+  transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--bar-index, 0) * 70ms);
 }
 .bar-over {
   position: absolute;
@@ -140,7 +164,10 @@ const showTargetLine = computed(() => props.scaleMax > 1);
   height: 100%;
   background: var(--danger);
   border-radius: var(--radius-small);
-  transition: left 0.3s, width 0.3s;
+  transition:
+    left 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--bar-index, 0) * 70ms);
 }
 .target-line {
   position: absolute;

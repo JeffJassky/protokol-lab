@@ -7,9 +7,11 @@ import { uniqueEmail, registerViaApi } from './helpers.js';
 test('user can log a weight entry from /log', async ({ page }) => {
   await registerViaApi(page, uniqueEmail('weight'));
   await page.goto('/log');
-  await expect(page.getByRole('heading', { name: /daily log/i })).toBeVisible();
-
+  // The page-title h2 was removed by design — anchor on URL + the weight
+  // input we're about to interact with.
+  await expect(page).toHaveURL(/\/log/);
   const weightInput = page.getByPlaceholder('lbs').first();
+  await expect(weightInput).toBeVisible();
   await weightInput.fill('183.4');
 
   // The lbs input is inside a small form; scope the "Log" button to that

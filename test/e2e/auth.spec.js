@@ -23,7 +23,7 @@ test.skip('login → /log → logout → /login', async ({ page }) => {
 
   await loginViaUi(page, email);
   await expect(page).toHaveURL(/\/log|\/$/);
-  await expect(page.getByRole('heading', { name: /daily log/i })).toBeVisible();
+  await expect(page.getByTestId('log-page')).toBeVisible();
 
   await page.getByRole('button', { name: /logout/i }).click();
   await expect(page).toHaveURL(/\/login(\?|$)/);
@@ -36,8 +36,10 @@ test('login with wrong password stays on /login', async ({ page }) => {
 
   await loginViaUi(page, email, 'wrong-password');
   await expect(page).toHaveURL(/\/login/);
-  // Daily Log heading must NOT be visible — that would mean we let the user in.
-  await expect(page.getByRole('heading', { name: /daily log/i })).toHaveCount(0);
+  // Stay on /login — the password input must still be present (we'd be on
+  // /log if the credentials had succeeded). URL match above is the primary
+  // assertion; this guards against any future redirect rewrite.
+  await expect(page.getByLabel(/password/i)).toBeVisible();
 });
 
 test('guarded route redirects to /login when unauthenticated', async ({ page, context }) => {

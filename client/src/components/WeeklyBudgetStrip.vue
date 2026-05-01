@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useWeeklyBudget } from '../composables/useWeeklyBudget.js';
 import MacroBar from './MacroBar.vue';
 
@@ -12,6 +12,43 @@ const expanded = ref(props.defaultExpanded);
 
 function r(n) { return Math.round(n); }
 function fmt(n) { return Math.round(n).toLocaleString(); }
+
+// Same entry-animation pattern as MacroBar: render the day bars at height 0
+// on first paint, then flip the gate on the next frame so the browser sees a
+// 0 → finalHeight transition. Double rAF prevents Vue from batching the gate
+// flip into the same frame as initial mount.
+const animateIn = ref(false);
+function triggerEntryAnimation() {
+  animateIn.value = false;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      animateIn.value = true;
+    });
+  });
+}
+onMounted(() => {
+  // Only matters when defaultExpanded=true on first mount; otherwise the
+  // expand handler runs the same routine when the user opens the panel.
+  if (expanded.value) triggerEntryAnimation();
+});
+
+// Re-arm the gate before the v-if mounts the bars so they render at height 0
+// for one frame, then transition to final values. Setting animateIn=false
+// before flipping expanded is critical — Vue evaluates the children's style
+// bindings synchronously when the v-if becomes true.
+function toggleExpanded() {
+  if (expanded.value) {
+    expanded.value = false;
+    return;
+  }
+  animateIn.value = false;
+  expanded.value = true;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      animateIn.value = true;
+    });
+  });
+}
 
 function deltaLabel(v, unit) {
   if (v == null) return '';
@@ -125,17 +162,20 @@ const maxDayCal = computed(() => {
 });
 
 function barHeightPct(cal) {
+  if (!animateIn.value) return 0;
   return (cal / maxDayCal.value) * 100;
 }
 
 // Bottom segment: portion of intake up to (but not past) the daily target.
 function normalHeightPct(cal) {
+  if (!animateIn.value) return 0;
   const t = targets.value?.calories || 0;
   return (Math.min(cal, t) / maxDayCal.value) * 100;
 }
 
 // Top segment: only the overage above the daily target.
 function overHeightPct(cal) {
+  if (!animateIn.value) return 0;
   const t = targets.value?.calories || 0;
   if (cal <= t) return 0;
   return ((cal - t) / maxDayCal.value) * 100;
@@ -154,7 +194,7 @@ const targetLinePct = computed(() => {
       type="button"
       class="wb-header"
       :class="{ expanded }"
-      @click="expanded = !expanded"
+      @click="toggleExpanded"
     >
       <div class="wb-stat">
         <span class="wb-stat-label">7-day budget</span>
@@ -230,10 +270,11 @@ const targetLinePct = computed(() => {
     <div v-if="expanded" class="wb-body">
       <div class="wb-strip">
         <div
-          v-for="day in perDay"
+          v-for="(day, i) in perDay"
           :key="day.date"
           class="wb-day"
           :class="{ 'is-today': day.isToday }"
+          :style="{ '--bar-index': i }"
         >
           <div class="wb-day-label">
             {{ dayShortLabel(day.date, day.isToday) }}
@@ -244,9 +285,8 @@ const targetLinePct = computed(() => {
               :style="{ height: normalHeightPct(day.calories) + '%' }"
             />
             <div
-              v-if="overHeightPct(day.calories) > 0"
               class="wb-day-over"
-              :style="{ bottom: targetLinePct + '%', height: overHeightPct(day.calories) + '%' }"
+              :style="{ height: overHeightPct(day.calories) + '%' }"
             />
             <div
               class="wb-day-target-line"
@@ -265,8 +305,9 @@ const targetLinePct = computed(() => {
 
       <div class="wb-macros">
         <MacroBar
-          v-for="m in weekMacroBars"
+          v-for="(m, i) in weekMacroBars"
           :key="m.key"
+          :index="i"
           :label="m.label"
           :current="m.current"
           :target="m.target"
@@ -374,21 +415,28 @@ const targetLinePct = computed(() => {
   background: var(--surface-raised);
   border-radius: var(--radius-small);
   overflow: hidden;
+  /* column-reverse stacks fill on the bottom, over directly above it. Both
+     bars then use simple `height` (no bottom anchor), so the height
+     transition behaves identically for both. The previous `bottom: X%`
+     anchor on the over bar was preventing reliable height interpolation. */
+  display: flex;
+  flex-direction: column-reverse;
 }
+/* Match MacroBar easing — out-quint for a deliberate settle. Per-day stagger
+   via --bar-index makes the 7 days cascade Mon→Sun on initial render.
+   Both bars are flex children of a column-reverse track, so each animates
+   simple `height` from 0 → final and stack from the bottom up. */
 .wb-day-fill {
-  position: absolute;
-  left: 0;
-  right: 0;
+  width: 100%;
   background: var(--border-strong);
-  bottom: 0;
-  transition: height 0.25s;
+  transition: height 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--bar-index, 0) * 70ms);
 }
 .wb-day-over {
-  position: absolute;
-  left: 0;
-  right: 0;
+  width: 100%;
   background: var(--danger);
-  transition: height 0.25s, bottom 0.25s;
+  transition: height 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--bar-index, 0) * 70ms);
 }
 .wb-day-target-line {
   position: absolute;

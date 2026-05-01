@@ -147,10 +147,10 @@ const suggestion = computed(() => {
         <div v-if="suggestion.detail" class="suggestion-detail">{{ suggestion.detail }}</div>
       </div>
     </div>
-    <MacroBar label="Calories" :current="summary.totalCalories" :target="summary.targets?.calories || 0" color="var(--color-cal)" unit=" kcal" :scale-max="scaleMax" />
-    <MacroBar label="Protein" :current="summary.totalProtein" :target="summary.targets?.proteinGrams || 0" color="var(--color-protein)" unit="g" :scale-max="scaleMax" />
-    <MacroBar label="Fat" :current="summary.totalFat" :target="summary.targets?.fatGrams || 0" color="var(--color-fat)" unit="g" :scale-max="scaleMax" />
-    <MacroBar label="Carbs" :current="summary.totalCarbs" :target="summary.targets?.carbsGrams || 0" color="var(--color-carbs)" unit="g" :scale-max="scaleMax" />
+    <MacroBar :index="0" label="Calories" :current="summary.totalCalories" :target="summary.targets?.calories || 0" color="var(--color-cal)" unit=" kcal" :scale-max="scaleMax" />
+    <MacroBar :index="1" label="Protein" :current="summary.totalProtein" :target="summary.targets?.proteinGrams || 0" color="var(--color-protein)" unit="g" :scale-max="scaleMax" />
+    <MacroBar :index="2" label="Fat" :current="summary.totalFat" :target="summary.targets?.fatGrams || 0" color="var(--color-fat)" unit="g" :scale-max="scaleMax" />
+    <MacroBar :index="3" label="Carbs" :current="summary.totalCarbs" :target="summary.targets?.carbsGrams || 0" color="var(--color-carbs)" unit="g" :scale-max="scaleMax" />
   </div>
 </template>
 

@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { api } from '../api/index.js';
+import { localYmd } from '../utils/date.js';
 
 export const useFoodLogStore = defineStore('foodlog', () => {
   const entries = ref({ breakfast: [], lunch: [], dinner: [], snack: [] });
   const summary = ref(null);
-  const currentDate = ref(new Date().toISOString().slice(0, 10));
+  const currentDate = ref(localYmd());
   const dailyCalories = ref([]);
   const dailyNutrition = ref([]);
 

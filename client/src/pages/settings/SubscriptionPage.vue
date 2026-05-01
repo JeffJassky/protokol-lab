@@ -134,13 +134,25 @@ onMounted(async () => {
 <template>
   <div class="subscription-page">
     <div class="head">
-      <router-link to="/profile/settings/account" class="back-link" aria-label="Back">‹ Account</router-link>
+      <router-link
+        to="/profile/settings/account"
+        class="back-link"
+        aria-label="Back"
+        >‹ Account</router-link
+      >
       <h2 class="page-title">Subscription</h2>
     </div>
 
     <div v-if="subBanner" class="sub-banner" :class="subBanner.kind">
       {{ subBanner.msg }}
-      <button type="button" class="sub-banner-dismiss" @click="subBanner = null" aria-label="Dismiss">×</button>
+      <button
+        type="button"
+        class="sub-banner-dismiss"
+        @click="subBanner = null"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
     </div>
 
     <div class="card">
@@ -150,11 +162,17 @@ onMounted(async () => {
         <div class="sub-current">
           <div class="sub-current-row">
             <span class="sub-current-label">Current plan</span>
-            <span class="sub-current-value">{{ currentPlan?.marketing?.title || 'Free' }}</span>
+            <span
+              class="sub-current-value"
+              >{{ currentPlan?.marketing?.title || 'Free' }}</span
+            >
           </div>
           <div v-if="trialEndsAt" class="sub-current-row">
             <span class="sub-current-label">Trial ends</span>
-            <span class="sub-current-value">{{ trialEndsAt.toLocaleDateString() }}</span>
+            <span
+              class="sub-current-value"
+              >{{ trialEndsAt.toLocaleDateString() }}</span
+            >
           </div>
           <div v-else-if="subscription?.planExpiresAt" class="sub-current-row">
             <span class="sub-current-label">Renews / ends</span>
@@ -164,7 +182,10 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="isPaidNow && subscription?.hasStripeCustomer" class="sub-actions">
+        <div
+          v-if="isPaidNow && subscription?.hasStripeCustomer"
+          class="sub-actions"
+        >
           <button
             type="button"
             class="btn-secondary"
@@ -174,24 +195,33 @@ onMounted(async () => {
             {{ portalBusy ? 'Opening…' : 'Manage billing' }}
           </button>
           <p class="sub-hint">
-            Change plan, update card, or cancel anytime in the Stripe billing portal.
+            Change plan, update card, or cancel anytime in the Stripe billing
+            portal.
           </p>
         </div>
 
         <div v-else class="sub-upgrade">
-          <div class="sub-interval-toggle" role="tablist" aria-label="Billing interval">
+          <div
+            class="sub-interval-toggle"
+            role="tablist"
+            aria-label="Billing interval"
+          >
             <button
               type="button"
               class="sub-interval-btn"
               :class="{ active: billingInterval === 'monthly' }"
               @click="billingInterval = 'monthly'"
-            >Monthly</button>
+            >
+              Monthly
+            </button>
             <button
               type="button"
               class="sub-interval-btn"
               :class="{ active: billingInterval === 'yearly' }"
               @click="billingInterval = 'yearly'"
-            >Yearly <span class="sub-save-tag">save {{ annualSavePct }}%</span></button>
+            >
+              Yearly <span class="sub-save-tag">save {{ annualSavePct }}%</span>
+            </button>
           </div>
 
           <div class="sub-plans">
@@ -201,7 +231,9 @@ onMounted(async () => {
               class="sub-plan"
               :class="{ featured: plan.marketing.badge === 'Most Popular' }"
             >
-              <div v-if="plan.marketing.badge" class="sub-plan-badge">{{ plan.marketing.badge }}</div>
+              <div v-if="plan.marketing.badge" class="sub-plan-badge">
+                {{ plan.marketing.badge }}
+              </div>
               <div class="sub-plan-title">{{ plan.marketing.title }}</div>
               <div class="sub-plan-tagline">{{ plan.marketing.tagline }}</div>
               <div class="sub-plan-price">
@@ -212,7 +244,9 @@ onMounted(async () => {
               </div>
               <div class="sub-plan-effective">{{ priceLabelFor(plan) }}</div>
               <ul class="sub-plan-feats">
-                <li v-for="feat in plan.marketing.featureList" :key="feat">{{ feat }}</li>
+                <li v-for="feat in plan.marketing.featureList" :key="feat">
+                  {{ feat }}
+                </li>
               </ul>
               <button
                 type="button"
@@ -230,7 +264,8 @@ onMounted(async () => {
           </div>
 
           <p class="sub-hint">
-            Card collected upfront. Cancel anytime during the trial — you won’t be charged.
+            Card collected upfront. Cancel anytime during the trial — you won’t
+            be charged.
           </p>
         </div>
       </template>
@@ -254,7 +289,8 @@ onMounted(async () => {
   padding: var(--space-1) 0;
 }
 .back-link:hover { color: var(--text); }
-.page-title { margin: 0; }
+
+.page-title { margin: 0; text-align: center; }
 
 .card {
   background: var(--surface);

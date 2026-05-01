@@ -1,15 +1,17 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { usePwa } from '../composables/usePwa.js';
 import { usePushStore } from '../stores/push.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { useAuthStore } from '../stores/auth.js';
+import { useDemoStore } from '../stores/demo.js';
 import InstallInstructions from './InstallInstructions.vue';
 
 const pwa = usePwa();
 const pushStore = usePushStore();
 const onboarding = useOnboardingStore();
 const auth = useAuthStore();
+const demo = useDemoStore();
 
 const expanded = ref('install'); // id of the currently expanded step
 
@@ -48,10 +50,17 @@ const steps = computed(() => {
 
 const allDone = computed(() => steps.value.every((s) => s.done));
 const incomplete = computed(() => steps.value.filter((s) => !s.done));
+// Baseline of 75% — by the time the user sees this checklist they've already
+// signed up, set up their profile, and started using the app. Showing 0%
+// feels demotivating. Each remaining step contributes the rest of the bar
+// equally so it always lands on 100% when all done, regardless of step count.
+const PROGRESS_BASELINE = 75;
 const progress = computed(() => {
   const total = steps.value.length;
-  if (!total) return 0;
-  return Math.round((steps.value.filter((s) => s.done).length / total) * 100);
+  if (!total) return 100;
+  const done = steps.value.filter((s) => s.done).length;
+  const earned = (done / total) * (100 - PROGRESS_BASELINE);
+  return PROGRESS_BASELINE + earned;
 });
 
 function toggle(id) {
@@ -61,14 +70,6 @@ function toggle(id) {
 async function enableNotifications() {
   const ok = await pushStore.enable();
   if (ok) onboarding.markNotificationPromptShown();
-}
-
-function dismiss() {
-  onboarding.dismissChecklist();
-}
-
-function restore() {
-  onboarding.restoreChecklist();
 }
 
 onMounted(async () => {
@@ -85,35 +86,27 @@ onMounted(async () => {
   if (firstIncomplete) expanded.value = firstIncomplete.id;
 });
 
-watch(() => onboarding.shouldRestoreAfterCooldown, (v) => {
-  if (v && !allDone.value) onboarding.restoreChecklist();
-});
-
-const visible = computed(() => {
-  if (allDone.value) return false;
-  if (onboarding.state.checklistDismissed && !onboarding.shouldRestoreAfterCooldown) return false;
-  return true;
-});
+// The checklist is persistent until every step is genuinely complete — no
+// dismiss / show-again. Setup is short enough that letting the user hide it
+// just makes them lose track and never enable reminders.
+// Demo sandboxes can't install or receive push, so the checklist is
+// pointless there and just clutters the demo experience.
+const visible = computed(() => !demo.inDemo && !allDone.value);
 </script>
 
 <template>
   <section v-if="visible" class="onboarding-card">
     <header class="oc-header">
-      <div class="oc-head-left">
-        <h3>Finish setup</h3>
-        <span class="oc-progress-text">{{ progress }}% complete</span>
-      </div>
-      <button
-        type="button"
-        class="oc-dismiss"
-        @click="dismiss"
-        title="Remind me later"
-      >
-        ×
-      </button>
+      <h3>Finish setup</h3>
     </header>
 
-    <div class="oc-progress-track" aria-hidden="true">
+    <div
+      class="oc-progress-track"
+      role="progressbar"
+      :aria-valuenow="Math.round(progress)"
+      aria-valuemin="0"
+      aria-valuemax="100"
+    >
       <div class="oc-progress-fill" :style="{ width: progress + '%' }" />
     </div>
 
@@ -195,15 +188,6 @@ const visible = computed(() => {
       All set — reminders will fire on your schedule.
     </p>
   </section>
-
-  <button
-    v-else-if="onboarding.state.checklistDismissed && !allDone"
-    type="button"
-    class="oc-restore"
-    @click="restore"
-  >
-    Show setup checklist
-  </button>
 </template>
 
 <style scoped>
@@ -217,35 +201,14 @@ const visible = computed(() => {
 }
 
 .oc-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
   margin-bottom: var(--space-2);
 }
-.oc-head-left { display: flex; flex-direction: column; gap: 0.15rem; }
 .oc-header h3 {
   font-size: var(--font-size-m);
   margin: 0;
   color: var(--text);
   font-weight: var(--font-weight-bold);
 }
-.oc-progress-text {
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  letter-spacing: var(--tracking-wide);
-}
-.oc-dismiss {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xl);
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 var(--space-1);
-}
-.oc-dismiss:hover { color: var(--text); }
-
 .oc-progress-track {
   height: 4px;
   background: var(--border);
@@ -348,16 +311,4 @@ const visible = computed(() => {
   color: var(--success, var(--text-secondary));
   text-align: center;
 }
-
-.oc-restore {
-  background: var(--bg);
-  border: 1px dashed var(--border);
-  color: var(--text-secondary);
-  border-radius: var(--radius-small);
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  margin-bottom: var(--space-4);
-}
-.oc-restore:hover { color: var(--text); border-color: var(--text-secondary); }
 </style>

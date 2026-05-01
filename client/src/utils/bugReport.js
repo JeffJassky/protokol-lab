@@ -63,3 +63,15 @@ export function buildDescription({ happened, expected, doing }, ctx) {
   for (const [k, v] of Object.entries(ctx || {})) lines.push(`- ${k}: ${v}`);
   return lines.join('\n').slice(0, 10000);
 }
+
+// Single-field feedback (open-ended). Saved as a ticket so support sees it.
+export function buildFeedbackDescription(body, ctx) {
+  const lines = [];
+  lines.push('Feedback:');
+  lines.push(String(body || '').trim());
+  lines.push('');
+  lines.push('---');
+  lines.push('Auto-collected context (do not edit):');
+  for (const [k, v] of Object.entries(ctx || {})) lines.push(`- ${k}: ${v}`);
+  return lines.join('\n').slice(0, 10000);
+}

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import DayNote from '../models/DayNote.js';
 import { childLogger } from '../lib/logger.js';
+import { parseLogDate } from '../lib/date.js';
 
 const log = childLogger('notes');
 const router = Router();
@@ -30,7 +31,7 @@ router.get('/', async (req, res) => {
     (req.log || log).warn('notes get: missing date');
     return res.status(400).json({ error: 'date required' });
   }
-  const note = await DayNote.findOne({ userId: req.userId, date: new Date(date) });
+  const note = await DayNote.findOne({ userId: req.userId, date: parseLogDate(date) });
   (req.log || log).debug({ date, exists: Boolean(note) }, 'notes: day fetched');
   res.json({ note: note || null });
 });
@@ -42,7 +43,7 @@ router.put('/', async (req, res) => {
     rlog.warn('notes put: missing date');
     return res.status(400).json({ error: 'date required' });
   }
-  const day = new Date(date);
+  const day = parseLogDate(date);
   const trimmed = typeof text === 'string' ? text : '';
 
   if (!trimmed.trim()) {

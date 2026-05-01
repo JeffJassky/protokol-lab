@@ -4,6 +4,7 @@ import FoodItem from '../models/FoodItem.js';
 import UserSettings from '../models/UserSettings.js';
 import { touchRecent } from '../services/recentFood.js';
 import { childLogger } from '../lib/logger.js';
+import { parseLogDate } from '../lib/date.js';
 
 const log = childLogger('foodlog');
 const router = Router();
@@ -189,7 +190,7 @@ router.post('/', async (req, res) => {
   const entry = await FoodLog.create({
     userId: req.userId,
     foodItemId,
-    date: new Date(req.body.date),
+    date: parseLogDate(req.body.date),
     mealType: req.body.mealType,
     servingCount: req.body.servingCount || 1,
   });
@@ -231,7 +232,7 @@ router.post('/copy', async (req, res) => {
       docs.push({
         userId: req.userId,
         foodItemId: src.foodItemId,
-        date: new Date(dateStr),
+        date: parseLogDate(dateStr),
         mealType: src.mealType,
         servingCount: src.servingCount,
         mealId: src.mealId || null,
@@ -270,7 +271,7 @@ router.post('/move', async (req, res) => {
       docs.push({
         userId: req.userId,
         foodItemId: src.foodItemId,
-        date: new Date(dateStr),
+        date: parseLogDate(dateStr),
         mealType: src.mealType,
         servingCount: src.servingCount,
         mealId: src.mealId || null,
