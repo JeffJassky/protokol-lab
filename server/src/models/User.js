@@ -32,6 +32,10 @@ const userSchema = new mongoose.Schema({
   // value, so users without googleId must omit the field entirely (otherwise
   // the second password-only registration collides on the duplicate null).
   googleId: { type: String },
+  // Apple Sign-In subject (`sub`). Stable per (user, Apple team), never
+  // recycled. Same sparse-unique pattern as googleId — omit the field
+  // entirely when absent so multiple non-Apple users don't collide on null.
+  appleId: { type: String },
   avatarUrl: { type: String, default: null },
 
   // Subscription plan. References a plan id from shared/plans.js.
@@ -91,6 +95,7 @@ const userSchema = new mongoose.Schema({
 
 userSchema.index({ passwordResetTokenHash: 1 });
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+userSchema.index({ appleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ isDemoSandbox: 1, lastActiveAt: 1 });
 userSchema.index({ parentUserId: 1 });
 // Pool claim hits this constantly — partial index keeps it tiny (N rows).

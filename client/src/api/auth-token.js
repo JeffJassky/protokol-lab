@@ -25,9 +25,14 @@ export function isNativePlatform() {
 }
 
 // Lazy import — keeps the Preferences plugin out of the web bundle entirely.
+// Returns the import module (a plain object) so callers do
+// `(await preferences()).Preferences.get(...)`. Returning the plugin proxy
+// directly from an async function would re-trigger the proxy's auto-generated
+// `.then` on every `await`, surfacing as `"Preferences.then() is not
+// implemented on ios"` — Capacitor plugin proxies are accidentally
+// "thenable."
 async function preferences() {
-  const { Preferences } = await import('@capacitor/preferences');
-  return Preferences;
+  return await import('@capacitor/preferences');
 }
 
 // Async on native (Preferences is async); cheap on web (returns immediately).
@@ -38,8 +43,8 @@ export async function hydrateAuthToken() {
   hydrated = true;
   if (!isNativePlatform()) return;
   try {
-    const prefs = await preferences();
-    const { value } = await prefs.get({ key: TOKEN_KEY });
+    const { Preferences } = await preferences();
+    const { value } = await Preferences.get({ key: TOKEN_KEY });
     cachedToken = value || null;
   } catch (_e) {
     cachedToken = null;
@@ -57,9 +62,9 @@ export function setAuthToken(token) {
   // token in memory; the disk write doesn't need to block the auth flow.
   (async () => {
     try {
-      const prefs = await preferences();
-      if (token) await prefs.set({ key: TOKEN_KEY, value: token });
-      else await prefs.remove({ key: TOKEN_KEY });
+      const { Preferences } = await preferences();
+      if (token) await Preferences.set({ key: TOKEN_KEY, value: token });
+      else await Preferences.remove({ key: TOKEN_KEY });
     } catch (_e) {
       // Best-effort; the in-memory copy still works for the session.
     }

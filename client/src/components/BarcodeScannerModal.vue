@@ -68,43 +68,20 @@ async function startWebDevice(id) {
 
 async function startNativeScanner() {
   try {
-    // ML Kit native scanner — uses the OS camera with a system-rendered
-    // overlay. Returns immediately on a successful scan or on cancel; no
-    // in-app camera surface needed. Plugin loads only on native.
-    const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
-
-    // Probe / install the scanning module on Android (no-op on iOS where
-    // ML Kit is bundled). Best-effort: failure here surfaces in the .scan()
-    // call below.
-    try {
-      const supported = await BarcodeScanner.isSupported();
-      if (!supported.supported) {
-        error.value = 'Barcode scanning is not supported on this device.';
-        return;
-      }
-      const moduleAvailable = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable?.();
-      if (moduleAvailable && !moduleAvailable.available) {
-        await BarcodeScanner.installGoogleBarcodeScannerModule?.();
-      }
-    } catch (_e) {
-      // Older plugin versions skip the module check; ignore.
-    }
-
-    const perm = await BarcodeScanner.checkPermissions();
-    if (perm.camera !== 'granted') {
-      const req = await BarcodeScanner.requestPermissions();
-      if (req.camera !== 'granted') {
-        error.value = 'Camera permission denied.';
-        return;
-      }
-    }
-
-    const { barcodes } = await BarcodeScanner.scan();
-    const code = barcodes?.[0]?.rawValue || barcodes?.[0]?.displayValue;
+    // Native scanner — opens an OS-level camera surface with system overlay.
+    // Resolves with the scanned value or throws on user cancel. Plugin loads
+    // only on native; web path stays on zxing above.
+    const { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } = await import(
+      '@capacitor/barcode-scanner'
+    );
+    const result = await CapacitorBarcodeScanner.scanBarcode({
+      hint: CapacitorBarcodeScannerTypeHint.ALL,
+      scanInstructions: 'Point the camera at a product barcode.',
+    });
+    const code = result?.ScanResult;
     if (code) emit('detected', code);
     else emit('close');
   } catch (e) {
-    // User cancellation surfaces as a thrown error on some platforms.
     const msg = String(e?.message || e || '').toLowerCase();
     if (msg.includes('cancel')) {
       emit('close');

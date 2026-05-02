@@ -5,6 +5,7 @@ import { usePushStore } from '../stores/push.js';
 import { useOnboardingStore } from '../stores/onboarding.js';
 import { useAuthStore } from '../stores/auth.js';
 import { useDemoStore } from '../stores/demo.js';
+import { isNativePlatform } from '../api/auth-token.js';
 import InstallInstructions from './InstallInstructions.vue';
 
 const pwa = usePwa();
@@ -12,15 +13,21 @@ const pushStore = usePushStore();
 const onboarding = useOnboardingStore();
 const auth = useAuthStore();
 const demo = useDemoStore();
+// Capacitor builds are already "installed" — the install step is dead weight,
+// and the "install first" gate on the notifications step also goes away
+// since iOS native apps receive APNs directly without a PWA shell.
+const native = isNativePlatform();
 
 const expanded = ref('install'); // id of the currently expanded step
 
 const steps = computed(() => {
   const list = [];
 
-  // Skip the install step on desktop if we have no install prompt available —
-  // most desktops don't need a PWA install for notifications anyway.
-  const showInstall = pwa.platform.value !== 'desktop' || pwa.canPromptInstall.value || !pwa.installed.value;
+  // Skip the install step entirely on Capacitor — the user is literally
+  // running the installed app — and otherwise on desktops with no install
+  // prompt available (most desktops don't need a PWA install anyway).
+  const showInstall = !native
+    && (pwa.platform.value !== 'desktop' || pwa.canPromptInstall.value || !pwa.installed.value);
   if (showInstall) {
     list.push({
       id: 'install',
@@ -30,9 +37,10 @@ const steps = computed(() => {
     });
   }
 
-  // On iOS, blocking notification step until installed avoids a wasted prompt
-  // that would otherwise permanently deny permission.
-  const notifsBlocked = pwa.platform.value === 'ios' && !pwa.installed.value;
+  // The "install first" gate only applies to mobile Safari PWAs (iOS Web
+  // Push requires the home-screen install). Capacitor builds get APNs
+  // directly so the gate is irrelevant.
+  const notifsBlocked = !native && pwa.platform.value === 'ios' && !pwa.installed.value;
   list.push({
     id: 'notifications',
     title: 'Enable reminders',

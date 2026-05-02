@@ -30,9 +30,11 @@ onMounted(() => {
 // completes — by then Vue has rendered the first authed view and we have
 // either a user, a redirect to /login, or a known unauthed state.
 let splashHidden = false;
-async function hideSplashIfNative() {
+async function hideSplashIfNative(reason) {
   if (splashHidden || !isNativePlatform()) return;
   splashHidden = true;
+  // eslint-disable-next-line no-console
+  console.log(`[splash] hide (${reason})`);
   try {
     const { SplashScreen } = await import('@capacitor/splash-screen');
     await SplashScreen.hide();
@@ -41,8 +43,16 @@ async function hideSplashIfNative() {
   }
 }
 
-if (auth.checked) hideSplashIfNative();
-else watch(() => auth.checked, (resolved) => { if (resolved) hideSplashIfNative(); });
+if (auth.checked) hideSplashIfNative('auth-already-checked');
+else watch(() => auth.checked, (resolved) => { if (resolved) hideSplashIfNative('auth-checked'); });
+
+// Failsafe: hide the splash after a generous timeout no matter what auth
+// is doing. If the API call to /me hangs (CORS misconfig, server cold,
+// network drop) we still want the user to see /login or the offline
+// banner instead of a forever-spinner Capacitor logo.
+if (isNativePlatform()) {
+  setTimeout(() => hideSplashIfNative('timeout-5s'), 5000);
+}
 
 // Public routes (landing, login, register, etc.) render raw — no app chrome.
 // Also hide chrome on routes that explicitly opt out (e.g. /welcome wizard).

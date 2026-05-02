@@ -1,6 +1,6 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import piniaPluginPersistedstate from 'pinia-plugin-persistedstate';
+import { createPersistedState } from 'pinia-plugin-persistedstate';
 import { createHead } from '@unhead/vue/client';
 import FloatingVue from 'floating-vue';
 import 'floating-vue/dist/style.css';
@@ -22,7 +22,7 @@ const pinia = createPinia();
 // Plugin handles re-hydration on store mount and write-through on mutation.
 // Storage is platform-aware (localStorage on web, @capacitor/preferences on
 // native). Stores opt in via `defineStore(id, fn, { persist: {...} })`.
-pinia.use(piniaPluginPersistedstate({
+pinia.use(createPersistedState({
   storage: makePersistedStateStorage(),
 }));
 app.use(pinia);
@@ -58,6 +58,13 @@ if (isNativePlatform()) {
           iOSClientId: import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID,
           iOSServerClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
           mode: 'online',
+        },
+        // Apple Sign-In is iOS-only for now. iOS doesn't need a clientId —
+        // it uses the app's bundle ID via AuthenticationServices. The
+        // clientId field is for web/Android, which we don't ship yet.
+        // Empty redirectUrl tells the plugin to skip URL redirection on iOS.
+        apple: {
+          redirectUrl: '',
         },
       });
     } catch (err) {

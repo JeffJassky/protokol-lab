@@ -25,10 +25,19 @@ export const useAuthStore = defineStore('auth', () => {
     // async).
     await hydrateAuthToken();
     try {
-      const data = await api.get('/api/auth/me');
+      // Race the fetch against an 8s timeout so a hung network (CORS
+      // misconfig, server cold-start) doesn't block the whole app boot.
+      // checked still resolves either way; the user lands on /login or
+      // the persisted shell instead of a stuck splash.
+      const data = await Promise.race([
+        api.get('/api/auth/me'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('fetchMe timeout')), 8000)),
+      ]);
       user.value = data.user;
       minAppVersion.value = data.minAppVersion || null;
-    } catch {
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] fetchMe failed', err?.message || err);
       user.value = null;
     } finally {
       checked.value = true;
@@ -49,6 +58,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function loginWithGoogle(credential) {
     const data = await api.post('/api/auth/google', { credential });
+    captureToken(data);
+    user.value = data.user;
+  }
+
+  // Apple Sign-In (native iOS for now). Payload shape mirrors what
+  // AppleSignInButton emits: { identityToken, fullName }. Server route
+  // verifies the JWT, looks up by appleId or auto-links by email.
+  async function loginWithApple(payload) {
+    const data = await api.post('/api/auth/apple', payload);
     captureToken(data);
     user.value = data.user;
   }
@@ -92,7 +110,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     user, checked, minAppVersion,
-    fetchMe, login, register, loginWithGoogle, requestPasswordReset, resetPassword, logout,
+    fetchMe, login, register, loginWithGoogle, loginWithApple, requestPasswordReset, resetPassword, logout,
     deleteAccount,
     setOnboardingStep, completeOnboarding,
   };

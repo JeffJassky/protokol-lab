@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth.js';
 import { startCheckout } from '../api/stripe.js';
 import { PLANS } from '../../../shared/plans.js';
 import GoogleSignInButton from '../components/GoogleSignInButton.vue';
+import AppleSignInButton from '../components/AppleSignInButton.vue';
 import BrandWordmark from '../components/BrandWordmark.vue';
 
 const auth = useAuthStore();
@@ -73,6 +74,18 @@ async function handleGoogleCredential(credential) {
     loading.value = false;
   }
 }
+
+async function handleAppleCredential(payload) {
+  error.value = '';
+  loading.value = true;
+  try {
+    await auth.loginWithApple(payload);
+    await postAuthRedirect();
+  } catch (err) {
+    error.value = err.message;
+    loading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -91,6 +104,10 @@ async function handleGoogleCredential(credential) {
       <GoogleSignInButton
         text="signup_with"
         @credential="handleGoogleCredential"
+      />
+      <AppleSignInButton
+        text="signup_with"
+        @credential="handleAppleCredential"
       />
       <div class="divider"><span>or</span></div>
       <form @submit.prevent="handleRegister">

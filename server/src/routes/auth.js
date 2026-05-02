@@ -4,6 +4,12 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { OAuth2Client } from 'google-auth-library';
+import {
+  verifyAppleIdToken,
+  isAppleSignInConfigured,
+  sanitizeAppleDisplayName,
+  previewToken,
+} from '../lib/appleSignIn.js';
 import User from '../models/User.js';
 import { requireAuth, requireAuthUser } from '../middleware/requireAuth.js';
 import { sendPasswordResetEmail, sendWelcomeEmail, sendAccountDeletedEmail } from '../services/email.js';
@@ -354,6 +360,104 @@ router.post('/google', loginLimiter, async (req, res) => {
   if (created) {
     sendWelcomeEmail(user.email).catch((err) => {
       rlog.error({ ...errContext(err), userId: String(user._id) }, 'google sign-in: welcome email failed');
+    });
+  }
+
+  await stitchAnonToUser(req.anonId, user._id, rlog);
+  await wipeDemoForAuthedSession({ req, res, userId: user._id, rlog });
+
+  const body = { user: serializeUser(user) };
+  if (wantsBearer(req)) body.token = token;
+  res.status(created ? 201 : 200).json(body);
+});
+
+// Sign in with Apple. The client (iOS native plugin or web JS SDK) hands us
+// the identity token; we verify it against Apple's published JWKS, then
+// look up / auto-link / create the user the same way the Google route does.
+//
+// Apple quirks:
+//   - `email` is only present on the FIRST sign-in for a user. Subsequent
+//     sign-ins return `sub` only. Must look up by `appleId` first.
+//   - Apple "Hide My Email" surfaces a `@privaterelay.appleid.com` address.
+//     Treat it as verified — Apple guarantees deliverability through relay.
+//   - Display name is NOT in the JWT; the iOS plugin / web SDK passes it
+//     separately as { givenName, familyName }. Optional, untrusted hint.
+router.post('/apple', loginLimiter, async (req, res) => {
+  const rlog = req.log || log;
+  const idToken = typeof req.body?.identityToken === 'string' ? req.body.identityToken : '';
+  const nonce = typeof req.body?.nonce === 'string' ? req.body.nonce : null;
+  const nameHint = req.body?.fullName || null;
+
+  if (!idToken) {
+    return res.status(400).json({ error: 'Missing identityToken' });
+  }
+  if (!isAppleSignInConfigured()) {
+    rlog.error('apple sign-in: APPLE_BUNDLE_ID / APPLE_SERVICE_ID not configured');
+    return res.status(503).json({ error: 'Apple sign-in not configured' });
+  }
+
+  let claims;
+  try {
+    claims = await verifyAppleIdToken(idToken, nonce ? { nonce } : {});
+  } catch (err) {
+    rlog.warn(
+      { ...errContext(err), tokenPreview: previewToken(idToken) },
+      'apple sign-in: token verification failed',
+    );
+    return res.status(401).json({ error: 'Invalid Apple credential' });
+  }
+
+  const appleId = claims.sub;
+  const email = claims.email;
+  // Apple only marks email_verified=true for real addresses. Private-relay
+  // addresses come back without email_verified set explicitly but Apple
+  // guarantees they route to the user — accept those too.
+  const emailUsable = !!email && (claims.emailVerified || claims.isPrivateEmail);
+
+  let user = await User.findOne({ appleId });
+  let created = false;
+
+  if (!user) {
+    if (!emailUsable) {
+      // First-time sign-in MUST include a usable email. If the user
+      // previously revoked this app on appleid.apple.com, Apple drops the
+      // email on the next sign-in and there's nothing to link by — bail
+      // with guidance rather than create an emailless ghost account.
+      rlog.warn(
+        { hasEmail: !!email, isPrivateEmail: claims.isPrivateEmail, verified: claims.emailVerified },
+        'apple sign-in: first-time sign-in without a usable email',
+      );
+      return res.status(409).json({
+        error: 'Apple sign-in did not return an email. In iOS Settings, revoke "Protokol Lab" under your Apple ID and try again.',
+      });
+    }
+
+    user = await User.findOne({ email });
+    if (user) {
+      user.appleId = appleId;
+      const sanitized = sanitizeAppleDisplayName(nameHint);
+      if (!user.displayName && sanitized) user.displayName = sanitized;
+      await user.save();
+      rlog.info({ userId: String(user._id), email }, 'apple sign-in: auto-linked existing account');
+    } else {
+      user = await User.create({
+        email,
+        appleId,
+        displayName: sanitizeAppleDisplayName(nameHint),
+      });
+      created = true;
+      rlog.info({ userId: String(user._id), email }, 'apple sign-in: new user created');
+    }
+  } else {
+    rlog.info({ userId: String(user._id), email: user.email }, 'apple sign-in: success');
+  }
+
+  const token = signToken(user._id);
+  res.cookie('token', token, COOKIE_OPTS);
+
+  if (created) {
+    sendWelcomeEmail(user.email).catch((err) => {
+      rlog.error({ ...errContext(err), userId: String(user._id) }, 'apple sign-in: welcome email failed');
     });
   }
 

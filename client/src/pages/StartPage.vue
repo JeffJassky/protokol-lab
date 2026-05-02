@@ -11,6 +11,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useDemoStore } from '../stores/demo.js';
 import GoogleSignInButton from '../components/GoogleSignInButton.vue';
+import AppleSignInButton from '../components/AppleSignInButton.vue';
 import BrandWordmark from '../components/BrandWordmark.vue';
 
 const auth = useAuthStore();
@@ -61,6 +62,18 @@ async function handleGoogleCredential(credential) {
   }
 }
 
+async function handleAppleCredential(payload) {
+  loading.value = true;
+  try {
+    await auth.loginWithApple(payload);
+    await demo.fetchStatus();
+    router.push('/welcome');
+  } catch (err) {
+    error.value = err.message;
+    loading.value = false;
+  }
+}
+
 onMounted(async () => {
   if (!demo.checked) await demo.fetchStatus();
 });
@@ -79,6 +92,7 @@ onMounted(async () => {
       </p>
 
       <GoogleSignInButton text="signup_with" @credential="handleGoogleCredential" />
+      <AppleSignInButton text="signup_with" @credential="handleAppleCredential" />
       <div class="divider"><span>or</span></div>
 
       <form @submit.prevent="handleSubmit">

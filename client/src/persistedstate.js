@@ -10,12 +10,14 @@
 
 import { Capacitor } from '@capacitor/core';
 
-let preferencesPlugin = null;
-async function getPreferences() {
-  if (preferencesPlugin) return preferencesPlugin;
-  const m = await import('@capacitor/preferences');
-  preferencesPlugin = m.Preferences;
-  return preferencesPlugin;
+// Lazy-import the Preferences module. We DON'T cache the plugin proxy
+// because returning it from an async function makes JS treat it as
+// thenable (Capacitor plugin proxies have auto-generated `.then`), which
+// surfaces as `"Preferences.then() is not implemented on ios"` on every
+// `await`. Returning the import module (a plain object) keeps the awaited
+// resolution non-thenable; we destructure `Preferences` at the call site.
+async function getPreferencesModule() {
+  return await import('@capacitor/preferences');
 }
 
 export function makePersistedStateStorage() {
@@ -28,17 +30,17 @@ export function makePersistedStateStorage() {
   // through the lazy-imported plugin so the web build never bundles it.
   return {
     getItem: async (key) => {
-      const prefs = await getPreferences();
-      const { value } = await prefs.get({ key });
+      const { Preferences } = await getPreferencesModule();
+      const { value } = await Preferences.get({ key });
       return value;
     },
     setItem: async (key, value) => {
-      const prefs = await getPreferences();
-      await prefs.set({ key, value });
+      const { Preferences } = await getPreferencesModule();
+      await Preferences.set({ key, value });
     },
     removeItem: async (key) => {
-      const prefs = await getPreferences();
-      await prefs.remove({ key });
+      const { Preferences } = await getPreferencesModule();
+      await Preferences.remove({ key });
     },
   };
 }

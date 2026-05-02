@@ -47,6 +47,16 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Allow plain HTTP to local-network hosts so dev sim builds can reach
+	     `http://localhost:3001` (the local Express server). NSAllowsLocalNetworking
+	     is scoped to the LAN only — it does NOT relax ATS for the open
+	     internet, so prod builds talking to https://protokollab.com still
+	     enforce HTTPS. Safe in submitted binaries. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<!-- Privacy usage descriptions. Required by Apple before any system
 	     permission prompt fires; missing keys = launch crash on first
 	     prompt. Strings appear verbatim in the OS dialog so write them
@@ -55,9 +65,20 @@
 	<string>Protokol Lab uses the camera to scan food barcodes and capture progress photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Protokol Lab needs access to your photos to attach progress pictures to your log.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Protokol Lab saves photos you capture to your library.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Protokol Lab can read your weight from Apple Health so you don't have to enter it twice.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Protokol Lab can save weight entries you log here back to Apple Health.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.14815036497-n0gunpkbhjkeqi96s8dfm7l3f59bpoe6</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

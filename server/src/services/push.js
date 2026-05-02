@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import PushSubscription from '../models/PushSubscription.js';
 import { childLogger, errContext } from '../lib/logger.js';
+import { initApns, isApnsConfigured, sendApns, APNS_DEAD_TOKEN_REASONS } from '../lib/apns.js';
 
 const log = childLogger('push-svc');
 
@@ -19,6 +20,10 @@ export function initPush() {
   webpush.setVapidDetails(subject, pub, priv);
   configured = true;
   log.info({ subject, publicKeyPrefix: pub.slice(0, 16) + '…' }, 'push configured');
+
+  // APNs is optional — if creds are missing the iOS native send path is
+  // skipped (logged inside initApns), web push keeps working.
+  initApns();
 }
 
 export function isPushConfigured() {
@@ -34,15 +39,17 @@ function endpointHost(endpoint) {
 }
 
 export async function sendToSubscription(subDoc, payload) {
-  // Native subs (FCM/APNs) are stored but not sent until M7 wires Firebase
-  // and APNs credentials. Until then we log + skip so the cron worker
-  // doesn't crash trying to call web-push with a missing endpoint.
-  if (subDoc.transport === 'fcm' || subDoc.transport === 'apns') {
+  // FCM (Android) is still stubbed — Phase A doesn't ship Firebase creds.
+  if (subDoc.transport === 'fcm') {
     log.debug(
       { subscriptionId: String(subDoc._id), transport: subDoc.transport },
-      'push send: native transport not yet wired, skipping',
+      'push send: fcm not yet wired, skipping',
     );
     return { ok: false, reason: 'native-transport-pending' };
+  }
+
+  if (subDoc.transport === 'apns') {
+    return sendApnsToSubscription(subDoc, payload);
   }
 
   if (!configured) {
@@ -94,6 +101,67 @@ export async function sendToSubscription(subDoc, payload) {
 
     log.error({ ...ctx, ...errContext(err) }, 'push send failed');
     subDoc.lastError = `${statusCode || 'err'}: ${err.body || err.message}`;
+    await subDoc.save().catch(() => {});
+    return { ok: false, reason: 'error', error: err };
+  }
+}
+
+// APNs path. Mirrors the web push handler — log, mark lastSentAt on success,
+// prune the row when Apple says the token is dead, and stash lastError on
+// other failures so admin tooling has a breadcrumb.
+async function sendApnsToSubscription(subDoc, payload) {
+  if (!isApnsConfigured()) {
+    log.warn(
+      { subscriptionId: String(subDoc._id) },
+      'push send (apns): not configured, skipping',
+    );
+    return { ok: false, reason: 'apns-not-configured' };
+  }
+
+  const token = subDoc.token;
+  if (!token) {
+    log.warn(
+      { subscriptionId: String(subDoc._id) },
+      'push send (apns): missing device token, skipping',
+    );
+    return { ok: false, reason: 'missing-token' };
+  }
+
+  const t0 = Date.now();
+  try {
+    await sendApns(token, payload);
+    log.info(
+      {
+        subscriptionId: String(subDoc._id),
+        userId: String(subDoc.userId),
+        transport: 'apns',
+        durationMs: Date.now() - t0,
+        category: typeof payload === 'object' ? payload.category : undefined,
+      },
+      'push sent (apns)',
+    );
+    subDoc.lastSentAt = new Date();
+    subDoc.lastError = null;
+    await subDoc.save();
+    return { ok: true };
+  } catch (err) {
+    const ctx = {
+      subscriptionId: String(subDoc._id),
+      userId: String(subDoc.userId),
+      transport: 'apns',
+      statusCode: err.statusCode,
+      reason: err.reason,
+      durationMs: Date.now() - t0,
+    };
+
+    if (APNS_DEAD_TOKEN_REASONS.has(err.reason)) {
+      await PushSubscription.deleteOne({ _id: subDoc._id });
+      log.info(ctx, 'push (apns): dead token pruned');
+      return { ok: false, reason: 'expired', removed: true };
+    }
+
+    log.error({ ...ctx, ...errContext(err) }, 'push send (apns) failed');
+    subDoc.lastError = `${err.statusCode || 'err'}: ${err.reason || err.message}`;
     await subDoc.save().catch(() => {});
     return { ok: false, reason: 'error', error: err };
   }
