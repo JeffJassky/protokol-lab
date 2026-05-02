@@ -93,6 +93,19 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+// Defense-in-depth: even if a route accidentally serializes a raw User doc
+// (e.g. `res.json({ user: req.user })`), bcrypt hash + reset token never
+// reach the wire. The whitelist serializeUser() in routes/auth.js is the
+// primary guard; this is the safety net.
+userSchema.set('toJSON', {
+  transform(_doc, ret) {
+    delete ret.passwordHash;
+    delete ret.passwordResetTokenHash;
+    delete ret.passwordResetExpiresAt;
+    return ret;
+  },
+});
+
 userSchema.index({ passwordResetTokenHash: 1 });
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ appleId: 1 }, { unique: true, sparse: true });

@@ -13,10 +13,9 @@
 // Single DSN; the SDK routes events through both transport sinks.
 
 import * as Sentry from '@sentry/vue';
-import * as SentryCapacitor from '@sentry/capacitor';
 import { isNativePlatform } from './api/auth-token.js';
 
-export function initSentry(app, router) {
+export async function initSentry(app, router) {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   if (!dsn) return;
 
@@ -55,9 +54,11 @@ export function initSentry(app, router) {
   };
 
   if (isNativePlatform()) {
+    // Lazy-load so web bundle doesn't ship the native bridge wrapper.
     // SentryCapacitor.init takes (config, vueInit). It calls vueInit under
     // the hood (passing the merged config) so we only register the Vue
     // wiring once — no double-init.
+    const SentryCapacitor = await import('@sentry/capacitor');
     SentryCapacitor.init(config, Sentry.init);
     return;
   }
