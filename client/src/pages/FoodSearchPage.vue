@@ -121,15 +121,17 @@ async function ensureFoodItemId(food) {
     date: today,
     mealType: 'snack',
     servingCount: 1,
+    usdaFdcId: food.usdaFdcId,
     offBarcode: food.offBarcode,
     name: food.name,
     brand: food.brand,
     servingSize: food.servingSize,
-    servingGrams: food.servingGrams,
-    caloriesPer: food.caloriesPer,
-    proteinPer: food.proteinPer,
-    fatPer: food.fatPer,
-    carbsPer: food.carbsPer,
+    servingAmount: food.servingAmount,
+    servingUnit: food.servingUnit,
+    servingKnown: food.servingKnown,
+    perServing: food.perServing || {},
+    nutrientSource: food.nutrientSource,
+    nutrientCoverage: food.nutrientCoverage,
   };
   const { entry } = await api.post('/api/foodlog', body);
   await api.del(`/api/foodlog/${entry._id}`);
@@ -201,15 +203,17 @@ async function confirmAdd() {
     } else if (food.source === 'local' && food.foodItemId?._id) {
       body.foodItemId = food.foodItemId._id;
     } else {
+      body.usdaFdcId = food.usdaFdcId;
       body.offBarcode = food.offBarcode;
       body.name = food.name;
       body.brand = food.brand;
       body.servingSize = food.servingSize;
-      body.servingGrams = food.servingGrams;
-      body.caloriesPer = food.caloriesPer;
-      body.proteinPer = food.proteinPer;
-      body.fatPer = food.fatPer;
-      body.carbsPer = food.carbsPer;
+      body.servingAmount = food.servingAmount;
+      body.servingUnit = food.servingUnit;
+      body.servingKnown = food.servingKnown;
+      body.perServing = food.perServing || {};
+      body.nutrientSource = food.nutrientSource;
+      body.nutrientCoverage = food.nutrientCoverage;
     }
 
     // Just-in-time profile gate (PRD §9): TDEE math needs body composition.
@@ -385,19 +389,22 @@ async function logMealToToday(m) {
     <!-- Confirm panel -->
     <div v-if="selectedFood" class="confirm-card">
       <h3>{{ selectedFood.name }}</h3>
+      <p v-if="selectedFood.servingKnown === false" class="serving-warn-banner">
+        ⚠ No serving size from source — set portion in food editor before logging.
+      </p>
       <p class="confirm-meta">
-        {{ selectedFood.caloriesPer }} kcal per serving
-        ({{ selectedFood.servingSize || `${selectedFood.servingGrams}g` }})
+        {{ Math.round(selectedFood.perServing?.calories || 0) }} kcal per serving
+        ({{ selectedFood.servingSize || (selectedFood.servingAmount ? `${Math.round(selectedFood.servingAmount)}${selectedFood.servingUnit}` : '—') }})
       </p>
       <div class="macro-row">
-        <span>P {{ selectedFood.proteinPer }}g</span>
-        <span>F {{ selectedFood.fatPer }}g</span>
-        <span>C {{ selectedFood.carbsPer }}g</span>
+        <span>P {{ Math.round(selectedFood.perServing?.protein || 0) }}g</span>
+        <span>F {{ Math.round(selectedFood.perServing?.fat || 0) }}g</span>
+        <span>C {{ Math.round(selectedFood.perServing?.carbs || 0) }}g</span>
       </div>
       <div class="confirm-form">
         <label>Servings</label>
         <input type="number" v-model.number="servingCount" min="0.25" step="0.25" />
-        <span class="total-cal">= {{ Math.round(selectedFood.caloriesPer * servingCount) }} kcal</span>
+        <span class="total-cal">= {{ Math.round((selectedFood.perServing?.calories || 0) * servingCount) }} kcal</span>
       </div>
       <div class="confirm-actions">
         <button class="btn-secondary" @click="cancelSelect">Cancel</button>
@@ -566,10 +573,10 @@ async function logMealToToday(m) {
                       @change="updateItemServings(m, item, $event.target.value)"
                     />
                   </td>
-                  <td class="col-num">{{ Math.round((item.foodItemId?.caloriesPer || 0) * item.servingCount) }}</td>
-                  <td class="col-num col-p">{{ Math.round((item.foodItemId?.proteinPer || 0) * item.servingCount) }}</td>
-                  <td class="col-num col-f">{{ Math.round((item.foodItemId?.fatPer || 0) * item.servingCount) }}</td>
-                  <td class="col-num col-c">{{ Math.round((item.foodItemId?.carbsPer || 0) * item.servingCount) }}</td>
+                  <td class="col-num">{{ Math.round((item.foodItemId?.perServing?.calories || 0) * item.servingCount) }}</td>
+                  <td class="col-num col-p">{{ Math.round((item.foodItemId?.perServing?.protein || 0) * item.servingCount) }}</td>
+                  <td class="col-num col-f">{{ Math.round((item.foodItemId?.perServing?.fat || 0) * item.servingCount) }}</td>
+                  <td class="col-num col-c">{{ Math.round((item.foodItemId?.perServing?.carbs || 0) * item.servingCount) }}</td>
                   <td class="col-del">
                     <button class="delete-btn" @click="removeMealItem(m, item)">x</button>
                   </td>

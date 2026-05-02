@@ -4,103 +4,58 @@ import FavoriteFood from '../models/FavoriteFood.js';
 import RecentFood from '../models/RecentFood.js';
 import Meal from '../models/Meal.js';
 import { childLogger, errContext } from '../lib/logger.js';
+import { normalizeOffProduct, searchUsda, getUsdaByBarcode } from '../services/nutrition.js';
+import { NUTRIENT_KEYS, addNutrients, scaleNutrients, roundNutrients } from '../../../shared/nutrients.js';
+
+// Source priority for /search results. USDA is preferred — Branded items have
+// reliable serving sizes (FDA-mandated label data) and Foundation/SR/FNDDS
+// have full lab-analyzed micronutrient panels. OFF is fallback for
+// international/long-tail products that USDA doesn't cover.
+const USDA_MIN_RESULTS = 8;             // below this, top up with OFF
+const USDA_MIN_WITH_SERVING = 4;        // or if too few have serving data
 
 const log = childLogger('food');
 const router = Router();
 
-const BEVERAGE_CATEGORY_PATTERNS = [
-  'beverages', 'drinks', 'beers', 'wines', 'spirits', 'sodas',
-  'juices', 'waters', 'milks', 'teas', 'coffees',
-];
-
-function isBeverage(p) {
-  const cats = p.categories_tags;
-  if (Array.isArray(cats)) {
-    for (const tag of cats) {
-      if (typeof tag !== 'string') continue;
-      const lower = tag.toLowerCase();
-      if (BEVERAGE_CATEGORY_PATTERNS.some((pat) => lower.includes(pat))) return true;
-    }
-  }
-  const qty = typeof p.quantity === 'string' ? p.quantity.toLowerCase() : '';
-  if (/\b(ml|cl|dl|l|fl\s*oz)\b/.test(qty)) return true;
-  return false;
+// Project a FoodItem doc into the JSON shape the client expects. Strips
+// internal Mongoose fields and ensures perServing always renders even when
+// empty (so the client can pattern-match on it).
+function projectItem(item) {
+  return {
+    source: 'local',
+    _id: item._id,
+    offBarcode: item.offBarcode,
+    usdaFdcId: item.usdaFdcId,
+    name: item.name,
+    emoji: item.emoji || '',
+    brand: item.brand,
+    servingSize: item.servingSize,
+    servingAmount: item.servingAmount,
+    servingUnit: item.servingUnit,
+    servingKnown: item.servingKnown,
+    perServing: item.perServing || {},
+    nutrientSource: item.nutrientSource,
+    nutrientCoverage: item.nutrientCoverage,
+  };
 }
 
-function normalizeOffProduct(p) {
-  const n = p.nutriments || {};
-  const beverage = isBeverage(p);
-  const unit = beverage ? 'ml' : 'g';
-  const servingQty = p.serving_quantity || 100;
-  const scale = servingQty / 100;
-
-  const kcalServing = n['energy-kcal_serving'];
-  const kcal100 = n['energy-kcal_100g'];
-  const kjServing = n['energy-kj_serving'];
-  const kj100 = n['energy-kj_100g'];
-
-  let caloriesPer;
-  if (kcalServing != null) caloriesPer = kcalServing;
-  else if (kcal100 != null) caloriesPer = kcal100 * scale;
-  else if (kjServing != null) caloriesPer = kjServing / 4.184;
-  else if (kj100 != null) caloriesPer = (kj100 / 4.184) * scale;
-  else return null;
-
-  const val = (serving, per100) => {
-    if (serving != null) return serving;
-    if (per100 != null) return per100 * scale;
-    return 0;
-  };
-
-  const brand = Array.isArray(p.brands) ? p.brands.join(', ') : p.brands || '';
-
-  let name = p.product_name;
-  if (name && typeof name === 'object') {
-    name = name.en || Object.values(name).find((v) => typeof v === 'string') || 'Unknown';
-  }
-
-  let servingSize;
-  if (typeof p.serving_size === 'string' && p.serving_size.trim()) {
-    servingSize = p.serving_size.trim();
-  } else if (p.serving_quantity) {
-    servingSize = `${Math.round(servingQty)} ${unit}`;
-  } else {
-    servingSize = `per 100 ${unit}`;
-  }
-
-  return {
-    source: 'openfoodfacts',
-    offBarcode: p.code || null,
-    name: name || 'Unknown',
-    brand,
-    servingSize,
-    servingGrams: Math.round(servingQty),
-    caloriesPer: Math.round(caloriesPer),
-    proteinPer: Math.round(val(n.proteins_serving, n.proteins_100g)),
-    fatPer: Math.round(val(n.fat_serving, n.fat_100g)),
-    carbsPer: Math.round(val(n.carbohydrates_serving, n.carbohydrates_100g)),
-  };
+// Sort known-serving entries before unknown-serving ones inside the same
+// source — Nutella-style entries (no portion data) are mostly noise for
+// typical users, so we sink them.
+function sinkUnknownServing(items) {
+  const known = items.filter((i) => i.servingKnown);
+  const unknown = items.filter((i) => !i.servingKnown);
+  return [...known, ...unknown];
 }
 
 function summarizeMeal(meal) {
-  let cal = 0;
-  let p = 0;
-  let f = 0;
-  let c = 0;
+  const totals = {};
   for (const item of meal.items) {
     const food = item.foodItemId;
     if (!food || typeof food !== 'object') continue;
-    cal += (food.caloriesPer || 0) * item.servingCount;
-    p += (food.proteinPer || 0) * item.servingCount;
-    f += (food.fatPer || 0) * item.servingCount;
-    c += (food.carbsPer || 0) * item.servingCount;
+    addNutrients(totals, scaleNutrients(food.perServing, item.servingCount));
   }
-  return {
-    caloriesPer: Math.round(cal),
-    proteinPer: Math.round(p),
-    fatPer: Math.round(f),
-    carbsPer: Math.round(c),
-  };
+  return { perServing: roundNutrients(totals) };
 }
 
 router.get('/search', async (req, res) => {
@@ -130,8 +85,10 @@ router.get('/search', async (req, res) => {
       brand: `${m.items.length} item${m.items.length === 1 ? '' : 's'}`,
       itemCount: m.items.length,
       servingSize: '1 meal',
-      servingGrams: 0,
-      ...totals,
+      servingAmount: null,
+      servingUnit: null,
+      servingKnown: true,
+      perServing: totals.perServing,
     };
   });
 
@@ -142,20 +99,13 @@ router.get('/search', async (req, res) => {
     .sort({ score: { $meta: 'textScore' } })
     .limit(5);
 
-  const local = localResults.map((item) => ({
-    source: 'local',
-    _id: item._id,
-    offBarcode: item.offBarcode,
-    name: item.name,
-    emoji: item.emoji || '',
-    brand: item.brand,
-    servingSize: item.servingSize,
-    servingGrams: item.servingGrams,
-    caloriesPer: item.caloriesPer,
-    proteinPer: item.proteinPer,
-    fatPer: item.fatPer,
-    carbsPer: item.carbsPer,
-  }));
+  const local = localResults.map(projectItem);
+  const localBarcodes = new Set(local.filter((l) => l.offBarcode).map((l) => l.offBarcode));
+  const localFdcIds = new Set(local.filter((l) => l.usdaFdcId).map((l) => l.usdaFdcId));
+
+  // Fire USDA + OFF in parallel. USDA is preferred but we still query OFF up
+  // front so a thin USDA result set can be padded without a second round-trip.
+  const usdaPromise = searchUsda(q, { limit: 25 }).catch((err) => ({ results: [], debug: { error: err.message } }));
 
   let off = [];
   const offDebug = { query: q, page: Number(page) };
@@ -174,7 +124,7 @@ router.get('/search', async (req, res) => {
     url.searchParams.set('page', String(page));
     url.searchParams.set(
       'fields',
-      'code,product_name,brands,serving_size,serving_quantity,quantity,categories_tags,nutriments',
+      'code,product_name,brands,serving_size,serving_quantity,serving_quantity_unit,quantity,categories_tags,nutriments',
     );
     url.searchParams.set('langs', 'en');
     offDebug.url = url.toString();
@@ -207,8 +157,6 @@ router.get('/search', async (req, res) => {
       : [];
     offDebug.productCount = products.length;
 
-    const localBarcodes = new Set(local.filter((l) => l.offBarcode).map((l) => l.offBarcode));
-
     const scoreProduct = (p) => {
       if (!tokens.length) return 0;
       const haystack = `${p.product_name || ''} ${p.brands || ''}`.toLowerCase();
@@ -230,26 +178,50 @@ router.get('/search', async (req, res) => {
     offDebug.rankedFullCoverage = fullCoverage.length;
     offDebug.rankedKept = ranked.length;
 
-    off = ranked
+    const normalized = ranked
       .map(normalizeOffProduct)
       .filter((item) => item && !localBarcodes.has(item.offBarcode));
+
+    off = sinkUnknownServing(normalized);
     offDebug.normalizedCount = off.length;
+    offDebug.servingKnownCount = normalized.filter((i) => i.servingKnown).length;
 
     rlog.debug(offDebug, 'food search: OFF ok');
   } catch (err) {
     rlog.warn({ ...errContext(err), ...offDebug }, 'food search: OFF failed');
   }
 
+  // Resolve USDA promise. Filter dupes against local catalog by either
+  // barcode (Branded gtinUpc) or fdcId.
+  const { results: usdaRaw, debug: usdaDebug } = await usdaPromise;
+  const usda = sinkUnknownServing(
+    usdaRaw.filter((item) =>
+      !localFdcIds.has(item.usdaFdcId) &&
+      (!item.offBarcode || !localBarcodes.has(item.offBarcode)),
+    ),
+  );
+  // Drop OFF rows whose barcode also appears in USDA — USDA wins.
+  const usdaBarcodes = new Set(usda.filter((u) => u.offBarcode).map((u) => u.offBarcode));
+  const offFiltered = off.filter((o) => !o.offBarcode || !usdaBarcodes.has(o.offBarcode));
+
+  // Use OFF only when USDA is thin. USDA is the priority source.
+  const usdaWithServing = usda.filter((i) => i.servingKnown).length;
+  const useOff = usda.length < USDA_MIN_RESULTS || usdaWithServing < USDA_MIN_WITH_SERVING;
+  const finalOff = useOff ? offFiltered : [];
+
   rlog.info(
     {
       q, page: Number(page),
-      mealCount: meals.length, localCount: local.length, offCount: off.length,
+      mealCount: meals.length, localCount: local.length,
+      usdaCount: usda.length, usdaWithServing,
+      offCount: off.length, offReturned: finalOff.length, usedOff: useOff,
       durationMs: Date.now() - searchStart,
+      usda: usdaDebug,
     },
     'food search: done',
   );
 
-  res.json({ results: [...meals, ...local, ...off] });
+  res.json({ results: [...meals, ...local, ...usda, ...finalOff] });
 });
 
 router.get('/barcode/:code', async (req, res) => {
@@ -263,26 +235,24 @@ router.get('/barcode/:code', async (req, res) => {
   const localItem = await FoodItem.findOne({ userId: req.userId, offBarcode: code });
   if (localItem) {
     rlog.debug({ code, itemId: String(localItem._id) }, 'barcode: local hit');
-    return res.json({
-      result: {
-        source: 'local',
-        _id: localItem._id,
-        offBarcode: localItem.offBarcode,
-        name: localItem.name,
-        emoji: localItem.emoji || '',
-        brand: localItem.brand,
-        servingSize: localItem.servingSize,
-        servingGrams: localItem.servingGrams,
-        caloriesPer: localItem.caloriesPer,
-        proteinPer: localItem.proteinPer,
-        fatPer: localItem.fatPer,
-        carbsPer: localItem.carbsPer,
-      },
-    });
+    return res.json({ result: projectItem(localItem) });
   }
 
+  // USDA Branded first — when present, it has reliable label data.
   try {
-    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=code,product_name,brands,serving_size,serving_quantity,quantity,categories_tags,nutriments`;
+    const { result: usdaResult, debug: usdaDebug } = await getUsdaByBarcode(code);
+    if (usdaResult) {
+      rlog.info({ code, source: 'usda', usda: usdaDebug, name: usdaResult.name }, 'barcode: USDA hit');
+      return res.json({ result: usdaResult });
+    }
+    rlog.debug({ code, usda: usdaDebug }, 'barcode: USDA miss, trying OFF');
+  } catch (err) {
+    rlog.warn({ ...errContext(err), code }, 'barcode: USDA lookup failed, trying OFF');
+  }
+
+  // OFF fallback — handles international + long-tail products.
+  try {
+    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=code,product_name,brands,serving_size,serving_quantity,serving_quantity_unit,quantity,categories_tags,nutriments`;
     const t0 = Date.now();
     const resp = await fetch(url, {
       headers: {
@@ -302,7 +272,7 @@ router.get('/barcode/:code', async (req, res) => {
       rlog.warn({ code, durationMs }, 'barcode: OFF product missing nutrition');
       return res.status(404).json({ error: 'Product missing nutrition data' });
     }
-    rlog.info({ code, durationMs, name: normalized.name }, 'barcode: OFF hit');
+    rlog.info({ code, durationMs, name: normalized.name, servingKnown: normalized.servingKnown }, 'barcode: OFF hit');
     return res.json({ result: normalized });
   } catch (err) {
     rlog.error({ ...errContext(err), code }, 'barcode: OFF lookup failed');
@@ -311,17 +281,32 @@ router.get('/barcode/:code', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const { name, emoji, brand, servingSize, servingGrams, caloriesPer, proteinPer, fatPer, carbsPer } = req.body;
+  const {
+    name, emoji, brand,
+    servingSize, servingAmount, servingUnit, servingKnown,
+    perServing,
+  } = req.body;
+
   const update = {};
   if (name != null) update.name = name;
   if (emoji != null) update.emoji = emoji;
   if (brand != null) update.brand = brand;
   if (servingSize != null) update.servingSize = servingSize;
-  if (servingGrams != null) update.servingGrams = Number(servingGrams);
-  if (caloriesPer != null) update.caloriesPer = Number(caloriesPer);
-  if (proteinPer != null) update.proteinPer = Number(proteinPer);
-  if (fatPer != null) update.fatPer = Number(fatPer);
-  if (carbsPer != null) update.carbsPer = Number(carbsPer);
+  if (servingAmount != null) update.servingAmount = Number(servingAmount);
+  if (servingUnit != null) update.servingUnit = servingUnit;
+  if (servingKnown != null) update.servingKnown = !!servingKnown;
+
+  // perServing replaces the whole subdoc when sent — clients send the full
+  // shape they want stored. Only known nutrient keys are accepted.
+  if (perServing && typeof perServing === 'object') {
+    const cleaned = {};
+    for (const k of NUTRIENT_KEYS) {
+      if (perServing[k] != null && Number.isFinite(Number(perServing[k]))) {
+        cleaned[k] = Number(perServing[k]);
+      }
+    }
+    update.perServing = cleaned;
+  }
 
   const item = await FoodItem.findOneAndUpdate(
     { _id: req.params.id, userId: req.userId },
@@ -333,7 +318,7 @@ router.put('/:id', async (req, res) => {
     return res.status(404).json({ error: 'Not found' });
   }
   (req.log || log).info({ itemId: req.params.id, fields: Object.keys(update) }, 'food item updated');
-  res.json({ item });
+  res.json({ item: projectItem(item) });
 });
 
 router.get('/recents', async (req, res) => {
@@ -373,8 +358,10 @@ router.get('/recents', async (req, res) => {
         brand: `${m.items.length} item${m.items.length === 1 ? '' : 's'}`,
         itemCount: m.items.length,
         servingSize: '1 meal',
-        servingGrams: 0,
-        ...totals,
+        servingAmount: null,
+        servingUnit: null,
+        servingKnown: true,
+        perServing: totals.perServing,
       },
     };
   });

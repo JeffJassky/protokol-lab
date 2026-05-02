@@ -3,7 +3,8 @@ import { marked } from "marked";
 import FoodLog from "../models/FoodLog.js";
 import FoodItem from "../models/FoodItem.js";
 import WeightLog from "../models/WeightLog.js";
-import WaistLog from "../models/WaistLog.js";
+import Metric from "../models/Metric.js";
+import MetricLog from "../models/MetricLog.js";
 import DoseLog from "../models/DoseLog.js";
 import Compound from "../models/Compound.js";
 import Symptom from "../models/Symptom.js";
@@ -90,8 +91,9 @@ const functionDeclarations = [
     },
   },
   {
-    name: "get_waist_log",
-    description: "Get waist measurement entries (in inches) for a date range.",
+    name: "get_metric_log",
+    description:
+      "Get biometric measurement entries (waist, arms, body fat, custom user-defined metrics, etc.) for a date range. Pass `metricKey` to scope to one metric (e.g. 'waist', 'arm_left', 'body_fat'); omit it to return every metric the user tracks.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -100,6 +102,10 @@ const functionDeclarations = [
           description: "Start date (YYYY-MM-DD)",
         },
         endDate: { type: Type.STRING, description: "End date (YYYY-MM-DD)" },
+        metricKey: {
+          type: Type.STRING,
+          description: "Optional: filter to a single metric by its key/slug",
+        },
       },
       required: ["startDate", "endDate"],
     },
@@ -210,19 +216,20 @@ const functionDeclarations = [
           type: Type.STRING,
           description: 'Human-readable serving, e.g. "1 cup", "4 oz"',
         },
-        servingGrams: {
+        servingAmount: {
           type: Type.NUMBER,
-          description: "Grams per serving (default 100)",
+          description: "Numeric serving size (grams or millilitres). Optional.",
         },
-        caloriesPer: { type: Type.NUMBER, description: "Calories per serving" },
-        proteinPer: {
-          type: Type.NUMBER,
-          description: "Protein grams per serving",
+        servingUnit: {
+          type: Type.STRING,
+          description: "'g' or 'ml'. Defaults to 'g' when servingAmount is set.",
         },
-        fatPer: { type: Type.NUMBER, description: "Fat grams per serving" },
-        carbsPer: { type: Type.NUMBER, description: "Carb grams per serving" },
+        calories: { type: Type.NUMBER, description: "Calories per serving" },
+        protein: { type: Type.NUMBER, description: "Protein grams per serving" },
+        fat: { type: Type.NUMBER, description: "Fat grams per serving" },
+        carbs: { type: Type.NUMBER, description: "Carb grams per serving" },
       },
-      required: ["name", "caloriesPer"],
+      required: ["name", "calories"],
     },
   },
   {
@@ -494,30 +501,27 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
         .sort({ date: 1 })
         .populate("foodItemId")
         .lean();
-      return entries.map((e) => ({
-        date: e.date.toISOString().split("T")[0],
-        mealType: e.mealType,
-        servingCount: e.servingCount,
-        food: e.foodItemId
-          ? {
-              name: e.foodItemId.name,
-              brand: e.foodItemId.brand,
-              servingSize: e.foodItemId.servingSize,
-              caloriesPer: e.foodItemId.caloriesPer,
-              proteinPer: e.foodItemId.proteinPer,
-              fatPer: e.foodItemId.fatPer,
-              carbsPer: e.foodItemId.carbsPer,
-            }
-          : null,
-        totalCalories: e.foodItemId
-          ? e.foodItemId.caloriesPer * e.servingCount
-          : 0,
-        totalProtein: e.foodItemId
-          ? e.foodItemId.proteinPer * e.servingCount
-          : 0,
-        totalFat: e.foodItemId ? e.foodItemId.fatPer * e.servingCount : 0,
-        totalCarbs: e.foodItemId ? e.foodItemId.carbsPer * e.servingCount : 0,
-      }));
+      return entries.map((e) => {
+        const ps = e.foodItemId?.perServing || {};
+        const s = e.servingCount;
+        return {
+          date: e.date.toISOString().split("T")[0],
+          mealType: e.mealType,
+          servingCount: s,
+          food: e.foodItemId
+            ? {
+                name: e.foodItemId.name,
+                brand: e.foodItemId.brand,
+                servingSize: e.foodItemId.servingSize,
+                perServing: ps,
+              }
+            : null,
+          totalCalories: (ps.calories || 0) * s,
+          totalProtein: (ps.protein || 0) * s,
+          totalFat: (ps.fat || 0) * s,
+          totalCarbs: (ps.carbs || 0) * s,
+        };
+      });
     }
 
     case "get_daily_nutrition": {
@@ -533,11 +537,12 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
         const day = e.date.toISOString().split("T")[0];
         if (!byDay[day])
           byDay[day] = { date: day, calories: 0, protein: 0, fat: 0, carbs: 0 };
-        if (e.foodItemId) {
-          byDay[day].calories += e.foodItemId.caloriesPer * e.servingCount;
-          byDay[day].protein += e.foodItemId.proteinPer * e.servingCount;
-          byDay[day].fat += e.foodItemId.fatPer * e.servingCount;
-          byDay[day].carbs += e.foodItemId.carbsPer * e.servingCount;
+        const ps = e.foodItemId?.perServing;
+        if (ps) {
+          byDay[day].calories += (ps.calories || 0) * e.servingCount;
+          byDay[day].protein += (ps.protein || 0) * e.servingCount;
+          byDay[day].fat += (ps.fat || 0) * e.servingCount;
+          byDay[day].carbs += (ps.carbs || 0) * e.servingCount;
         }
       }
 
@@ -557,17 +562,35 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
       }));
     }
 
-    case "get_waist_log": {
-      const entries = await WaistLog.find({
+    case "get_metric_log": {
+      // Resolve which metrics to read. The model can either pin to one
+      // (`metricKey`) or omit and get everything the user tracks.
+      const metricFilter = { userId };
+      if (args.metricKey) metricFilter.key = args.metricKey;
+      const metrics = await Metric.find(metricFilter)
+        .select("_id key name dimension displayUnit")
+        .lean();
+      if (!metrics.length) return [];
+      const byId = new Map(metrics.map((m) => [String(m._id), m]));
+      const logs = await MetricLog.find({
         userId,
+        metricId: { $in: metrics.map((m) => m._id) },
         date: dateRange(args.startDate, args.endDate),
       })
         .sort({ date: 1 })
         .lean();
-      return entries.map((e) => ({
-        date: e.date.toISOString().split("T")[0],
-        waistInches: e.waistInches,
-      }));
+      return logs.map((l) => {
+        const m = byId.get(String(l.metricId));
+        return {
+          date: l.date.toISOString().split("T")[0],
+          metric: m?.key,
+          name: m?.name,
+          // Canonical-unit value (cm for length, g for mass, etc.). The agent
+          // is given the dimension so it knows how to interpret/convert.
+          value: l.value,
+          dimension: m?.dimension,
+        };
+      });
     }
 
     case "get_dose_log": {
@@ -656,15 +679,18 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
         .lean();
       return meals.map((m) => ({
         name: m.name,
-        items: m.items.map((item) => ({
-          food: item.foodItemId?.name || "Unknown",
-          brand: item.foodItemId?.brand || "",
-          servingCount: item.servingCount,
-          calories: (item.foodItemId?.caloriesPer || 0) * item.servingCount,
-          protein: (item.foodItemId?.proteinPer || 0) * item.servingCount,
-          fat: (item.foodItemId?.fatPer || 0) * item.servingCount,
-          carbs: (item.foodItemId?.carbsPer || 0) * item.servingCount,
-        })),
+        items: m.items.map((item) => {
+          const ps = item.foodItemId?.perServing || {};
+          return {
+            food: item.foodItemId?.name || "Unknown",
+            brand: item.foodItemId?.brand || "",
+            servingCount: item.servingCount,
+            calories: (ps.calories || 0) * item.servingCount,
+            protein: (ps.protein || 0) * item.servingCount,
+            fat: (ps.fat || 0) * item.servingCount,
+            carbs: (ps.carbs || 0) * item.servingCount,
+          };
+        }),
       }));
     }
 
@@ -685,17 +711,15 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
         brand: i.brand,
         emoji: i.emoji,
         servingSize: i.servingSize,
-        servingGrams: i.servingGrams,
-        caloriesPer: i.caloriesPer,
-        proteinPer: i.proteinPer,
-        fatPer: i.fatPer,
-        carbsPer: i.carbsPer,
+        servingAmount: i.servingAmount,
+        servingUnit: i.servingUnit,
+        perServing: i.perServing || {},
       }));
     }
 
     case "create_food_item": {
-      if (!args.name || args.caloriesPer == null) {
-        return { error: "name and caloriesPer required" };
+      if (!args.name || args.calories == null) {
+        return { error: "name and calories required" };
       }
       // Plan cap on user-custom foods. OpenFoodFacts barcode imports stay
       // global (userId=null) and never count. We only count items this user
@@ -717,6 +741,7 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
             : `You've reached the ${denial.limit}-food limit for your plan.`,
         };
       }
+      const servingAmount = args.servingAmount != null ? Number(args.servingAmount) : null;
       const item = await FoodItem.create({
         userId,
         isCustom: true,
@@ -724,21 +749,23 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
         brand: args.brand || "",
         emoji: args.emoji || "",
         servingSize: args.servingSize || "",
-        servingGrams:
-          args.servingGrams != null ? Number(args.servingGrams) : 100,
-        caloriesPer: Number(args.caloriesPer),
-        proteinPer: Number(args.proteinPer || 0),
-        fatPer: Number(args.fatPer || 0),
-        carbsPer: Number(args.carbsPer || 0),
+        servingAmount,
+        servingUnit: servingAmount != null ? (args.servingUnit || 'g') : null,
+        servingKnown: servingAmount != null,
+        perServing: {
+          calories: Number(args.calories),
+          protein: Number(args.protein || 0),
+          fat: Number(args.fat || 0),
+          carbs: Number(args.carbs || 0),
+        },
+        nutrientSource: 'agent',
+        nutrientCoverage: 'macros_only',
       });
       return {
         foodItemId: item._id.toString(),
         name: item.name,
         brand: item.brand,
-        caloriesPer: item.caloriesPer,
-        proteinPer: item.proteinPer,
-        fatPer: item.fatPer,
-        carbsPer: item.carbsPer,
+        perServing: item.perServing,
       };
     }
 
@@ -764,15 +791,16 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
       await touchRecent(userId, args.foodItemId, entry.servingCount, entry.mealType);
 
       const servings = entry.servingCount;
+      const ps = food.perServing || {};
       return {
         ok: true,
         entryId: entry._id.toString(),
         summary: `Logged ${servings} × ${food.name} to ${args.mealType} on ${args.date}`,
         nutrition: {
-          calories: Math.round((food.caloriesPer || 0) * servings),
-          protein: Math.round((food.proteinPer || 0) * servings),
-          fat: Math.round((food.fatPer || 0) * servings),
-          carbs: Math.round((food.carbsPer || 0) * servings),
+          calories: Math.round((ps.calories || 0) * servings),
+          protein: Math.round((ps.protein || 0) * servings),
+          fat: Math.round((ps.fat || 0) * servings),
+          carbs: Math.round((ps.carbs || 0) * servings),
         },
       };
     }
@@ -909,12 +937,12 @@ async function buildDataSnapshot(userId, timeZone = 'UTC') {
   weekAgo.setUTCDate(weekAgo.getUTCDate() - 7);
   const startDate = `${weekAgo.getUTCFullYear()}-${String(weekAgo.getUTCMonth() + 1).padStart(2, "0")}-${String(weekAgo.getUTCDate()).padStart(2, "0")}`;
 
-  const [settings, nutrition, weight, waist, doses, symptoms, compounds] =
+  const [settings, nutrition, weight, metrics, doses, symptoms, compounds] =
     await Promise.all([
       executeTool("get_user_settings", {}, userId),
       executeTool("get_daily_nutrition", { startDate, endDate: today }, userId),
       executeTool("get_weight_log", { startDate, endDate: today }, userId),
-      executeTool("get_waist_log", { startDate, endDate: today }, userId),
+      executeTool("get_metric_log", { startDate, endDate: today }, userId),
       executeTool("get_dose_log", { startDate, endDate: today }, userId),
       executeTool("get_symptom_log", { startDate, endDate: today }, userId),
       executeTool("get_compounds", {}, userId),
@@ -959,9 +987,19 @@ Daily targets: ${settings.targets.calories} cal, ${settings.targets.proteinGrams
     sections.push(`WEIGHT LOG (last 7 days): ${rows}`);
   }
 
-  if (Array.isArray(waist) && waist.length) {
-    const rows = waist.map((w) => `${w.date}: ${w.waistInches}in`).join(", ");
-    sections.push(`WAIST LOG (last 7 days): ${rows}`);
+  if (Array.isArray(metrics) && metrics.length) {
+    // Group by metric so the snapshot reads as one section per metric the
+    // user actually tracks ("WAIST: 2026-04-25: 91cm; 2026-05-01: 90cm" etc).
+    const byMetric = new Map();
+    for (const m of metrics) {
+      if (!byMetric.has(m.metric)) byMetric.set(m.metric, { name: m.name, dimension: m.dimension, rows: [] });
+      byMetric.get(m.metric).rows.push(`${m.date}: ${m.value}`);
+    }
+    const lines = [];
+    for (const { name, dimension, rows } of byMetric.values()) {
+      lines.push(`${name} (canonical ${dimension}): ${rows.join(", ")}`);
+    }
+    sections.push(`METRICS LOG (last 7 days, canonical units):\n${lines.join("\n")}`);
   }
 
   if (Array.isArray(doses) && doses.length) {
@@ -1112,7 +1150,7 @@ ${snapshot}
 
 TOOLS — WHEN TO USE:
 You already have the last 7 days of user data above. Tool usage:
-- Read-only data tools (get_food_log, get_daily_nutrition, get_weight_log, get_waist_log, get_dose_log, get_symptom_log, get_user_settings, get_saved_meals, get_compounds):
+- Read-only data tools (get_food_log, get_daily_nutrition, get_weight_log, get_metric_log, get_dose_log, get_symptom_log, get_user_settings, get_saved_meals, get_compounds):
   - Use when the user asks about a date range OUTSIDE the last 7 days
   - Use when the user asks for detailed food-by-food breakdown (snapshot only has daily totals)
   - Use when you need data not covered by the snapshot
@@ -1132,7 +1170,7 @@ You already have the last 7 days of user data above. Tool usage:
     \`\`\`chart
     { "series": ["weight"], "from": "2026-02-01", "to": "2026-04-30", "title": "Weight, Feb–Apr" }
     \`\`\`
-  - Series ids: weight, waist, calories, protein, fat, carbs, score, dosage:<compoundId>, symptom:<symptomId>.
+  - Series ids: weight, calories, protein, fat, carbs, score, dosage:<compoundId>, symptom:<symptomId>, metric:<metricId>.
   - "from" and "to" must be YYYY-MM-DD. "title" is optional but recommended.
   - You may include up to ~3 series in one chart when they share a sensible scale, or pair a metric with its compound (e.g., weight + dosage:retaId).
   - Limit yourself to 1-2 charts per reply — they take real screen space. Skip the chart if a sentence would do.
@@ -1162,7 +1200,7 @@ When the user sends an image of food, your job is to identify every distinct ite
 6. Mark confidence honestly: high only when you clearly read a label or the food is unambiguous AND portion is well-constrained. Medium for known foods with visual portion estimation. Low for ambiguous items or hidden ingredients.
 7. In your final reply, give a short friendly summary — what you saw, the estimated total calories, and any caveats (hidden oils, dressings, etc). Then tell the user to review the card below to confirm or edit.
 
-DO NOT call get_user_settings, get_daily_nutrition, get_weight_log, get_waist_log, get_dose_log, get_symptom_log, or get_compounds for the last 7 days — that data is already in the snapshot above.
+DO NOT call get_user_settings, get_daily_nutrition, get_weight_log, get_metric_log, get_dose_log, get_symptom_log, or get_compounds for the last 7 days — that data is already in the snapshot above.
 
 RULES:
 1. Use the snapshot data for recent-day questions. Only fetch more data when the question needs it.
@@ -1475,8 +1513,10 @@ function describeToolCall(name, args) {
       return `Getting daily nutrition totals${range}`;
     case "get_weight_log":
       return `Checking weight entries${range}`;
-    case "get_waist_log":
-      return `Checking waist measurements${range}`;
+    case "get_metric_log":
+      return args?.metricKey
+        ? `Checking ${args.metricKey} measurements${range}`
+        : `Checking biometric measurements${range}`;
     case "get_dose_log":
       return args?.compoundName
         ? `Looking up ${args.compoundName} dose history${range}`

@@ -14,11 +14,12 @@ const name = ref('');
 const emoji = ref('');
 const brand = ref('');
 const servingSize = ref('');
-const servingGrams = ref(100);
-const caloriesPer = ref(0);
-const proteinPer = ref(0);
-const fatPer = ref(0);
-const carbsPer = ref(0);
+const servingAmount = ref(null);
+const servingUnit = ref('g');
+const calories = ref(0);
+const protein = ref(0);
+const fat = ref(0);
+const carbs = ref(0);
 const saving = ref(false);
 const error = ref('');
 
@@ -27,15 +28,17 @@ watch(
   (isOpen) => {
     if (isOpen && props.foodItem) {
       const f = props.foodItem;
+      const ps = f.perServing || {};
       name.value = f.name || '';
       emoji.value = f.emoji || '';
       brand.value = f.brand || '';
       servingSize.value = f.servingSize || '';
-      servingGrams.value = f.servingGrams || 100;
-      caloriesPer.value = f.caloriesPer || 0;
-      proteinPer.value = f.proteinPer || 0;
-      fatPer.value = f.fatPer || 0;
-      carbsPer.value = f.carbsPer || 0;
+      servingAmount.value = f.servingAmount ?? null;
+      servingUnit.value = f.servingUnit || 'g';
+      calories.value = ps.calories ?? 0;
+      protein.value = ps.protein ?? 0;
+      fat.value = ps.fat ?? 0;
+      carbs.value = ps.carbs ?? 0;
       error.value = '';
     }
   },
@@ -46,16 +49,22 @@ async function handleSave() {
   saving.value = true;
   error.value = '';
   try {
+    const amt = servingAmount.value != null && servingAmount.value !== '' ? Number(servingAmount.value) : null;
     await api.put(`/api/food/${props.foodItem._id}`, {
       name: name.value,
       emoji: emoji.value,
       brand: brand.value,
       servingSize: servingSize.value,
-      servingGrams: Number(servingGrams.value),
-      caloriesPer: Number(caloriesPer.value),
-      proteinPer: Number(proteinPer.value),
-      fatPer: Number(fatPer.value),
-      carbsPer: Number(carbsPer.value),
+      servingAmount: amt,
+      servingUnit: amt != null ? servingUnit.value : null,
+      servingKnown: amt != null,
+      perServing: {
+        ...(props.foodItem.perServing || {}),
+        calories: Number(calories.value),
+        protein: Number(protein.value),
+        fat: Number(fat.value),
+        carbs: Number(carbs.value),
+      },
     });
     emit('saved');
   } catch (err) {
@@ -91,13 +100,20 @@ async function handleSave() {
         </div>
 
         <div class="field-row">
-          <div class="field">
+          <div class="field" style="flex: 2">
             <label>Serving size</label>
             <input type="text" v-model="servingSize" placeholder='e.g. "1 cup"' />
           </div>
           <div class="field">
-            <label>Serving (g)</label>
-            <input type="number" v-model.number="servingGrams" min="0" step="1" />
+            <label>Amount</label>
+            <input type="number" v-model.number="servingAmount" min="0" step="0.1" placeholder="e.g. 100" />
+          </div>
+          <div class="field" style="flex: 0 0 5rem">
+            <label>Unit</label>
+            <select v-model="servingUnit">
+              <option value="g">g</option>
+              <option value="ml">ml</option>
+            </select>
           </div>
         </div>
 
@@ -106,19 +122,19 @@ async function handleSave() {
         <div class="field-row macros">
           <div class="field">
             <label class="cal-label">Calories</label>
-            <input type="number" v-model.number="caloriesPer" min="0" step="1" />
+            <input type="number" v-model.number="calories" min="0" step="1" />
           </div>
           <div class="field">
             <label class="p-label">Protein (g)</label>
-            <input type="number" v-model.number="proteinPer" min="0" step="1" />
+            <input type="number" v-model.number="protein" min="0" step="0.1" />
           </div>
           <div class="field">
             <label class="f-label">Fat (g)</label>
-            <input type="number" v-model.number="fatPer" min="0" step="1" />
+            <input type="number" v-model.number="fat" min="0" step="0.1" />
           </div>
           <div class="field">
             <label class="c-label">Carbs (g)</label>
-            <input type="number" v-model.number="carbsPer" min="0" step="1" />
+            <input type="number" v-model.number="carbs" min="0" step="0.1" />
           </div>
         </div>
 

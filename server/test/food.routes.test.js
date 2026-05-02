@@ -38,8 +38,21 @@ function jsonResponse(body, init = {}) {
   });
 }
 
+// Build a fetch mock that routes by URL hostname so we can stub USDA and OFF
+// independently in the same test. Hosts not in the map throw — surfaces
+// accidental egress.
+function routedFetch(handlers) {
+  return vi.fn(async (input) => {
+    const url = String(input?.url || input || '');
+    if (url.includes('api.nal.usda.gov') && handlers.usda) return handlers.usda(url);
+    if (url.includes('openfoodfacts.org') && handlers.off) return handlers.off(url);
+    throw new Error(`No fetch handler for ${url}`);
+  });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  delete process.env.USDA_FDC_API_KEY;
 });
 
 describe('GET /api/food/search', () => {
@@ -61,11 +74,11 @@ describe('GET /api/food/search', () => {
       name: 'Granola Bar',
       brand: 'Acme',
       servingSize: '1 bar',
-      servingGrams: 40,
-      caloriesPer: 200,
-      proteinPer: 4,
-      fatPer: 8,
-      carbsPer: 28,
+      servingAmount: 40,
+      servingUnit: 'g',
+      servingKnown: true,
+      perServing: { calories: 200, protein: 4, fat: 8, carbs: 28 },
+      nutrientSource: 'manual',
       isCustom: true,
     });
     await Meal.create({
@@ -117,10 +130,11 @@ describe('GET /api/food/barcode/:code', () => {
       userId,
       offBarcode: '0000000000019',
       name: 'Cached Bar',
-      caloriesPer: 100,
-      proteinPer: 2,
-      fatPer: 4,
-      carbsPer: 14,
+      servingAmount: 30,
+      servingUnit: 'g',
+      servingKnown: true,
+      perServing: { calories: 100, protein: 2, fat: 4, carbs: 14 },
+      nutrientSource: 'openfoodfacts',
       isCustom: false,
     });
     const fetchMock = vi.fn();
@@ -178,7 +192,7 @@ describe('/api/food/favorites', () => {
   it('add → list → remove flow', async () => {
     const { agent, userId } = await registerAndLogin();
     const food = await FoodItem.create({
-      userId, name: 'Apple', caloriesPer: 50, isCustom: true,
+      userId, name: 'Apple', perServing: { calories: 50 }, isCustom: true,
     });
 
     const add = await agent.post('/api/food/favorites').send({
@@ -202,7 +216,7 @@ describe('/api/food/favorites', () => {
   it('POST /favorites is upsert-on-(userId,foodItemId) — second call replaces', async () => {
     const { agent, userId } = await registerAndLogin();
     const food = await FoodItem.create({
-      userId, name: 'Apple', caloriesPer: 50, isCustom: true,
+      userId, name: 'Apple', perServing: { calories: 50 }, isCustom: true,
     });
 
     await agent.post('/api/food/favorites').send({
@@ -226,7 +240,7 @@ describe('GET /api/food/recents', () => {
   it('merges RecentFood and recently-logged Meals, sorted newest first', async () => {
     const { agent, userId } = await registerAndLogin();
     const food = await FoodItem.create({
-      userId, name: 'Eggs', caloriesPer: 80, isCustom: true,
+      userId, name: 'Eggs', perServing: { calories: 80 }, isCustom: true,
     });
     const meal = await Meal.create({
       userId,
@@ -247,5 +261,184 @@ describe('GET /api/food/recents', () => {
     expect(res.body.recents).toHaveLength(2);
     expect(res.body.recents[0].kind).toBe('food'); // newer ts wins
     expect(res.body.recents[1].kind).toBe('meal');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// USDA FDC integration. Default is no API key (USDA path skipped). These
+// tests opt in via process.env.USDA_FDC_API_KEY and stub api.nal.usda.gov.
+// ---------------------------------------------------------------------------
+
+const usdaSearchPayload = {
+  totalHits: 1,
+  foods: [{
+    fdcId: 999001,
+    description: 'NUTELLA HAZELNUT SPREAD',
+    brandOwner: 'Ferrero',
+    brandName: 'Nutella',
+    dataType: 'Branded',
+    gtinUpc: '009800800124',
+    servingSize: 37,
+    servingSizeUnit: 'g',
+    householdServingFullText: '2 tbsp',
+    foodNutrients: [
+      { nutrientId: 1008, value: 539, unitName: 'KCAL' },
+      { nutrientId: 1003, value: 6.3, unitName: 'G' },
+      { nutrientId: 1004, value: 30.9, unitName: 'G' },
+      { nutrientId: 1005, value: 57.5, unitName: 'G' },
+      { nutrientId: 1087, value: 77, unitName: 'MG' },
+      { nutrientId: 1089, value: 2.08, unitName: 'MG' },
+      { nutrientId: 1093, value: 41, unitName: 'MG' },
+    ],
+  }],
+};
+
+describe('USDA FDC integration', () => {
+  it('search prefers USDA results when present and skips OFF when sufficient', async () => {
+    process.env.USDA_FDC_API_KEY = 'test-key';
+    // 8 USDA results so the route's threshold is met and OFF is skipped.
+    const usdaFoods = Array.from({ length: 8 }, (_, i) => ({
+      ...usdaSearchPayload.foods[0],
+      fdcId: 999100 + i,
+      description: `USDA item ${i}`,
+      gtinUpc: `99${i}`,
+    }));
+    const offFetch = vi.fn(async () => jsonResponse({ hits: [] }));
+    vi.stubGlobal('fetch', routedFetch({
+      usda: async () => jsonResponse({ totalHits: 8, foods: usdaFoods }),
+      off: offFetch,
+    }));
+
+    const { agent } = await registerAndLogin('usda-search@example.com');
+    const res = await agent.get('/api/food/search?q=nutella');
+    expect(res.status).toBe(200);
+    const sources = res.body.results.map((r) => r.source);
+    expect(sources.filter((s) => s === 'usda_branded')).toHaveLength(8);
+    // OFF was *fetched* in parallel for safety, but its results were dropped
+    // because USDA hit the threshold.
+    expect(sources).not.toContain('openfoodfacts');
+  });
+
+  it('search falls back to OFF when USDA returns thin results', async () => {
+    process.env.USDA_FDC_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', routedFetch({
+      usda: async () => jsonResponse({ totalHits: 1, foods: [usdaSearchPayload.foods[0]] }),
+      off: async () => jsonResponse({
+        hits: [{
+          code: '0000000000050',
+          product_name: 'OFF Granola',
+          brands: 'Other',
+          serving_quantity: 30,
+          serving_quantity_unit: 'g',
+          nutriments: {
+            'energy-kcal_100g': 400, proteins_100g: 8, fat_100g: 16, carbohydrates_100g: 56,
+          },
+        }],
+      }),
+    }));
+
+    const { agent } = await registerAndLogin('usda-thin@example.com');
+    const res = await agent.get('/api/food/search?q=granola');
+    expect(res.status).toBe(200);
+    const sources = res.body.results.map((r) => r.source);
+    expect(sources).toContain('usda_branded');
+    expect(sources).toContain('openfoodfacts');
+  });
+
+  it('barcode lookup tries USDA before OFF', async () => {
+    process.env.USDA_FDC_API_KEY = 'test-key';
+    const offCall = vi.fn(async () => jsonResponse({ status: 0 }));
+    vi.stubGlobal('fetch', routedFetch({
+      usda: async () => jsonResponse({
+        totalHits: 1,
+        foods: [{
+          ...usdaSearchPayload.foods[0],
+          gtinUpc: '0000000000020', // exact match
+        }],
+      }),
+      off: offCall,
+    }));
+
+    const { agent } = await registerAndLogin('usda-barcode@example.com');
+    const res = await agent.get('/api/food/barcode/0000000000020');
+    expect(res.status).toBe(200);
+    expect(res.body.result.source).toBe('usda_branded');
+    expect(res.body.result.usdaFdcId).toBe('999001');
+    expect(offCall).not.toHaveBeenCalled();
+  });
+
+  it('barcode falls back to OFF when USDA has no match', async () => {
+    process.env.USDA_FDC_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', routedFetch({
+      usda: async () => jsonResponse({ totalHits: 0, foods: [] }),
+      off: async () => jsonResponse({
+        status: 1,
+        product: {
+          code: '0000000000022',
+          product_name: 'OFF Bar',
+          brands: 'Brand',
+          serving_quantity: 30,
+          serving_quantity_unit: 'g',
+          nutriments: { 'energy-kcal_100g': 200, proteins_100g: 4 },
+        },
+      }),
+    }));
+
+    const { agent } = await registerAndLogin('usda-fallback@example.com');
+    const res = await agent.get('/api/food/barcode/0000000000022');
+    expect(res.status).toBe(200);
+    expect(res.body.result.source).toBe('openfoodfacts');
+  });
+
+  it('USDA is silently skipped when API key missing', async () => {
+    // No USDA_FDC_API_KEY in env. The route still works via OFF only.
+    vi.stubGlobal('fetch', routedFetch({
+      off: async () => jsonResponse({
+        hits: [{
+          code: '0000000000060',
+          product_name: 'Anything Bar',
+          brands: 'B',
+          serving_quantity: 50,
+          serving_quantity_unit: 'g',
+          nutriments: { 'energy-kcal_100g': 300, proteins_100g: 5 },
+        }],
+      }),
+    }));
+
+    const { agent } = await registerAndLogin('usda-nokey@example.com');
+    const res = await agent.get('/api/food/search?q=anything');
+    expect(res.status).toBe(200);
+    const sources = res.body.results.map((r) => r.source);
+    expect(sources).toContain('openfoodfacts');
+    expect(sources).not.toContain('usda_branded');
+  });
+
+  it('foodlog upsert dedups by usdaFdcId across requests', async () => {
+    process.env.USDA_FDC_API_KEY = 'test-key';
+    const { agent, userId } = await registerAndLogin('usda-upsert@example.com');
+
+    const body = {
+      usdaFdcId: '999001',
+      offBarcode: '009800800124',
+      name: 'NUTELLA',
+      brand: 'Nutella',
+      servingSize: '2 tbsp (37 g)',
+      servingAmount: 37,
+      servingUnit: 'g',
+      servingKnown: true,
+      perServing: { calories: 200, protein: 2, fat: 11, carbs: 21 },
+      nutrientSource: 'usda_branded',
+      nutrientCoverage: 'label_only',
+      date: '2026-04-28',
+      mealType: 'snack',
+      servingCount: 1,
+    };
+    const a = await agent.post('/api/foodlog').send(body);
+    expect(a.status).toBe(201);
+    const b = await agent.post('/api/foodlog').send(body);
+    expect(b.status).toBe(201);
+
+    const items = await FoodItem.find({ userId, usdaFdcId: '999001' });
+    expect(items).toHaveLength(1);
   });
 });

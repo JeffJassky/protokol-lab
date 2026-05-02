@@ -5,31 +5,58 @@ import UserSettings from '../models/UserSettings.js';
 import { touchRecent } from '../services/recentFood.js';
 import { childLogger } from '../lib/logger.js';
 import { parseLogDate } from '../lib/date.js';
+import { NUTRIENT_KEYS, addNutrients, scaleNutrients, roundNutrients } from '../../../shared/nutrients.js';
 
 const log = childLogger('foodlog');
 const router = Router();
 
+function cleanPerServing(input) {
+  if (!input || typeof input !== 'object') return {};
+  const out = {};
+  for (const k of NUTRIENT_KEYS) {
+    if (input[k] != null && Number.isFinite(Number(input[k]))) {
+      out[k] = Number(input[k]);
+    }
+  }
+  return out;
+}
+
 async function resolveFoodItemId(body, userId) {
   if (body.foodItemId) return body.foodItemId;
 
+  // Per-user dedup keyed off the source identity (usdaFdcId or offBarcode).
+  // Each user keeps their own copy so we can attribute, count, and let users
+  // edit fields without leaking changes to other users.
+  const sharedSet = {
+    name: body.name,
+    brand: body.brand,
+    servingSize: body.servingSize,
+    servingAmount: body.servingAmount != null ? Number(body.servingAmount) : null,
+    servingUnit: body.servingUnit || null,
+    servingKnown: !!body.servingKnown,
+    perServing: cleanPerServing(body.perServing),
+    nutrientSource: body.nutrientSource || null,
+    nutrientCoverage: body.nutrientCoverage || null,
+  };
+
+  if (body.usdaFdcId) {
+    const item = await FoodItem.findOneAndUpdate(
+      { userId, usdaFdcId: String(body.usdaFdcId) },
+      {
+        $setOnInsert: { userId, isCustom: false, usdaFdcId: String(body.usdaFdcId) },
+        $set: { ...sharedSet, offBarcode: body.offBarcode || null },
+      },
+      { upsert: true, returnDocument: 'after' },
+    );
+    return item._id;
+  }
+
   if (body.offBarcode) {
-    // Per-user dedup. Each user keeps their own copy of an OFF product so
-    // we can attribute, count, and let users edit fields without leaking
-    // changes to other users.
     const item = await FoodItem.findOneAndUpdate(
       { userId, offBarcode: body.offBarcode },
       {
         $setOnInsert: { userId, isCustom: false },
-        $set: {
-          name: body.name,
-          brand: body.brand,
-          servingSize: body.servingSize,
-          servingGrams: body.servingGrams,
-          caloriesPer: body.caloriesPer,
-          proteinPer: body.proteinPer,
-          fatPer: body.fatPer,
-          carbsPer: body.carbsPer,
-        },
+        $set: { ...sharedSet, nutrientSource: sharedSet.nutrientSource || 'openfoodfacts' },
       },
       { upsert: true, returnDocument: 'after' },
     );
@@ -81,22 +108,17 @@ router.get('/daily-nutrition', async (req, res) => {
     const food = entry.foodItemId;
     if (!food) continue;
     const dayKey = entry.date.toISOString().slice(0, 10);
-    const prev = byDay.get(dayKey) || { calories: 0, protein: 0, fat: 0, carbs: 0 };
-    const s = entry.servingCount;
-    prev.calories += (food.caloriesPer || 0) * s;
-    prev.protein += (food.proteinPer || 0) * s;
-    prev.fat += (food.fatPer || 0) * s;
-    prev.carbs += (food.carbsPer || 0) * s;
+    const prev = byDay.get(dayKey) || {};
+    addNutrients(prev, scaleNutrients(food.perServing, entry.servingCount));
     byDay.set(dayKey, prev);
   }
 
   const days = [...byDay.entries()]
-    .map(([date, n]) => ({
+    .map(([date, totals]) => ({
       date,
-      calories: Math.round(n.calories),
-      protein: Math.round(n.protein),
-      fat: Math.round(n.fat),
-      carbs: Math.round(n.carbs),
+      // Flatten each day's nutrients to top-level fields so the daily series
+      // can be charted directly. Older clients only consumed the macros.
+      ...roundNutrients(totals, 0),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -126,7 +148,8 @@ router.get('/daily-calories', async (req, res) => {
     if (!food) continue;
     const dayKey = entry.date.toISOString().slice(0, 10);
     const prev = byDay.get(dayKey) || 0;
-    byDay.set(dayKey, prev + (food.caloriesPer || 0) * entry.servingCount);
+    const cal = food.perServing?.calories || 0;
+    byDay.set(dayKey, prev + cal * entry.servingCount);
   }
 
   const days = [...byDay.entries()]
@@ -150,30 +173,23 @@ router.get('/summary', async (req, res) => {
 
   const settings = await UserSettings.findOne({ userId: req.userId });
 
-  let totalCalories = 0;
-  let totalProtein = 0;
-  let totalFat = 0;
-  let totalCarbs = 0;
-
+  const totals = {};
   for (const entry of entries) {
     const food = entry.foodItemId;
     if (!food) continue;
-    totalCalories += food.caloriesPer * entry.servingCount;
-    totalProtein += food.proteinPer * entry.servingCount;
-    totalFat += food.fatPer * entry.servingCount;
-    totalCarbs += food.carbsPer * entry.servingCount;
+    addNutrients(totals, scaleNutrients(food.perServing, entry.servingCount));
   }
 
+  const rounded = roundNutrients(totals, 0);
+
   (req.log || log).debug(
-    { date, entryCount: entries.length, totalCalories: Math.round(totalCalories) },
+    { date, entryCount: entries.length, totalCalories: rounded.calories || 0 },
     'foodlog: day summary',
   );
   res.json({
     summary: {
-      totalCalories: Math.round(totalCalories),
-      totalProtein: Math.round(totalProtein),
-      totalFat: Math.round(totalFat),
-      totalCarbs: Math.round(totalCarbs),
+      // Aggregated totals for every nutrient we have data for.
+      perServing: rounded,
       targets: settings?.targets || null,
     },
   });

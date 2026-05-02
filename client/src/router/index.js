@@ -30,7 +30,11 @@ const DashboardPage = () => import('../pages/DashboardPage.vue');
 const ProfilePage = () => import('../pages/ProfilePage.vue');
 const NotificationsPage = () => import('../pages/settings/NotificationsPage.vue');
 const SettingsCompoundsPage = () => import('../pages/settings/CompoundsPage.vue');
+const FastingSettingsPage = () => import('../pages/settings/FastingPage.vue');
+const WaterSettingsPage = () => import('../pages/settings/WaterPage.vue');
 const AppearancePage = () => import('../pages/settings/AppearancePage.vue');
+const MetricsSettingsPage = () => import('../pages/settings/MetricsPage.vue');
+const PhotosSettingsPage = () => import('../pages/settings/PhotosPage.vue');
 const AccountPage = () => import('../pages/settings/AccountPage.vue');
 const SubscriptionPage = () => import('../pages/settings/SubscriptionPage.vue');
 const LogPage = () => import('../pages/LogPage.vue');
@@ -123,7 +127,11 @@ const routes = [
   { path: '/profile/settings', redirect: '/profile' },
   { path: '/profile/settings/notifications', name: 'profile-settings-notifications', component: NotificationsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/compounds', name: 'profile-settings-compounds', component: SettingsCompoundsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/fasting', name: 'profile-settings-fasting', component: FastingSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/water', name: 'profile-settings-water', component: WaterSettingsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/appearance', name: 'profile-settings-appearance', component: AppearancePage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/metrics', name: 'profile-settings-metrics', component: MetricsSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/photos', name: 'profile-settings-photos', component: PhotosSettingsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/account', name: 'profile-settings-account', component: AccountPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/account/subscription', name: 'profile-settings-subscription', component: SubscriptionPage, meta: { requiresAuth: true } },
   // Old routes — redirect bookmarks + in-flight Stripe redirects to the new locations.

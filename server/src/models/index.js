@@ -10,6 +10,7 @@ import ChatUsage from './ChatUsage.js';
 import Compound from './Compound.js';
 import DayNote from './DayNote.js';
 import DoseLog from './DoseLog.js';
+import FastingEvent from './FastingEvent.js';
 import FavoriteFood from './FavoriteFood.js';
 import FeatureRequest from './FeatureRequest.js';
 import FoodItem from './FoodItem.js';
@@ -17,7 +18,10 @@ import FoodLog from './FoodLog.js';
 import FunnelEvent from './FunnelEvent.js';
 import Meal from './Meal.js';
 import MealProposal from './MealProposal.js';
+import Metric from './Metric.js';
+import MetricLog from './MetricLog.js';
 import Photo from './Photo.js';
+import PhotoType from './PhotoType.js';
 import PushSubscription from './PushSubscription.js';
 import RecentFood from './RecentFood.js';
 import SupportTicket from './SupportTicket.js';
@@ -25,13 +29,13 @@ import Symptom from './Symptom.js';
 import SymptomLog from './SymptomLog.js';
 import User from './User.js';
 import UserSettings from './UserSettings.js';
-import WaistLog from './WaistLog.js';
+import WaterLog from './WaterLog.js';
 import WeightLog from './WeightLog.js';
 
 export {
   ChatThread, ChatUsage, Compound, DayNote, DoseLog,
-  FavoriteFood, FeatureRequest, FoodItem, FoodLog,
-  FunnelEvent, Meal, MealProposal, Photo, PushSubscription,
+  FastingEvent, FavoriteFood, FeatureRequest, FoodItem, FoodLog,
+  FunnelEvent, Meal, MealProposal, Metric, MetricLog, Photo, PhotoType, PushSubscription,
   RecentFood, SupportTicket, Symptom, SymptomLog,
-  User, UserSettings, WaistLog, WeightLog,
+  User, UserSettings, WaterLog, WeightLog,
 };

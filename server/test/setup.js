@@ -54,6 +54,10 @@ process.env.COOKIE_SAMESITE = 'lax';
 // Disable Sendgrid real sends; email.js no-ops when key is absent.
 delete process.env.SENDGRID_API_KEY;
 delete process.env.SENDGRID_FROM_EMAIL;
+// USDA off by default in tests so legacy OFF-only assertions don't have to
+// stub api.nal.usda.gov. Tests that exercise the USDA path set
+// USDA_FDC_API_KEY in their own beforeEach/beforeAll.
+delete process.env.USDA_FDC_API_KEY;
 
 // Silence pino fully in tests unless a dev exports LOG_LEVEL=debug.
 // (LOG_LEVEL=silent is recognized by pino.)

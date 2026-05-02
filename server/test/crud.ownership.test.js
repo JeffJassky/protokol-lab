@@ -83,18 +83,12 @@ describe('foodlog — ownership', () => {
     const aliceFood = await FoodItem.create({
       userId: alice.userId,
       name: 'Chicken breast',
-      caloriesPer: 165,
-      proteinPer: 31,
-      fatPer: 3.6,
-      carbsPer: 0,
+      perServing: { calories: 165, protein: 31, fat: 3.6, carbs: 0 },
     });
     const bobFood = await FoodItem.create({
       userId: bob.userId,
       name: 'Chicken breast',
-      caloriesPer: 165,
-      proteinPer: 31,
-      fatPer: 3.6,
-      carbsPer: 0,
+      perServing: { calories: 165, protein: 31, fat: 3.6, carbs: 0 },
     });
     foodItem = aliceFood; // legacy var name reused by downstream specs
 

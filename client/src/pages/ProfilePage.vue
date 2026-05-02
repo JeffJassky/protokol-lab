@@ -369,10 +369,38 @@ watch(
       <p v-if="error" class="error">{{ error }}</p>
     </form>
 
+    <router-link to="/profile/settings/metrics" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Metrics</span>
+        <span class="settings-link-sub">Body measurements + unit system</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/photos" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Photos</span>
+        <span class="settings-link-sub">Progress photo categories + visibility</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
     <router-link to="/profile/settings/compounds" class="card settings-link">
       <span class="settings-link-text">
         <span class="settings-link-label">Compounds</span>
         <span class="settings-link-sub">Your regimen + dose schedules</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/fasting" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Fasting</span>
+        <span class="settings-link-sub">Intermittent fasting schedule + banner</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/water" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Hydration</span>
+        <span class="settings-link-sub">Daily water tracker + dashboard</span>
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
@@ -404,7 +432,7 @@ watch(
 </template>
 
 <style scoped>
-.profile-page { max-width: 560px; }
+.profile-page { max-width: 720px; }
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

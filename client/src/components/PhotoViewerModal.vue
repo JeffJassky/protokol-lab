@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { usePhotoTypesStore } from '../stores/photoTypes.js';
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -7,6 +8,18 @@ const props = defineProps({
   startIndex: { type: Number, default: 0 },
 });
 const emit = defineEmits(['close']);
+
+const photoTypesStore = usePhotoTypesStore();
+function photoLabel(photo) {
+  if (!photo) return '';
+  if (photo.photoTypeId) {
+    const t = photoTypesStore.photoTypes.find(
+      (x) => String(x._id) === String(photo.photoTypeId),
+    );
+    if (t) return t.name;
+  }
+  return photo.angle || '';
+}
 
 const index = ref(0);
 
@@ -64,9 +77,9 @@ function formatDate(dateStr) {
     >›</button>
 
     <figure class="viewer-frame" @click.stop>
-      <img :src="current.url" :alt="`${current.angle} photo for ${current.date}`" />
+      <img :src="current.url" :alt="`${photoLabel(current)} photo for ${current.date}`" />
       <figcaption>
-        <span class="cap-angle">{{ current.angle }}</span>
+        <span class="cap-angle">{{ photoLabel(current) }}</span>
         <span class="cap-date">{{ formatDate(current.date) }}</span>
         <span class="cap-count">{{ index + 1 }} / {{ photos.length }}</span>
       </figcaption>

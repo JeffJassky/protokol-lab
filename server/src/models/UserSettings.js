@@ -31,11 +31,61 @@ const userSettingsSchema = new mongoose.Schema({
   // first save; the reminder scheduler formats HH:mm in this zone so a user
   // who travels still gets their 8am reminder at local 8am.
   timezone: { type: String, default: 'UTC' },
+  // Unit system preference for displaying biometric measurements (arms, etc.)
+  // Storage is always canonical (cm/g/etc.); this only affects render +
+  // input. See shared/units.js for the dimension → unit mapping.
+  unitSystem: { type: String, enum: ['imperial', 'metric'], default: 'imperial' },
   // Evening (or whenever) "did you track today?" nudge. Skipped when the
   // user already logged a weight / meal / symptom today.
   trackReminder: {
     enabled: { type: Boolean, default: false },
     time: { type: String, default: '20:00' },
+  },
+  // Intermittent-fasting feature. The schedule here is the *rule*; actual
+  // fast occurrences live in FastingEvent. `iana_tz` is captured at save
+  // time so DST math is deterministic (independent of the user's later
+  // device tz). `weeklyRules` is only consulted when kind === 'weekly'.
+  fasting: {
+    enabled: { type: Boolean, default: false },
+    showOnLog: { type: Boolean, default: true },
+    showOnDashboard: { type: Boolean, default: true },
+    kind: { type: String, enum: ['none', 'daily', 'weekly'], default: 'daily' },
+    protocol: { type: String, default: '16:8' },
+    fastDurationMinutes: { type: Number, default: 16 * 60 },
+    dailyStartTime: { type: String, default: '20:00' },
+    weeklyRules: {
+      type: [
+        {
+          _id: false,
+          weekday: { type: Number, min: 0, max: 6 },
+          startTime: { type: String },
+          durationMinutes: { type: Number },
+        },
+      ],
+      default: [],
+    },
+    ianaTz: { type: String, default: 'UTC' },
+  },
+  // Progress photos. Off by default; enabling reveals the photo capture
+  // card on the log page (per `showOnLog`) and the photo timeline on the
+  // dashboard (per `showOnDashboard`). Photo *types* are stored separately
+  // in the PhotoType collection — this gates the feature surface, not the
+  // type library.
+  photos: {
+    enabled: { type: Boolean, default: false },
+    showOnLog: { type: Boolean, default: true },
+    showOnDashboard: { type: Boolean, default: true },
+  },
+  // Hydration tracker. Off by default; enabling reveals the drop-row on
+  // LogPage. `unit` is display-only — volumes always store canonically as ml.
+  // `servingMl` is the size of one tap/drop (250 ml ≈ 8 fl oz default).
+  // `dailyTargetMl` divided by `servingMl` gives the number of drop icons.
+  water: {
+    enabled: { type: Boolean, default: false },
+    unit: { type: String, enum: ['ml', 'fl_oz'], default: 'fl_oz' },
+    dailyTargetMl: { type: Number, default: 2000 },
+    servingMl: { type: Number, default: 250 },
+    showOnDashboard: { type: Boolean, default: false },
   },
   updatedAt: { type: Date, default: Date.now },
 });

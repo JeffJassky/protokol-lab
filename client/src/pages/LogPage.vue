@@ -6,8 +6,17 @@ import { useMealsStore } from '../stores/meals.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useSymptomsStore } from '../stores/symptoms.js';
+import { useMetricsStore } from '../stores/metrics.js';
+import { usePhotoTypesStore } from '../stores/photoTypes.js';
+import {
+  defaultUnitFor,
+  unitLabel,
+  toCanonical,
+  fromCanonical,
+} from '../../../shared/units.js';
 import { useNotesStore } from '../stores/notes.js';
 import { useWeightStore } from '../stores/weight.js';
+import { useWaterStore, mlToUnit } from '../stores/water.js';
 import { useCompoundsStore } from '../stores/compounds.js';
 import { useDosesStore } from '../stores/doses.js';
 import { useSettingsStore } from '../stores/settings.js';
@@ -19,6 +28,7 @@ import FoodItemEditModal from '../components/FoodItemEditModal.vue';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import PhotoCaptureCard from '../components/PhotoCaptureCard.vue';
 import UpgradeBadge from '../components/UpgradeBadge.vue';
+import FastingBanner from '../components/FastingBanner.vue';
 import { localYmd } from '../utils/date.js';
 
 const route = useRoute();
@@ -44,8 +54,11 @@ const symptomsUpgradeTier = computed(() => {
   return target?.id || null;
 });
 const symptomsStore = useSymptomsStore();
+const metricsStore = useMetricsStore();
+const photoTypesStore = usePhotoTypesStore();
 const notesStore = useNotesStore();
 const weightStore = useWeightStore();
+const waterStore = useWaterStore();
 const compoundsStore = useCompoundsStore();
 const dosesStore = useDosesStore();
 const settingsStore = useSettingsStore();
@@ -86,11 +99,55 @@ async function handleEditSaved() {
 const newWeight = ref('');
 const savingWeight = ref(false);
 const weightInputFocused = ref(false);
-const waistInputFocused = ref(false);
 const doseInputFocused = reactive({});
 // Dose inputs are keyed by compoundId since the user may have multiple compounds.
 const newDoseByCompound = reactive({});
 const savingDoseByCompound = reactive({});
+
+// Metric input state, keyed by metricId. Values typed in display units; only
+// converted to canonical at save time so the user sees what they typed.
+const newMetricByMetric = reactive({});
+const savingMetricByMetric = reactive({});
+const metricInputFocused = reactive({});
+
+const unitSystem = computed(() => settingsStore.settings?.unitSystem || 'imperial');
+
+const enabledMetrics = computed(() =>
+  metricsStore.metrics.filter((m) => m.enabled).sort((a, b) => a.order - b.order),
+);
+
+function metricDisplayUnit(metric) {
+  return metric.displayUnit || defaultUnitFor(metric.dimension, unitSystem.value);
+}
+
+function metricDisplayValue(metric) {
+  const log = metricsStore.logsByMetric[metric._id];
+  if (!log) return null;
+  const unit = metricDisplayUnit(metric);
+  const v = fromCanonical(log.value, unit);
+  // Trim to a sensible number of decimals — same heuristic as
+  // shared/units.js defaultDecimals: lengths/masses get 1, counts get 0.
+  const decimals = ['cm', 'in', 'mm', 'm', 'ft', 'kg', 'lb'].includes(unit) ? 1 : 0;
+  return Number.isFinite(v) ? v.toFixed(decimals) : null;
+}
+
+async function handleAddMetric(metric) {
+  const raw = newMetricByMetric[metric._id];
+  if (raw === '' || raw == null || Number.isNaN(Number(raw))) return;
+  savingMetricByMetric[metric._id] = true;
+  try {
+    const unit = metricDisplayUnit(metric);
+    const canonical = toCanonical(Number(raw), unit);
+    await metricsStore.setValue(metric._id, canonical);
+    newMetricByMetric[metric._id] = '';
+  } finally {
+    savingMetricByMetric[metric._id] = false;
+  }
+}
+
+async function handleDeleteMetric(metric) {
+  await metricsStore.setValue(metric._id, null);
+}
 
 const mealTypes = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -103,7 +160,9 @@ async function loadAllForDate(d) {
   await Promise.all([
     foodlogStore.loadDay(d),
     symptomsStore.fetchLogsForDate(d),
+    metricsStore.fetchLogsForDate(d),
     notesStore.fetchForDate(d),
+    waterStore.fetchDay(d),
   ]);
   noteDraft.value = notesStore.text;
 }
@@ -113,11 +172,12 @@ onMounted(async () => {
     loadAllForDate(date.value),
     mealsStore.fetchMeals(),
     symptomsStore.fetchSymptoms(),
+    metricsStore.fetchMetrics(),
     weightStore.fetchEntries(),
-    weightStore.fetchWaistEntries(),
     compoundsStore.fetchAll(),
     dosesStore.fetchEntries(),
     photosStore.fetchAll(),
+    photoTypesStore.fetchPhotoTypes(),
     settingsStore.loaded ? Promise.resolve() : settingsStore.fetchSettings(),
   ]);
 });
@@ -132,12 +192,13 @@ watch(date, async (val) => {
 function entryNutrition(entry) {
   const food = entry.foodItemId;
   if (!food) return { cal: 0, p: 0, f: 0, c: 0 };
+  const ps = food.perServing || {};
   const s = entry.servingCount;
   return {
-    cal: Math.round((food.caloriesPer || 0) * s),
-    p: Math.round((food.proteinPer || 0) * s),
-    f: Math.round((food.fatPer || 0) * s),
-    c: Math.round((food.carbsPer || 0) * s),
+    cal: Math.round((ps.calories || 0) * s),
+    p: Math.round((ps.protein || 0) * s),
+    f: Math.round((ps.fat || 0) * s),
+    c: Math.round((ps.carbs || 0) * s),
   };
 }
 
@@ -254,7 +315,12 @@ function startEdit(entry) {
 }
 
 async function saveEdit(id) {
-  await foodlogStore.updateEntry(id, { servingCount: Number(editServings.value) });
+  const count = Number(editServings.value);
+  if (count === 0) {
+    await foodlogStore.deleteEntry(id);
+  } else {
+    await foodlogStore.updateEntry(id, { servingCount: count });
+  }
   editingId.value = null;
 }
 
@@ -413,17 +479,63 @@ async function handleDeleteSymptom(symptom) {
   await symptomsStore.deleteSymptom(symptom._id);
 }
 
-// ---- Weight + waist + dose forms ----------------------------------------
+// ---- Water tracker ------------------------------------------------------
+
+const waterSettings = computed(() => settingsStore.settings?.water || {});
+const waterEnabled = computed(() => Boolean(waterSettings.value.enabled));
+const waterUnit = computed(() => waterSettings.value.unit || 'fl_oz');
+const waterServingMl = computed(() => Number(waterSettings.value.servingMl) || 250);
+const waterTargetMl = computed(() => Number(waterSettings.value.dailyTargetMl) || 2000);
+const waterDropCount = computed(() =>
+  Math.max(1, Math.ceil(waterTargetMl.value / waterServingMl.value)),
+);
+const waterEntriesToday = computed(() => waterStore.entriesFor(date.value));
+const waterFilledCount = computed(() => waterEntriesToday.value.length);
+const waterTotalMl = computed(() =>
+  waterEntriesToday.value.reduce((sum, e) => sum + (e.volumeMl || 0), 0),
+);
+const waterTotalDisplay = computed(() => {
+  const v = mlToUnit(waterTotalMl.value, waterUnit.value);
+  return waterUnit.value === 'fl_oz' ? Math.round(v) : Math.round(v);
+});
+const waterTargetDisplay = computed(() => {
+  const v = mlToUnit(waterTargetMl.value, waterUnit.value);
+  return waterUnit.value === 'fl_oz' ? Math.round(v) : Math.round(v);
+});
+const waterUnitLabel = computed(() => (waterUnit.value === 'fl_oz' ? 'fl oz' : 'ml'));
+const waterGoalHit = computed(() => waterTotalMl.value >= waterTargetMl.value);
+const waterBusy = ref(false);
+
+// Tap drop at 1-based index `n`. If it's already the last filled drop,
+// decrement (delete latest entry); otherwise add entries until count = n.
+async function handleDropTap(n) {
+  if (waterBusy.value) return;
+  waterBusy.value = true;
+  try {
+    const current = waterFilledCount.value;
+    if (n === current) {
+      await waterStore.popLatest(date.value);
+    } else if (n > current) {
+      const toAdd = n - current;
+      for (let i = 0; i < toAdd; i++) {
+        await waterStore.addEntry(waterServingMl.value, date.value);
+      }
+    } else {
+      const toRemove = current - n;
+      for (let i = 0; i < toRemove; i++) {
+        await waterStore.popLatest(date.value);
+      }
+    }
+  } finally {
+    waterBusy.value = false;
+  }
+}
+
+// ---- Weight + dose forms ------------------------------------------------
 
 const todaysWeight = computed(() =>
   weightStore.entries.find((e) => String(e.date).slice(0, 10) === date.value),
 );
-const todaysWaist = computed(() =>
-  weightStore.waistEntries.find((e) => String(e.date).slice(0, 10) === date.value),
-);
-
-const newWaist = ref('');
-const savingWaist = ref(false);
 
 // Compounds + per-compound dose state for the rendered cards.
 const enabledCompounds = computed(() => compoundsStore.enabled);
@@ -486,20 +598,13 @@ async function handleDeleteWeight() {
   if (!todaysWeight.value) return;
   await weightStore.deleteWeight(todaysWeight.value._id);
 }
-async function handleAddWaist() {
-  if (!newWaist.value) return;
-  savingWaist.value = true;
-  try {
-    await weightStore.addWaist(Number(newWaist.value), date.value);
-    newWaist.value = '';
-  } finally {
-    savingWaist.value = false;
-  }
-}
-async function handleDeleteWaist() {
-  if (!todaysWaist.value) return;
-  await weightStore.deleteWaist(todaysWaist.value._id);
-}
+
+const photosVisibleOnLog = computed(() => {
+  const p = settingsStore.settings?.photos;
+  if (!p || !p.enabled) return false;
+  return p.showOnLog !== false;
+});
+
 async function handleDeleteDose(dose) {
   if (!dose) return;
   await dosesStore.deleteDose(dose._id);
@@ -530,7 +635,38 @@ function onNoteBlur() {
 
 <template>
   <div class="log-page" data-testid="log-page">
+    <FastingBanner surface="log" />
     <DateSelector v-model="date" />
+
+    <!-- =========================================================== -->
+    <!-- WATER (drop row, conditional)                                -->
+    <!-- =========================================================== -->
+    <div v-if="waterEnabled" id="water" class="meal-card compact water-card">
+      <div class="water-head">
+        <h3 class="water-title">Water</h3>
+        <span class="water-total" :class="{ hit: waterGoalHit }">
+          {{ waterTotalDisplay }} / {{ waterTargetDisplay }} {{ waterUnitLabel }}
+        </span>
+      </div>
+      <div class="water-drops">
+        <button
+          v-for="n in waterDropCount"
+          :key="n"
+          type="button"
+          class="water-drop"
+          :class="{ filled: n <= waterFilledCount }"
+          :aria-label="`Log drop ${n}`"
+          :disabled="waterBusy"
+          @click="handleDropTap(n)"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 2.5 C12 2.5 5 11 5 16 C5 19.866 8.134 23 12 23 C15.866 23 19 19.866 19 16 C19 11 12 2.5 12 2.5 Z"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
 
     <!-- =========================================================== -->
     <!-- TOP ROW: Nutrition (half) + stacked Weight/Dose (half)       -->
@@ -601,34 +737,58 @@ function onNoteBlur() {
             <button class="delete-btn" @click="handleDeleteWeight">x</button>
           </div>
         </div>
-        <div class="metric-col" v-tooltip="'Log your waist'">
-          <div class="metric-label">Waist</div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <!-- METRICS (user-configured biometrics)                          -->
+    <!-- =========================================================== -->
+    <div
+      v-if="enabledMetrics.length"
+      id="metrics"
+      class="meal-card compact"
+    >
+      <div class="body-metrics">
+        <div
+          v-for="metric in enabledMetrics"
+          :key="metric._id"
+          class="metric-col"
+          v-tooltip="`Log ${metric.name}`"
+        >
+          <div class="metric-label">{{ metric.name }}</div>
           <form
-            v-if="!todaysWaist"
+            v-if="metricDisplayValue(metric) === null"
             class="quick-form"
-            @submit.prevent="handleAddWaist"
+            @submit.prevent="handleAddMetric(metric)"
           >
             <input
               type="number"
-              v-model.number="newWaist"
-              step="0.25"
-              placeholder="in"
+              v-model.number="newMetricByMetric[metric._id]"
+              step="0.1"
+              :placeholder="unitLabel(metricDisplayUnit(metric)) || metric.dimension"
               required
-              @focus="waistInputFocused = true"
-              @blur="waistInputFocused = false"
+              @focus="metricInputFocused[metric._id] = true"
+              @blur="metricInputFocused[metric._id] = false"
             />
             <button
               class="btn-primary"
-              :class="{ muted: !waistInputFocused && !newWaist }"
+              :class="{
+                muted:
+                  !metricInputFocused[metric._id] &&
+                  !newMetricByMetric[metric._id],
+              }"
               type="submit"
-              :disabled="savingWaist"
+              :disabled="savingMetricByMetric[metric._id]"
             >
               Log
             </button>
           </form>
           <div v-else class="logged-row">
-            <span class="logged-value">{{ todaysWaist.waistInches }}"</span>
-            <button class="delete-btn" @click="handleDeleteWaist">x</button>
+            <span class="logged-value">
+              {{ metricDisplayValue(metric) }}
+              {{ unitLabel(metricDisplayUnit(metric)) }}
+            </span>
+            <button class="delete-btn" @click="handleDeleteMetric(metric)">x</button>
           </div>
         </div>
       </div>
@@ -788,7 +948,7 @@ function onNoteBlur() {
                       <input
                         type="number"
                         v-model.number="editServings"
-                        min="0.25"
+                        min="0"
                         step="0.25"
                         class="edit-input"
                         @click.stop
@@ -1004,7 +1164,7 @@ function onNoteBlur() {
                           <input
                             type="number"
                             v-model.number="editServings"
-                            min="0.25"
+                            min="0"
                             step="0.25"
                             class="edit-input"
                             @click.stop
@@ -1216,7 +1376,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- PHOTO LOG                                                    -->
     <!-- =========================================================== -->
-    <div id="photos">
+    <div v-if="photosVisibleOnLog" id="photos">
       <PhotoCaptureCard :date="date" />
     </div>
 
@@ -1239,7 +1399,7 @@ function onNoteBlur() {
 </template>
 
 <style scoped>
-.log-page { max-width: 640px; }
+.log-page { max-width: 720px; }
 
 /* Mobile: pin the prev/next/day-name selector to the top of the viewport so
    it stays reachable while the user scrolls through nutrition, food log,
@@ -1262,6 +1422,58 @@ function onNoteBlur() {
 
 /* The nutrition card uses the same shell as a meal card but its inner padding
    gets a touch more breathing room since the macro bars need vertical space. */
+/* Water tracker — single row of tappable drop icons. Each click of an unfilled
+   drop logs one serving (servingMl); tapping the last filled drop deletes it. */
+.water-card { padding: var(--space-3) var(--space-5); }
+.water-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+.water-title {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.water-total {
+  font-size: var(--font-size-s);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.water-total.hit { color: var(--success, #16a34a); font-weight: var(--font-weight-bold); }
+.water-drops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.water-drop {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: var(--radius-small);
+}
+.water-drop:disabled { cursor: wait; opacity: 0.6; }
+.water-drop svg {
+  width: 28px;
+  height: 28px;
+  fill: transparent;
+  stroke: color-mix(in srgb, var(--text-tertiary) 60%, transparent);
+  stroke-width: 1.5;
+  transition: fill 120ms ease, stroke 120ms ease, transform 120ms ease;
+}
+.water-drop:hover svg { stroke: var(--text-secondary); }
+.water-drop:active svg { transform: scale(0.92); }
+.water-drop.filled svg {
+  fill: var(--water, #06b6d4);
+  stroke: var(--water, #06b6d4);
+}
+
 .nutrition-card { padding-bottom: var(--space-5); }
 .nutrition-card :deep(.daily-summary) {
   background: transparent;
@@ -1525,7 +1737,7 @@ function onNoteBlur() {
   font-size: var(--font-size-s);
   padding: var(--space-1);
 }
-.menu-btn { font-size: var(--font-size-l); line-height: 1; }
+.menu-btn { font-size: var(--font-size-l); line-height: 1; color: var(--text); }
 .delete-btn {
   display: inline-flex;
   align-items: center;

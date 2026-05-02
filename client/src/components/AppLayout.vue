@@ -29,6 +29,27 @@ const { isOnline } = useNetworkStatus();
 
 const showChat = ref(false);
 
+// Rotating CTA label on the chat FAB. Picks a fresh phrase every ~2 min so
+// the button has personality without becoming a moving target. Same phrase
+// never repeats back-to-back.
+const CHAT_CTAS = [
+  'Talk with Otto',
+  'Ask Otto',
+  'Chat with Otto',
+  'Log with Otto',
+  'Get suggestions from Otto',
+];
+const chatCta = ref(CHAT_CTAS[0]);
+let chatCtaTimer = null;
+function rotateChatCta() {
+  if (CHAT_CTAS.length < 2) return;
+  let next = chatCta.value;
+  while (next === chatCta.value) {
+    next = CHAT_CTAS[Math.floor(Math.random() * CHAT_CTAS.length)];
+  }
+  chatCta.value = next;
+}
+
 // Two-way sync with the chatStarter store so any component (e.g., the
 // Insights "Explain" button on the dashboard) can pop open the drawer.
 watch(
@@ -69,6 +90,9 @@ async function revalidateToday() {
 }
 
 onMounted(async () => {
+  rotateChatCta();
+  chatCtaTimer = window.setInterval(rotateChatCta, 120_000);
+
   const uid = auth.user?._id || auth.user?.id;
   if (uid) onboarding.hydrate(String(uid));
   if (pushStore.supported) {
@@ -100,6 +124,10 @@ onBeforeUnmount(() => {
   if (appStateListener) {
     appStateListener.remove();
     appStateListener = null;
+  }
+  if (chatCtaTimer) {
+    clearInterval(chatCtaTimer);
+    chatCtaTimer = null;
   }
 });
 
@@ -271,8 +299,28 @@ watch(() => auth.user, (u) => {
     </div>
 
     <!-- Chat toggle FAB (hidden when drawer is open) -->
-    <button v-if="!showChat" class="chat-fab" @click="showChat = true">
-      💬
+    <button
+      v-if="!showChat"
+      class="chat-fab"
+      @click="showChat = true"
+      :aria-label="chatCta"
+    >
+      <svg class="chat-fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <!-- antenna -->
+        <line x1="12" y1="2.5" x2="12" y2="5" />
+        <circle cx="12" cy="2.2" r="1" fill="currentColor" stroke="none" />
+        <!-- head -->
+        <rect x="4" y="6" width="16" height="13" rx="3.5" />
+        <!-- ears -->
+        <line x1="3" y1="11" x2="3" y2="14" />
+        <line x1="21" y1="11" x2="21" y2="14" />
+        <!-- eyes -->
+        <circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none" />
+        <circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none" />
+        <!-- smile -->
+        <path d="M9.5 15.5c.7.7 1.6 1 2.5 1s1.8-.3 2.5-1" />
+      </svg>
+      <span class="chat-fab-label">{{ chatCta }}</span>
     </button>
 
     <!-- Always-on bug reporter (real accounts only — demo skips it like Support nav). -->
@@ -412,13 +460,17 @@ watch(() => auth.user, (u) => {
   position: fixed;
   bottom: var(--space-6);
   right: var(--space-6);
-  width: 52px;
   height: 52px;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  gap: var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--primary);
   color: var(--text-on-primary);
   border: none;
-  font-size: var(--font-size-xl);
+  font-family: var(--font-display);
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-wide);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -430,6 +482,14 @@ watch(() => auth.user, (u) => {
 .chat-fab:hover {
   background: var(--primary-hover);
   transform: scale(1.05);
+}
+.chat-fab-icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+.chat-fab-label {
+  white-space: nowrap;
 }
 
 /* ───────────────────────────────────────────────────────────────────────
@@ -543,10 +603,18 @@ watch(() => auth.user, (u) => {
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
 
-  /* Hide the FAB while chat is open, and lift it above the bottom nav. */
+  /* Hide the FAB while chat is open, and lift it above the bottom nav.
+     Mobile drops the rotating CTA label and falls back to a circular
+     icon-only FAB so it doesn't crowd the bottom nav. */
   .chat-fab {
     bottom: calc(56px + env(safe-area-inset-bottom, 0) + var(--space-3));
     right: var(--space-3);
+    width: 52px;
+    padding: 0;
+    gap: 0;
+  }
+  .chat-fab-label {
+    display: none;
   }
 }
 </style>

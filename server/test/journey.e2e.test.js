@@ -37,7 +37,7 @@ async function seedTemplate({ days = 30 } = {}) {
   const fi = await FoodItem.create({
     userId: tmpl._id,
     name: 'Eggs',
-    caloriesPer: 80,
+    perServing: { calories: 80 },
     isCustom: true,
   });
   await FoodLog.create({

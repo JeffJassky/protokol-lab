@@ -4,6 +4,11 @@ dist-native
 .env
 .env.local
 .env.*.local
+
+# Local database backups (mongodump output). Contain real user data —
+# never commit.
+.backups/
+*.bson
 client_secret_*.json
 .DS_Store
 *.app

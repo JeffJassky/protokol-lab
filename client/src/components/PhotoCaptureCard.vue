@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { usePhotosStore } from '../stores/photos.js';
+import { usePhotoTypesStore } from '../stores/photoTypes.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { isNativePlatform } from '../api/auth-token.js';
@@ -12,6 +13,7 @@ const props = defineProps({
 });
 
 const photosStore = usePhotosStore();
+const photoTypesStore = usePhotoTypesStore();
 const upgradeModal = useUpgradeModalStore();
 const planLimits = usePlanLimits();
 
@@ -26,36 +28,42 @@ const photoUpgradeTier = computed(() => {
   return target?.id || null;
 });
 
-const ANGLES = [
-  { key: 'front', label: 'Front' },
-  { key: 'side', label: 'Side' },
-  { key: 'back', label: 'Back' },
-];
+onMounted(async () => {
+  if (!photoTypesStore.photoTypes.length) {
+    await photoTypesStore.fetchPhotoTypes();
+  }
+});
 
-// We key a hidden file input per angle so the camera/file picker opens on tap
-// without any extra intermediate UI.
+// We key a hidden file input per photoType id so the camera/file picker
+// opens on tap without any extra intermediate UI.
 const fileInputs = ref({});
 const errorMsg = ref('');
 const viewerOpen = ref(false);
 const viewerIndex = ref(0);
 
 const slots = computed(() =>
-  ANGLES.map((a) => ({
-    ...a,
-    entry: photosStore.forDateAngle(props.date, a.key),
+  photoTypesStore.enabled.map((t) => ({
+    _id: t._id,
+    name: t.name,
+    entry: photosStore.forDatePhotoType(props.date, t._id),
   })),
 );
 
-// All photos for the current date, sorted front/side/back/other — used by the
-// viewer so left/right arrows walk through the day's shots.
+// All photos for the current date, sorted by their photoType's order — used
+// by the viewer so left/right arrows walk through the day's shots in the
+// same sequence as the slot grid above.
 const dayPhotos = computed(() => {
-  const order = ['front', 'side', 'back', 'other'];
+  const orderById = new Map(
+    photoTypesStore.enabled.map((t, i) => [String(t._id), i]),
+  );
   return [...photosStore.forDate(props.date)].sort(
-    (a, b) => order.indexOf(a.angle) - order.indexOf(b.angle),
+    (a, b) =>
+      (orderById.get(String(a.photoTypeId)) ?? 999)
+      - (orderById.get(String(b.photoTypeId)) ?? 999),
   );
 });
 
-function triggerPick(angle) {
+function triggerPick(photoType) {
   if (photosAtCap.value) {
     upgradeModal.openForGate({
       limitKey: 'photosPerMonth',
@@ -64,19 +72,14 @@ function triggerPick(angle) {
     return;
   }
   if (isNativePlatform()) {
-    capturePhotoNative(angle);
+    capturePhotoNative(photoType);
     return;
   }
-  const el = fileInputs.value[angle];
+  const el = fileInputs.value[photoType._id];
   if (el) el.click();
 }
 
-// Native capture path. Calls @capacitor/camera's getPhoto() — surfaces the
-// system "Take Photo / Choose from Library" sheet on iOS and the equivalent
-// on Android, then hands back a temporary file URL we read into a Blob and
-// route through the existing presigned-URL upload pipeline. Web continues
-// to use the hidden <input type="file"> below (handled by onFile).
-async function capturePhotoNative(angle) {
+async function capturePhotoNative(photoType) {
   errorMsg.value = '';
   try {
     const [{ Camera, CameraResultType, CameraSource }] = await Promise.all([
@@ -86,8 +89,6 @@ async function capturePhotoNative(angle) {
       quality: 90,
       allowEditing: false,
       resultType: CameraResultType.Uri,
-      // Prompt offers Camera + Library; user picks. Matches the iOS sheet
-      // the file-input path used to surface (no `capture` attribute).
       source: CameraSource.Prompt,
       promptLabelHeader: 'Add a progress photo',
       promptLabelPhoto: 'Choose from Library',
@@ -95,28 +96,25 @@ async function capturePhotoNative(angle) {
       saveToGallery: false,
     });
     if (!photo?.webPath) return;
-    // Fetch the temporary file URL into a Blob so the existing
-    // photosStore.uploadPhoto() path (presign → S3 PUT) just works.
     const res = await fetch(photo.webPath);
     const blob = await res.blob();
     const ext = (photo.format || 'jpeg').toLowerCase();
     const file = new File([blob], `photo.${ext}`, { type: blob.type || `image/${ext}` });
-    await photosStore.uploadPhoto(file, { date: props.date, angle });
+    await photosStore.uploadPhoto(file, { date: props.date, photoTypeId: photoType._id });
   } catch (err) {
     const msg = String(err?.message || err || '').toLowerCase();
-    // User-cancel surfaces as a thrown error; quiet swallow.
     if (msg.includes('cancel') || msg.includes('user denied')) return;
     errorMsg.value = err?.message || 'Upload failed';
   }
 }
 
-async function onFile(angle, event) {
+async function onFile(photoType, event) {
   const file = event.target.files?.[0];
-  event.target.value = ''; // allow re-selecting the same file
+  event.target.value = '';
   if (!file) return;
   errorMsg.value = '';
   try {
-    await photosStore.uploadPhoto(file, { date: props.date, angle });
+    await photosStore.uploadPhoto(file, { date: props.date, photoTypeId: photoType._id });
   } catch (err) {
     errorMsg.value = err.message || 'Upload failed';
   }
@@ -130,7 +128,7 @@ function openViewer(entry) {
 
 async function handleDelete(entry, event) {
   event.stopPropagation();
-  if (!confirm(`Delete this ${entry.angle} photo?`)) return;
+  if (!confirm('Delete this photo?')) return;
   try {
     await photosStore.deletePhoto(entry._id);
   } catch (err) {
@@ -154,7 +152,7 @@ async function handleDelete(entry, event) {
       <span v-if="photosStore.uploading" class="card-sub">uploading…</span>
     </div>
     <p class="hint">
-      Snap a front, side, and back shot whenever you can. Consistency beats frequency.
+      Snap a shot for each enabled type whenever you can. Consistency beats frequency.
     </p>
     <p v-if="photosAtCap" class="hint" style="color: var(--text-tertiary)">
       <template v-if="photoCap === 1">
@@ -165,37 +163,40 @@ async function handleDelete(entry, event) {
       </template>
     </p>
 
-    <div class="photo-slots">
+    <p v-if="!slots.length" class="hint" style="color: var(--text-tertiary)">
+      No photo types enabled.
+      <router-link to="/profile/settings/photos">Configure photo types</router-link>
+      to start tracking.
+    </p>
+
+    <div v-else class="photo-slots">
       <div
         v-for="slot in slots"
-        :key="slot.key"
+        :key="slot._id"
         class="photo-slot"
         :class="{ filled: !!slot.entry }"
-        @click="slot.entry ? openViewer(slot.entry) : triggerPick(slot.key)"
+        @click="slot.entry ? openViewer(slot.entry) : triggerPick(slot)"
       >
         <img
           v-if="slot.entry"
           :src="slot.entry.thumbUrl"
-          :alt="`${slot.label} progress photo`"
+          :alt="`${slot.name} progress photo`"
           loading="lazy"
         />
         <span v-else class="photo-plus">+</span>
-        <span class="photo-slot-label">{{ slot.label }}</span>
+        <span class="photo-slot-label">{{ slot.name }}</span>
         <button
           v-if="slot.entry"
           class="photo-del"
           title="Delete"
           @click="handleDelete(slot.entry, $event)"
         >×</button>
-        <!-- No `capture` attribute → on mobile the OS prompts "Take Photo
-             or Choose from Library" instead of forcing the camera. On
-             desktop it's a normal file picker. -->
         <input
-          :ref="(el) => (fileInputs[slot.key] = el)"
+          :ref="(el) => (fileInputs[slot._id] = el)"
           type="file"
           accept="image/*"
           class="file-input"
-          @change="onFile(slot.key, $event)"
+          @change="onFile(slot, $event)"
         />
       </div>
     </div>
@@ -244,7 +245,7 @@ async function handleDelete(entry, event) {
 
 .photo-slots {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
   gap: var(--space-1);
 }
 .photo-slot {
@@ -291,6 +292,10 @@ async function handleDelete(entry, event) {
   background: var(--surface);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-small);
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .photo-slot.filled .photo-slot-label {
   background: rgba(0, 0, 0, 0.55);

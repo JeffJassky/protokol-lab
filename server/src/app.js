@@ -12,12 +12,15 @@ import foodRoutes from './routes/food.js';
 import foodlogRoutes from './routes/foodlog.js';
 import mealsRoutes from './routes/meals.js';
 import symptomsRoutes from './routes/symptoms.js';
-import waistRoutes from './routes/waist.js';
+import metricsRoutes from './routes/metrics.js';
+import waterRoutes from './routes/water.js';
 import doseRoutes from './routes/doses.js';
 import compoundsRoutes from './routes/compounds.js';
+import fastingRoutes from './routes/fasting.js';
 import chatRoutes from './routes/chat.js';
 import notesRoutes from './routes/notes.js';
 import photosRoutes from './routes/photos.js';
+import photoTypesRoutes from './routes/photoTypes.js';
 import pushRoutes, { publicPushRouter } from './routes/push.js';
 import stripeRoutes, { publicStripeRouter } from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
@@ -164,14 +167,17 @@ export function createApp({ serveClient = true } = {}) {
   app.use('/api/foodlog', requireAuth, foodlogRoutes);
   app.use('/api/meals', requireAuth, mealsRoutes);
   app.use('/api/symptoms', requireAuth, symptomsRoutes);
-  app.use('/api/waist', requireAuth, waistRoutes);
+  app.use('/api/metrics', requireAuth, metricsRoutes);
+  app.use('/api/water', requireAuth, waterRoutes);
   app.use('/api/doses', requireAuth, doseRoutes);
   app.use('/api/compounds', requireAuth, compoundsRoutes);
+  app.use('/api/fasting', requireAuth, fastingRoutes);
   // Chat is disabled in demo entirely — anon sessions have no quota account
   // and authed-demo users would chat against sandbox-scoped threads.
   app.use('/api/chat', requireAuth, requireRealProfile, chatRoutes);
   app.use('/api/notes', requireAuth, notesRoutes);
   app.use('/api/photos', requireAuth, photosRoutes);
+  app.use('/api/photo-types', requireAuth, photoTypesRoutes);
   // Analysis engine — read-only correlations / change-points / projections
   // over the user's existing data. Demo sandboxes can use it; real-only
   // gating happens implicitly because demo data exists in the same shape.

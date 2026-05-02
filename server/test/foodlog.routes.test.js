@@ -37,11 +37,14 @@ async function makeFoodItem(userId, overrides = {}) {
   return FoodItem.create({
     userId,
     name: 'Eggs',
-    caloriesPer: 80,
-    proteinPer: 6,
-    fatPer: 5,
-    carbsPer: 1,
     isCustom: true,
+    servingSize: '1 large',
+    servingAmount: 50,
+    servingUnit: 'g',
+    servingKnown: true,
+    perServing: { calories: 80, protein: 6, fat: 5, carbs: 1 },
+    nutrientSource: 'manual',
+    nutrientCoverage: 'macros_only',
     ...overrides,
   });
 }
@@ -79,11 +82,11 @@ describe('/api/foodlog', () => {
         name: 'Granola Bar',
         brand: 'Acme',
         servingSize: '1 bar',
-        servingGrams: 40,
-        caloriesPer: 200,
-        proteinPer: 4,
-        fatPer: 8,
-        carbsPer: 28,
+        servingAmount: 40,
+        servingUnit: 'g',
+        servingKnown: true,
+        perServing: { calories: 200, protein: 4, fat: 8, carbs: 28 },
+        nutrientSource: 'openfoodfacts',
         date,
         mealType: 'snack',
         servingCount: 1,
@@ -97,7 +100,7 @@ describe('/api/foodlog', () => {
       .send({
         offBarcode: '0000000000017',
         name: 'Granola Bar',
-        caloriesPer: 200,
+        perServing: { calories: 200 },
         date,
         mealType: 'snack',
         servingCount: 1,
@@ -122,8 +125,8 @@ describe('/api/foodlog', () => {
 
     const res = await agent.get(`/api/foodlog/summary?date=${date}`);
     expect(res.status).toBe(200);
-    expect(res.body.summary.totalCalories).toBe(240); // 80*2 + 80*1
-    expect(res.body.summary.totalProtein).toBe(18);
+    expect(res.body.summary.perServing.calories).toBe(240); // 80*2 + 80*1
+    expect(res.body.summary.perServing.protein).toBe(18);
     expect(res.body.summary.targets.calories).toBe(2200);
   });
 

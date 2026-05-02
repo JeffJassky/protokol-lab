@@ -35,7 +35,7 @@ async function seedTemplate(now = Date.now()) {
   const foodItem = await FoodItem.create({
     userId: tmpl._id,
     name: 'Chicken breast',
-    caloriesPer: 165,
+    perServing: { calories: 165 },
     isCustom: true,
   });
   const compound = await Compound.create({

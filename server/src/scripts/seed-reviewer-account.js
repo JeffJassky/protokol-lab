@@ -32,10 +32,13 @@ import User from '../models/User.js';
 import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
 import WeightLog from '../models/WeightLog.js';
-import WaistLog from '../models/WaistLog.js';
+import Metric from '../models/Metric.js';
+import MetricLog from '../models/MetricLog.js';
 import Compound from '../models/Compound.js';
 import DoseLog from '../models/DoseLog.js';
 import ChatThread from '../models/ChatThread.js';
+import { toCanonical } from '../../../shared/units.js';
+import { findPreset } from '../../../shared/metricPresets.js';
 
 const REVIEWER_EMAIL = (process.env.REVIEWER_EMAIL || 'appstore-review@protokollab.com')
   .toLowerCase()
@@ -85,7 +88,8 @@ const userId = user._id;
 await Promise.all([
   FoodLog.deleteMany({ userId }),
   WeightLog.deleteMany({ userId }),
-  WaistLog.deleteMany({ userId }),
+  MetricLog.deleteMany({ userId }),
+  Metric.deleteMany({ userId }),
   DoseLog.deleteMany({ userId }),
   Compound.deleteMany({ userId }),
   ChatThread.deleteMany({ userId }),
@@ -93,15 +97,24 @@ await Promise.all([
 ]);
 
 // 3. Seed a small foundation of foods, then 4 weeks of meals.
+const seedFood = (overrides) => ({
+  userId,
+  servingUnit: 'g',
+  servingKnown: true,
+  nutrientSource: 'manual',
+  nutrientCoverage: 'macros_only',
+  ...overrides,
+});
+
 const foods = await FoodItem.insertMany([
-  { userId, name: 'Greek Yogurt (plain, 0%)', emoji: '🥣', brand: 'Fage', servingSize: '170 g', servingGrams: 170, caloriesPer: 100, proteinPer: 18, fatPer: 0, carbsPer: 6 },
-  { userId, name: 'Chicken Breast (grilled)', emoji: '🍗', servingSize: '100 g', servingGrams: 100, caloriesPer: 165, proteinPer: 31, fatPer: 3.6, carbsPer: 0 },
-  { userId, name: 'White Rice (cooked)', emoji: '🍚', servingSize: '1 cup', servingGrams: 158, caloriesPer: 205, proteinPer: 4.3, fatPer: 0.4, carbsPer: 45 },
-  { userId, name: 'Salmon (baked)', emoji: '🐟', servingSize: '150 g', servingGrams: 150, caloriesPer: 312, proteinPer: 33, fatPer: 19, carbsPer: 0 },
-  { userId, name: 'Mixed Greens Salad', emoji: '🥗', servingSize: '2 cups', servingGrams: 100, caloriesPer: 50, proteinPer: 2, fatPer: 0.5, carbsPer: 10 },
-  { userId, name: 'Apple', emoji: '🍎', servingSize: '1 medium', servingGrams: 182, caloriesPer: 95, proteinPer: 0.5, fatPer: 0.3, carbsPer: 25 },
-  { userId, name: 'Almonds', emoji: '🌰', servingSize: '28 g', servingGrams: 28, caloriesPer: 164, proteinPer: 6, fatPer: 14, carbsPer: 6 },
-  { userId, name: 'Eggs (whole)', emoji: '🥚', servingSize: '2 large', servingGrams: 100, caloriesPer: 155, proteinPer: 13, fatPer: 11, carbsPer: 1 },
+  seedFood({ name: 'Greek Yogurt (plain, 0%)', emoji: '🥣', brand: 'Fage', servingSize: '170 g', servingAmount: 170, perServing: { calories: 100, protein: 18, fat: 0, carbs: 6 } }),
+  seedFood({ name: 'Chicken Breast (grilled)', emoji: '🍗', servingSize: '100 g', servingAmount: 100, perServing: { calories: 165, protein: 31, fat: 3.6, carbs: 0 } }),
+  seedFood({ name: 'White Rice (cooked)', emoji: '🍚', servingSize: '1 cup', servingAmount: 158, perServing: { calories: 205, protein: 4.3, fat: 0.4, carbs: 45 } }),
+  seedFood({ name: 'Salmon (baked)', emoji: '🐟', servingSize: '150 g', servingAmount: 150, perServing: { calories: 312, protein: 33, fat: 19, carbs: 0 } }),
+  seedFood({ name: 'Mixed Greens Salad', emoji: '🥗', servingSize: '2 cups', servingAmount: 100, perServing: { calories: 50, protein: 2, fat: 0.5, carbs: 10 } }),
+  seedFood({ name: 'Apple', emoji: '🍎', servingSize: '1 medium', servingAmount: 182, perServing: { calories: 95, protein: 0.5, fat: 0.3, carbs: 25 } }),
+  seedFood({ name: 'Almonds', emoji: '🌰', servingSize: '28 g', servingAmount: 28, perServing: { calories: 164, protein: 6, fat: 14, carbs: 6 } }),
+  seedFood({ name: 'Eggs (whole)', emoji: '🥚', servingSize: '2 large', servingAmount: 100, perServing: { calories: 155, protein: 13, fat: 11, carbs: 1 } }),
 ]);
 const byName = Object.fromEntries(foods.map((f) => [f.name, f]));
 
@@ -143,7 +156,6 @@ console.log(`[reviewer] inserted ${foodLogs.length} food logs across ${DAYS} day
 
 // 4. Weight + waist trend (gentle downward — narrative is "tracking a cut").
 const weightLogs = [];
-const waistLogs = [];
 const startWeight = 192;
 for (let n = DAYS - 1; n >= 0; n -= 2) {
   // Daily-ish weighings with realistic noise + monotone trend.
@@ -151,14 +163,35 @@ for (let n = DAYS - 1; n >= 0; n -= 2) {
   const noise = (n % 5) * 0.3 - 0.6;
   weightLogs.push({ userId, weightLbs: Number((startWeight + delta + noise).toFixed(1)), date: dateNDaysAgo(n, 7) });
 }
+await WeightLog.insertMany(weightLogs);
+
+// Waist tracked as a Metric (preset, dimension=length, canonical=cm). Stored
+// in cm to match production storage; the UI converts to in for imperial users.
+const waistPreset = findPreset('waist');
+const waistMetric = await Metric.create({
+  userId,
+  key: waistPreset.key,
+  name: waistPreset.name,
+  category: waistPreset.category,
+  dimension: waistPreset.dimension,
+  isPreset: true,
+  enabled: true,
+  order: 0,
+});
+const metricLogs = [];
 for (let n = DAYS - 1; n >= 0; n -= 7) {
   // Weekly waist tape measurement.
   const delta = ((DAYS - n) / DAYS) * -2;
-  waistLogs.push({ userId, waistInches: Number((36 + delta).toFixed(1)), date: dateNDaysAgo(n, 7) });
+  const inches = Number((36 + delta).toFixed(1));
+  metricLogs.push({
+    userId,
+    metricId: waistMetric._id,
+    value: toCanonical(inches, 'in'),
+    date: dateNDaysAgo(n, 7),
+  });
 }
-await WeightLog.insertMany(weightLogs);
-await WaistLog.insertMany(waistLogs);
-console.log(`[reviewer] inserted ${weightLogs.length} weight + ${waistLogs.length} waist entries`);
+await MetricLog.insertMany(metricLogs);
+console.log(`[reviewer] inserted ${weightLogs.length} weight + ${metricLogs.length} waist (metric) entries`);
 
 // 5. One compound + 4 doses (weekly tirzepatide).
 const compound = await Compound.create({
@@ -194,7 +227,7 @@ await ChatThread.create({
 });
 console.log('[reviewer] inserted seed chat thread');
 
-console.log(`\n[reviewer] DONE. Reviewer account ready:\n  email:    ${REVIEWER_EMAIL}\n  password: (the value you passed in REVIEWER_PASSWORD)\n  plan:     unlimited\n  data:     ${DAYS} days of foodlog, ${weightLogs.length} weights, ${waistLogs.length} waist, ${doseLogs.length} doses, 1 chat thread\n`);
+console.log(`\n[reviewer] DONE. Reviewer account ready:\n  email:    ${REVIEWER_EMAIL}\n  password: (the value you passed in REVIEWER_PASSWORD)\n  plan:     unlimited\n  data:     ${DAYS} days of foodlog, ${weightLogs.length} weights, ${metricLogs.length} waist (metric), ${doseLogs.length} doses, 1 chat thread\n`);
 
 await mongoose.disconnect();
 

@@ -7,7 +7,7 @@ export const DIMENSIONS = {
   mass:        { canonical: 'g',     units: ['g', 'kg', 'lb', 'oz'] },
   length:      { canonical: 'cm',    units: ['cm', 'mm', 'm', 'in', 'ft'] },
   volume:      { canonical: 'ml',    units: ['ml', 'l', 'fl_oz', 'cup'] },
-  duration:    { canonical: 's',     units: ['s', 'min', 'hr'] },
+  duration:    { canonical: 's',     units: ['s', 'min', 'hr', 'day'] },
   temperature: { canonical: 'C',     units: ['C', 'F'] },
   pressure:    { canonical: 'mmHg',  units: ['mmHg', 'kPa'] },
   percent:     { canonical: '%',     units: ['%'] },
@@ -21,7 +21,7 @@ const LINEAR_FACTORS = {
   g: 1, kg: 1000, lb: 453.59237, oz: 28.349523125,
   cm: 1, mm: 0.1, m: 100, in: 2.54, ft: 30.48,
   ml: 1, l: 1000, fl_oz: 29.5735295625, cup: 240,
-  s: 1, min: 60, hr: 3600,
+  s: 1, min: 60, hr: 3600, day: 86400,
   mmHg: 1, kPa: 7.50061682704,
   '%': 1, bpm: 1, count: 1,
 };
@@ -30,7 +30,7 @@ const UNIT_LABELS = {
   g: 'g', kg: 'kg', lb: 'lb', oz: 'oz',
   cm: 'cm', mm: 'mm', m: 'm', in: 'in', ft: 'ft',
   ml: 'ml', l: 'L', fl_oz: 'fl oz', cup: 'cup',
-  s: 's', min: 'min', hr: 'hr',
+  s: 's', min: 'min', hr: 'hr', day: 'd',
   C: '°C', F: '°F',
   mmHg: 'mmHg', kPa: 'kPa',
   '%': '%', bpm: 'bpm', count: '',
@@ -69,6 +69,40 @@ export function unitLabel(unit) {
 // Dimensions that have only one unit don't need a user preference picker.
 export function isUserSelectable(dimension) {
   return DIMENSIONS[dimension].units.length > 1;
+}
+
+// Default display unit per (system, dimension). Used when nothing more
+// specific is set (a metric's own `displayUnit` overrides). Users can still
+// pick any unit in `DIMENSIONS[dim].units` — these are just sensible starting
+// points so most users never have to think about it.
+export const SYSTEM_DEFAULTS = {
+  imperial: {
+    mass: 'lb',
+    length: 'in',
+    volume: 'fl_oz',
+    duration: 'min',
+    temperature: 'F',
+    pressure: 'mmHg',
+  },
+  metric: {
+    mass: 'kg',
+    length: 'cm',
+    volume: 'ml',
+    duration: 'min',
+    temperature: 'C',
+    pressure: 'mmHg',
+  },
+};
+
+export function defaultUnitFor(dimension, system = 'imperial') {
+  return SYSTEM_DEFAULTS[system]?.[dimension] || canonicalUnit(dimension);
+}
+
+// Resolve the unit to use when displaying a metric value:
+//   per-metric override → system default → canonical fallback
+export function resolveDisplayUnit({ dimension, displayUnit, system }) {
+  if (displayUnit) return displayUnit;
+  return defaultUnitFor(dimension, system);
 }
 
 export function toCanonical(value, unit) {

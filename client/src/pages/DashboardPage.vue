@@ -18,16 +18,25 @@ import { useWeightStore } from '../stores/weight.js';
 import { useFoodLogStore } from '../stores/foodlog.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { useSymptomsStore } from '../stores/symptoms.js';
+import { useMetricsStore } from '../stores/metrics.js';
+import { usePhotoTypesStore } from '../stores/photoTypes.js';
+import {
+  defaultUnitFor,
+  unitLabel,
+  fromCanonical,
+} from '../../../shared/units.js';
 import { useNotesStore } from '../stores/notes.js';
 import { useCompoundsStore } from '../stores/compounds.js';
 import { useDosesStore } from '../stores/doses.js';
 import { usePhotosStore } from '../stores/photos.js';
+import { useWaterStore, mlToUnit } from '../stores/water.js';
 import { computeNutritionScore } from '../utils/nutritionScore.js';
 import { contrastText } from '../utils/contrast.js';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import InsightsCard from '../components/InsightsCard.vue';
 import PhotoTimelineCard from '../components/PhotoTimelineCard.vue';
 import UpgradeBadge from '../components/UpgradeBadge.vue';
+import FastingBanner from '../components/FastingBanner.vue';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { localYmd } from '../utils/date.js';
@@ -74,10 +83,38 @@ const weightStore = useWeightStore();
 const foodLogStore = useFoodLogStore();
 const settingsStore = useSettingsStore();
 const symptomsStore = useSymptomsStore();
+const metricsStore = useMetricsStore();
+const photoTypesStore = usePhotoTypesStore();
+
+const photosVisibleOnDashboard = computed(() => {
+  const p = settingsStore.settings?.photos;
+  if (!p || !p.enabled) return false;
+  return p.showOnDashboard !== false;
+});
 const notesStore = useNotesStore();
 const compoundsStore = useCompoundsStore();
 const dosesStore = useDosesStore();
 const photosStore = usePhotosStore();
+const waterStore = useWaterStore();
+
+// Today's hydration summary card. Conditional on settings.water.enabled
+// AND settings.water.showOnDashboard.
+const waterSettings = computed(() => settingsStore.settings?.water || {});
+const waterCardVisible = computed(
+  () => Boolean(waterSettings.value.enabled) && Boolean(waterSettings.value.showOnDashboard),
+);
+const waterTodayKey = computed(() => localYmd());
+const waterTodayMl = computed(() => waterStore.totalMlFor(waterTodayKey.value));
+const waterTargetMl = computed(() => Number(waterSettings.value.dailyTargetMl) || 2000);
+const waterUnit = computed(() => waterSettings.value.unit || 'fl_oz');
+const waterUnitLabel = computed(() => (waterUnit.value === 'fl_oz' ? 'fl oz' : 'ml'));
+const waterTodayDisplay = computed(() => Math.round(mlToUnit(waterTodayMl.value, waterUnit.value)));
+const waterTargetDisplay = computed(() => Math.round(mlToUnit(waterTargetMl.value, waterUnit.value)));
+const waterPct = computed(() => {
+  if (!waterTargetMl.value) return 0;
+  return Math.min(100, Math.round((waterTodayMl.value / waterTargetMl.value) * 100));
+});
+const waterGoalHit = computed(() => waterTodayMl.value >= waterTargetMl.value);
 const planLimits = usePlanLimits();
 const upgradeModal = useUpgradeModalStore();
 
@@ -142,7 +179,6 @@ const CORE_SERIES = computed(() => {
   themeTick.value; // reactive dependency
   return [
     { id: 'weight', label: 'Weight', unit: 'lbs', color: cssVar('--color-weight', '#4f46e5'), cat: 'Body', axis: 'y', fill: true },
-    { id: 'waist', label: 'Waist', unit: 'in', color: cssVar('--color-waist', '#0ea5e9'), cat: 'Body', axis: 'yWaist', fill: false, pills: true },
     { id: 'calories', label: 'Calories', unit: 'kcal', color: cssVar('--color-cal', '#3b82f6'), cat: 'Nutrition', axis: 'yCal', fill: true },
     { id: 'protein', label: 'Protein', unit: 'g', color: cssVar('--color-protein', '#16a34a'), cat: 'Nutrition', axis: 'yGrams', fill: false },
     { id: 'fat', label: 'Fat', unit: 'g', color: cssVar('--color-fat', '#f59e0b'), cat: 'Nutrition', axis: 'yGrams', fill: false, dash: [4, 3] },
@@ -189,6 +225,36 @@ const symptomSeries = computed(() => {
   }));
 });
 
+// Metric series: one per enabled user-tracked metric (waist, arms, body fat,
+// custom, etc.). Reuses the symptom palette for visual consistency. All
+// metrics share `yMetric` even though their dimensions differ — same
+// trade-off as compounds sharing yDose: the per-axis scale is hidden so
+// the visual overlap is by design.
+const metricSeries = computed(() => {
+  themeTick.value; // reactive dep
+  const system = settingsStore.settings?.unitSystem || 'imperial';
+  return metricsStore.metrics
+    .filter((m) => m.enabled)
+    .sort((a, b) => a.order - b.order)
+    .map((m, i) => {
+      const unit = m.displayUnit || defaultUnitFor(m.dimension, system);
+      return {
+        id: `metric:${m._id}`,
+        label: m.name,
+        unit: unitLabel(unit) || m.dimension,
+        color: cssVar(SYMPTOM_COLOR_VARS[i % SYMPTOM_COLOR_VARS.length], '#0ea5e9'),
+        cat: 'Metrics',
+        axis: 'yMetric',
+        fill: false,
+        metricId: m._id,
+        // Carried so getSeriesDataPoints can resolve display unit without
+        // re-looking up the metric def.
+        dimension: m.dimension,
+        displayUnit: unit,
+      };
+    });
+});
+
 // For any series, build a sibling "trend" def — same color/category/axis,
 // dashed best-fit line. Compounds get one too even though their PK curve
 // is modeled rather than measured — the regression slope still tells the
@@ -208,12 +274,12 @@ function makeTrendDef(source) {
 }
 
 // Interleave each value series with its trend companion so the popover
-// groups them adjacent within their category ("Weight, Weight trend,
-// Waist, Waist trend, …").
+// groups them adjacent within their category ("Weight, Weight trend, …").
 const allSeries = computed(() => {
   const out = [];
   for (const s of [
     ...CORE_SERIES.value,
+    ...metricSeries.value,
     ...compoundSeries.value,
     ...symptomSeries.value,
   ]) {
@@ -300,7 +366,7 @@ const activeSeriesDefs = computed(() =>
 );
 
 
-// ---- Chart plugins (dose pills, waist pills) ----------------------------
+// ---- Chart plugins (dose pills) -----------------------------------------
 
 const pillLabelsPlugin = {
   id: 'pillLabels',
@@ -333,21 +399,6 @@ const pillLabelsPlugin = {
       });
     });
 
-    // Waist pills (at data points).
-    if (activeSeries.has('waist')) {
-      const wIdx = chart.data.datasets.findIndex((d) => d?.label === 'Waist');
-      if (wIdx !== -1) {
-        const meta = chart.getDatasetMeta(wIdx);
-        const ds = chart.data.datasets[wIdx];
-        if (meta?.data?.length) {
-          meta.data.forEach((point, i) => {
-            const val = ds.data[i]?.y;
-            if (val == null) return;
-            drawPill(ctx, `${val}"`, point.x, point.y - 14, cssVar('--color-waist', '#0ea5e9'), false, 0);
-          });
-        }
-      }
-    }
   },
 };
 
@@ -428,8 +479,8 @@ const endpointLabelsPlugin = {
     if (!isMobile.value) return;
 
     // Only the series whose y-axis we hid get inline endpoint labels.
-    // Other series (waist, dosage, symptoms) already have their own
-    // datapoint annotations.
+    // Other series (dosage, symptoms) already have their own datapoint
+    // annotations.
     const SERIES = [
       { label: 'Weight', unit: ' lbs', fmt: (v) => `${v} lbs` },
       { label: 'Calories', unit: ' kcal', fmt: (v) => `${Math.round(v).toLocaleString()} kcal` },
@@ -669,6 +720,7 @@ async function loadRangeData() {
   await Promise.all([
     foodLogStore.fetchDailyNutrition(from, to),
     symptomsStore.fetchRangeLogs(from, to),
+    metricsStore.fetchRangeLogs(from, to),
     notesStore.fetchRange(from, to),
   ]);
 }
@@ -682,15 +734,17 @@ onMounted(async () => {
   await Promise.all([
     weightStore.fetchEntries(),
     weightStore.fetchStats(),
-    weightStore.fetchWaistEntries(),
     compoundsStore.fetchAll(),
     dosesStore.fetchEntries(),
     dosesStore.fetchPkCurves(),
     symptomsStore.fetchSymptoms(),
     symptomsStore.fetchLoggedDates(),
+    metricsStore.fetchMetrics(),
     photosStore.fetchAll(),
+    photoTypesStore.fetchPhotoTypes(),
     loadRangeData(),
     settingsStore.loaded ? Promise.resolve() : settingsStore.fetchSettings(),
+    waterStore.fetchDay(localYmd()),
   ]);
   dataReady.value = true;
 
@@ -715,7 +769,6 @@ function filterByRange(arr, dateField = 'date') {
 }
 
 const filteredWeight = computed(() => filterByRange(weightStore.entries));
-const filteredWaist = computed(() => filterByRange(weightStore.waistEntries));
 const filteredNutrition = computed(() => foodLogStore.dailyNutrition || []);
 function filteredDosesFor(compoundId) {
   const all = dosesStore.entries.filter((d) => d.compoundId === compoundId);
@@ -746,6 +799,19 @@ const symptomDataById = computed(() => {
   for (const log of symptomsStore.rangeLogs) {
     if (!map.has(log.symptomId)) map.set(log.symptomId, []);
     map.get(log.symptomId).push(log);
+  }
+  return map;
+});
+
+// Build per-metric data: Map<metricId, [{date, value}]>. Stored in canonical
+// units; conversion to display unit happens in getSeriesDataPoints so the
+// per-metric `displayUnit` override is honored.
+const metricDataById = computed(() => {
+  const map = new Map();
+  for (const log of metricsStore.rangeLogs) {
+    const id = String(log.metricId);
+    if (!map.has(id)) map.set(id, []);
+    map.get(id).push(log);
   }
   return map;
 });
@@ -783,8 +849,6 @@ function getSeriesDataPoints(def) {
   switch (def.id) {
     case 'weight':
       return filteredWeight.value.map((e) => ({ x: parseLocalDate(e.date), y: e.weightLbs }));
-    case 'waist':
-      return filteredWaist.value.map((e) => ({ x: parseLocalDate(e.date), y: e.waistInches }));
     case 'calories':
       return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.calories }));
     case 'protein':
@@ -816,6 +880,14 @@ function getSeriesDataPoints(def) {
       if (def.symptomId) {
         const logs = symptomDataById.value.get(def.symptomId) || [];
         return logs.map((l) => ({ x: parseLocalDate(l.date), y: l.severity }));
+      }
+      if (def.metricId) {
+        const logs = metricDataById.value.get(String(def.metricId)) || [];
+        const unit = def.displayUnit;
+        return logs.map((l) => ({
+          x: parseLocalDate(l.date),
+          y: fromCanonical(l.value, unit),
+        }));
       }
       return [];
   }
@@ -1104,7 +1176,10 @@ function buildChartOptions(defs, { hideXAxis = false, stacked = false } = {}) {
       },
       border: { display: false },
     };
-    if (primary !== 'y' && primary !== 'yWaist') primaryAxisConfig.min = 0;
+    // y (weight) and yMetric (body measurements) auto-fit so small variations
+    // around a high baseline (e.g. 90cm waist trending to 88cm) aren't visually
+    // squashed against a hard zero.
+    if (primary !== 'y' && primary !== 'yMetric') primaryAxisConfig.min = 0;
     if (primary === 'ySymptom') primaryAxisConfig.max = 10;
     if (primary === 'yScore') primaryAxisConfig.max = 100;
     if (primary === 'yCal' && tdee.value) {
@@ -1119,7 +1194,7 @@ function buildChartOptions(defs, { hideXAxis = false, stacked = false } = {}) {
     for (const ax of usedAxes) {
       if (ax === primary) continue;
       const aux = { position: 'right', display: false, grid: { drawOnChartArea: false } };
-      if (ax !== 'y' && ax !== 'yWaist') aux.min = 0;
+      if (ax !== 'y' && ax !== 'yMetric') aux.min = 0;
       if (ax === 'ySymptom') aux.max = 10;
       if (ax === 'yScore') aux.max = 100;
       opts.scales[ax] = aux;
@@ -1165,9 +1240,6 @@ function buildChartOptions(defs, { hideXAxis = false, stacked = false } = {}) {
   // Hidden axes for other unit groups.
   if (usedAxes.has('yGrams')) {
     opts.scales.yGrams = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0 };
-  }
-  if (usedAxes.has('yWaist')) {
-    opts.scales.yWaist = { position: 'right', display: false, grid: { drawOnChartArea: false } };
   }
   if (usedAxes.has('yDose')) {
     opts.scales.yDose = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0 };
@@ -1234,7 +1306,7 @@ const allLogRows = computed(() => {
   const ensure = (dateStr) => {
     if (!byDate.has(dateStr)) byDate.set(dateStr, {
       date: dateStr,
-      weight: null, waist: null,
+      weight: null,
       doses: {}, // compoundId → value
       cal: null, protein: null, fat: null, carbs: null, score: null,
       symptoms: false, note: null,
@@ -1244,9 +1316,6 @@ const allLogRows = computed(() => {
 
   for (const e of weightStore.entries) {
     ensure(String(e.date).slice(0, 10)).weight = e.weightLbs;
-  }
-  for (const e of weightStore.waistEntries) {
-    ensure(String(e.date).slice(0, 10)).waist = e.waistInches;
   }
   for (const e of dosesStore.entries) {
     ensure(String(e.date).slice(0, 10)).doses[e.compoundId] = e.value;
@@ -1338,6 +1407,24 @@ function bmiClass(bmi) {
 
 <template>
   <div class="dashboard">
+    <FastingBanner surface="dashboard" />
+
+    <!-- Hydration summary -->
+    <div v-if="waterCardVisible" class="water-summary-card" :class="{ hit: waterGoalHit }">
+      <div class="water-summary-head">
+        <span class="water-summary-label">Hydration today</span>
+        <span class="water-summary-status">
+          {{ waterGoalHit ? 'Goal hit ✓' : `${waterPct}%` }}
+        </span>
+      </div>
+      <div class="water-summary-value">
+        {{ waterTodayDisplay }}
+        <span class="water-summary-target">/ {{ waterTargetDisplay }} {{ waterUnitLabel }}</span>
+      </div>
+      <div class="water-summary-bar">
+        <div class="water-summary-bar-fill" :style="{ width: `${waterPct}%` }"></div>
+      </div>
+    </div>
     <!-- Weight stats grid -->
     <div v-if="weightStore.stats" class="stats-grid">
       <div class="stat-card">
@@ -1622,7 +1709,7 @@ function bmiClass(bmi) {
     <InsightsCard />
 
     <!-- Progress photos timeline -->
-    <PhotoTimelineCard />
+    <PhotoTimelineCard v-if="photosVisibleOnDashboard" />
 
     <!-- Combined log history -->
     <div class="card">
@@ -1633,7 +1720,6 @@ function bmiClass(bmi) {
             <tr>
               <th class="lt-date"></th>
               <th class="lt-num">Weight</th>
-              <th class="lt-num">Waist</th>
               <th
                 v-for="c in tableCompounds"
                 :key="c._id"
@@ -1661,9 +1747,6 @@ function bmiClass(bmi) {
               <td class="lt-date">{{ formatDate(row.date) }}</td>
               <td class="lt-num">
                 {{ row.weight != null ? `${row.weight} lb` : '' }}
-              </td>
-              <td class="lt-num">
-                {{ row.waist != null ? `${row.waist}"` : '' }}
               </td>
               <td
                 v-for="c in tableCompounds"
@@ -2227,4 +2310,65 @@ function bmiClass(bmi) {
 }
 
 .empty { color: var(--text-secondary); font-size: var(--font-size-s); text-align: center; padding: var(--space-6) 0; }
+
+/* Hydration summary card on the dashboard. Mirrors stat-card spacing but
+   foregrounds a progress bar since hydration is a cumulative-toward-goal
+   metric, not a discrete value. */
+.water-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-3);
+}
+.water-summary-card.hit {
+  border-color: color-mix(in srgb, var(--success, #16a34a) 60%, var(--border));
+}
+.water-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+}
+.water-summary-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.water-summary-status {
+  font-size: var(--font-size-s);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.water-summary-card.hit .water-summary-status {
+  color: var(--success, #16a34a);
+  font-weight: var(--font-weight-bold);
+}
+.water-summary-value {
+  font-size: var(--font-size-xxl, 1.75rem);
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: var(--space-2);
+}
+.water-summary-target {
+  font-size: var(--font-size-s);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+  margin-left: 4px;
+}
+.water-summary-bar {
+  height: 6px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.water-summary-bar-fill {
+  height: 100%;
+  background: var(--water, #06b6d4);
+  border-radius: 999px;
+  transition: width 240ms ease;
+}
 </style>

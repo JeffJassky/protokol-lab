@@ -16,10 +16,12 @@ import Meal from '../models/Meal.js';
 import FoodLog from '../models/FoodLog.js';
 import DoseLog from '../models/DoseLog.js';
 import WeightLog from '../models/WeightLog.js';
-import WaistLog from '../models/WaistLog.js';
+import Metric from '../models/Metric.js';
+import MetricLog from '../models/MetricLog.js';
 import SymptomLog from '../models/SymptomLog.js';
 import DayNote from '../models/DayNote.js';
 import Photo from '../models/Photo.js';
+import PhotoType from '../models/PhotoType.js';
 import UserSettings from '../models/UserSettings.js';
 import { childLogger, errContext } from '../lib/logger.js';
 
@@ -49,7 +51,13 @@ const CLONE_PLAN = [
     rewriteRefs: { compoundId: 'Compound' },
   },
   { name: 'WeightLog', model: WeightLog, dateFields: ['date', 'createdAt'] },
-  { name: 'WaistLog', model: WaistLog, dateFields: ['date', 'createdAt'] },
+  { name: 'Metric', model: Metric, dateFields: ['createdAt', 'updatedAt'] },
+  {
+    name: 'MetricLog',
+    model: MetricLog,
+    dateFields: ['date', 'createdAt'],
+    rewriteRefs: { metricId: 'Metric' },
+  },
   {
     name: 'SymptomLog',
     model: SymptomLog,
@@ -59,12 +67,19 @@ const CLONE_PLAN = [
   { name: 'DayNote', model: DayNote, dateFields: ['date', 'updatedAt'] },
   // Photo.date is a 'YYYY-MM-DD' string, not a Date — shifted as a calendar
   // day, not a timestamp.
-  { name: 'Photo', model: Photo, dateFields: ['takenAt', 'createdAt'], dateStringFields: ['date'] },
+  { name: 'PhotoType', model: PhotoType, dateFields: ['createdAt', 'updatedAt'] },
+  {
+    name: 'Photo',
+    model: Photo,
+    dateFields: ['takenAt', 'createdAt'],
+    dateStringFields: ['date'],
+    rewriteRefs: { photoTypeId: 'PhotoType' },
+  },
   { name: 'UserSettings', model: UserSettings, dateFields: ['updatedAt'] },
 ];
 
 // Logs we look at to find the template's "most recent activity" for delta math.
-const TIMELINE_COLLECTIONS = ['FoodLog', 'DoseLog', 'WeightLog', 'WaistLog', 'SymptomLog', 'DayNote', 'Photo'];
+const TIMELINE_COLLECTIONS = ['FoodLog', 'DoseLog', 'WeightLog', 'MetricLog', 'SymptomLog', 'DayNote', 'Photo'];
 
 function shiftDate(value, deltaMs) {
   if (value == null) return value;

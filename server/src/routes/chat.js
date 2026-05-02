@@ -359,6 +359,7 @@ router.post('/proposals/:id/confirm', async (req, res) => {
   for (const item of itemsToLog) {
     let foodItemId = item.foodItemId;
     if (!foodItemId) {
+      const grams = item.grams != null ? Number(item.grams) : null;
       const created = await FoodItem.create({
         userId: req.authUserId,
         // AI-proposed foods come from a meal-photo or text proposal flow.
@@ -370,11 +371,17 @@ router.post('/proposals/:id/confirm', async (req, res) => {
         brand: item.brand || '',
         emoji: item.emoji || '',
         servingSize: item.portion || '',
-        servingGrams: item.grams != null ? Number(item.grams) : 100,
-        caloriesPer: Math.max(0, Math.round(Number(item.calories) || 0)),
-        proteinPer: Math.max(0, Math.round(Number(item.protein) || 0)),
-        fatPer: Math.max(0, Math.round(Number(item.fat) || 0)),
-        carbsPer: Math.max(0, Math.round(Number(item.carbs) || 0)),
+        servingAmount: grams,
+        servingUnit: grams != null ? 'g' : null,
+        servingKnown: grams != null,
+        perServing: {
+          calories: Math.max(0, Math.round(Number(item.calories) || 0)),
+          protein: Math.max(0, Math.round(Number(item.protein) || 0)),
+          fat: Math.max(0, Math.round(Number(item.fat) || 0)),
+          carbs: Math.max(0, Math.round(Number(item.carbs) || 0)),
+        },
+        nutrientSource: 'agent',
+        nutrientCoverage: 'macros_only',
       });
       foodItemId = created._id;
     }

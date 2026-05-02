@@ -19,7 +19,7 @@ async function mkSandbox({ parentUserId = null, lastActiveAt }) {
     lastActiveAt,
   });
   // Add one child row so we can assert cascade.
-  const fi = await FoodItem.create({ userId: sb._id, name: 'X', caloriesPer: 100 });
+  const fi = await FoodItem.create({ userId: sb._id, name: 'X', perServing: { calories: 100 } });
   await FoodLog.create({
     userId: sb._id,
     foodItemId: fi._id,

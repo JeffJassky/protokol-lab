@@ -11,12 +11,14 @@
 
 import FoodLog from '../models/FoodLog.js';
 import WeightLog from '../models/WeightLog.js';
-import WaistLog from '../models/WaistLog.js';
 import DoseLog from '../models/DoseLog.js';
 import Compound from '../models/Compound.js';
 import Symptom from '../models/Symptom.js';
 import SymptomLog from '../models/SymptomLog.js';
+import Metric from '../models/Metric.js';
+import MetricLog from '../models/MetricLog.js';
 import UserSettings from '../models/UserSettings.js';
+import { defaultUnitFor, fromCanonical, unitLabel } from '../../../shared/units.js';
 
 // PK math copied from /routes/doses.js — should be deduped into a shared
 // /lib/pk.js eventually, but kept inline here to avoid a refactor in the
@@ -76,22 +78,24 @@ async function fetchWeightDaily(uid, fromDate, toDate) {
   return { values, unit: 'lbs', label: 'Weight', kind: 'measured' };
 }
 
-async function fetchWaistDaily(uid, fromDate, toDate) {
-  const entries = await WaistLog.find({
-    userId: uid, date: dateRange(fromDate, toDate),
+// Fetch a user-defined Metric series. Values are stored canonically in the
+// metric's dimension; the chart unit reflects whatever the user picked
+// (per-metric `displayUnit`, falling back to their unitSystem default).
+async function fetchMetricDaily(uid, metricId, fromDate, toDate) {
+  const metric = await Metric.findOne({ _id: metricId, userId: uid }).lean();
+  if (!metric) return { values: new Map(), unit: '', label: '', kind: 'unknown' };
+  const settings = await UserSettings.findOne({ userId: uid }).select('unitSystem').lean();
+  const system = settings?.unitSystem || 'imperial';
+  const unit = metric.displayUnit || defaultUnitFor(metric.dimension, system);
+  const entries = await MetricLog.find({
+    userId: uid, metricId, date: dateRange(fromDate, toDate),
   }).sort({ date: 1 }).lean();
   const values = new Map();
-  for (const e of entries) values.set(isoDay(e.date), e.waistInches);
-  return { values, unit: 'in', label: 'Waist', kind: 'measured' };
+  for (const e of entries) values.set(isoDay(e.date), fromCanonical(e.value, unit));
+  return { values, unit: unitLabel(unit), label: metric.name, kind: 'measured' };
 }
 
-const NUTRITION_FIELDS = ['caloriesPer', 'proteinPer', 'fatPer', 'carbsPer'];
-const NUTRITION_KEY_MAP = {
-  calories: 'caloriesPer',
-  protein: 'proteinPer',
-  fat: 'fatPer',
-  carbs: 'carbsPer',
-};
+const NUTRITION_SERIES = new Set(['calories', 'protein', 'fat', 'carbs']);
 
 async function fetchNutritionDaily(uid, fromDate, toDate) {
   // Fetches all macros at once so a single Mongo round-trip serves
@@ -109,11 +113,12 @@ async function fetchNutritionDaily(uid, fromDate, toDate) {
     }
     const f = e.foodItemId;
     if (!f) continue;
+    const ps = f.perServing || {};
     const s = e.servingCount || 0;
-    acc.calories += (f.caloriesPer || 0) * s;
-    acc.protein += (f.proteinPer || 0) * s;
-    acc.fat += (f.fatPer || 0) * s;
-    acc.carbs += (f.carbsPer || 0) * s;
+    acc.calories += (ps.calories || 0) * s;
+    acc.protein += (ps.protein || 0) * s;
+    acc.fat += (ps.fat || 0) * s;
+    acc.carbs += (ps.carbs || 0) * s;
   }
   return byDay;
 }
@@ -172,19 +177,22 @@ async function fetchSymptomDaily(uid, symptomId, fromDate, toDate) {
 // ---- Public dispatch ----------------------------------------------------
 
 // Series ID conventions match the dashboard (DashboardPage.vue CORE_SERIES):
-//   - 'weight', 'waist'
+//   - 'weight'
 //   - 'calories', 'protein', 'fat', 'carbs', 'score'
 //   - 'dosage:<compoundId>'
 //   - 'symptom:<symptomId>'
+//   - 'metric:<metricId>'   (waist, arm, body fat, custom — anything in /api/metrics)
 //
 // `cache` lets callers batch multiple nutrition-derived series (calories +
 // protein + score) without re-querying FoodLog. Pass an empty object for a
 // single fetch.
 export async function fetchSeriesDaily(uid, seriesId, fromDate, toDate, cache = {}) {
   if (seriesId === 'weight') return fetchWeightDaily(uid, fromDate, toDate);
-  if (seriesId === 'waist') return fetchWaistDaily(uid, fromDate, toDate);
+  if (seriesId.startsWith('metric:')) {
+    return fetchMetricDaily(uid, seriesId.slice('metric:'.length), fromDate, toDate);
+  }
 
-  if (NUTRITION_KEY_MAP[seriesId] || seriesId === 'score') {
+  if (NUTRITION_SERIES.has(seriesId) || seriesId === 'score') {
     if (!cache.nutrition) cache.nutrition = await fetchNutritionDaily(uid, fromDate, toDate);
     if (seriesId === 'score') {
       if (!cache.targets) {
@@ -288,11 +296,14 @@ function addDays(isoDate, days) {
 // Returns every series id this user could meaningfully chart — used by the
 // insights aggregator when it scans for top correlations.
 export async function listAvailableSeriesIds(uid) {
-  const ids = ['weight', 'waist', 'calories', 'protein', 'fat', 'carbs', 'score'];
-  const compounds = await Compound.find({ userId: uid, enabled: true })
-    .select('_id name').lean();
-  const symptoms = await Symptom.find({ userId: uid }).select('_id name').lean();
+  const ids = ['weight', 'calories', 'protein', 'fat', 'carbs', 'score'];
+  const [compounds, symptoms, metrics] = await Promise.all([
+    Compound.find({ userId: uid, enabled: true }).select('_id name').lean(),
+    Symptom.find({ userId: uid }).select('_id name').lean(),
+    Metric.find({ userId: uid, enabled: true }).select('_id name').lean(),
+  ]);
   for (const c of compounds) ids.push(`dosage:${c._id}`);
   for (const s of symptoms) ids.push(`symptom:${s._id}`);
+  for (const m of metrics) ids.push(`metric:${m._id}`);
   return ids;
 }

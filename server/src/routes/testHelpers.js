@@ -63,8 +63,14 @@ router.post('/seed-demo-template', async (req, res) => {
     const fi = await FoodItem.create({
       userId: tmpl._id,
       name: 'Eggs',
-      caloriesPer: 80,
       isCustom: true,
+      servingSize: '1 large',
+      servingAmount: 50,
+      servingUnit: 'g',
+      servingKnown: true,
+      perServing: { calories: 80, protein: 6, fat: 5, carbs: 1 },
+      nutrientSource: 'manual',
+      nutrientCoverage: 'macros_only',
     });
     await FoodLog.create({
       userId: tmpl._id,

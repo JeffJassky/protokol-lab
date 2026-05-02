@@ -21,7 +21,7 @@ const app = createApp({ serveClient: false });
 
 async function seedTinyTemplate() {
   const tmpl = await User.create({ email: 'tmpl@demo.local', isDemoTemplate: true });
-  const fi = await FoodItem.create({ userId: tmpl._id, name: 'X', caloriesPer: 100, isCustom: true });
+  const fi = await FoodItem.create({ userId: tmpl._id, name: 'X', perServing: { calories: 100 }, isCustom: true });
   await FoodLog.create({
     userId: tmpl._id,
     foodItemId: fi._id,

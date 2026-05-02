@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Photo from '../models/Photo.js';
+import PhotoType from '../models/PhotoType.js';
 import {
   buildPhotoKey,
   presignPut,
@@ -11,8 +12,6 @@ import { evaluateStorageCap, getQuotaWindows } from '../lib/planLimits.js';
 
 const log = childLogger('photos');
 const router = Router();
-
-const ANGLES = ['front', 'side', 'back', 'other'];
 
 // Photo cap is calendar-month rolling. Counts uploads whose server-side
 // `createdAt` falls in the current UTC month; resets at startOfNextMonth.
@@ -34,16 +33,25 @@ async function denyIfPhotoCapReached(req) {
   };
 }
 
+// Resolve the PhotoType for an upload: by id (preferred) or fall back to
+// looking up by the legacy `angle` string while clients are still updating.
+// Returns the PhotoType doc or null if no match was found.
+async function resolvePhotoType(userId, { photoTypeId, angle }) {
+  if (photoTypeId) {
+    return PhotoType.findOne({ _id: photoTypeId, userId });
+  }
+  if (angle) {
+    return PhotoType.findOne({ userId, key: angle });
+  }
+  return null;
+}
+
 router.post('/upload-url', async (req, res) => {
   const rlog = req.log || log;
-  const { date, angle = 'other', contentType = 'image/jpeg', ext = 'jpg' } = req.body || {};
+  const { date, contentType = 'image/jpeg', ext = 'jpg' } = req.body || {};
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     rlog.warn({ date }, 'photos upload-url: invalid date');
     return res.status(400).json({ error: 'valid date (YYYY-MM-DD) required' });
-  }
-  if (!ANGLES.includes(angle)) {
-    rlog.warn({ angle }, 'photos upload-url: invalid angle');
-    return res.status(400).json({ error: `angle must be one of ${ANGLES.join(', ')}` });
   }
 
   // Fail-fast cap check: refusing to sign URLs prevents the wasted S3 PUT
@@ -65,10 +73,10 @@ router.post('/upload-url', async (req, res) => {
       presignPut(s3Key, contentType),
       presignPut(thumbKey, 'image/webp'),
     ]);
-    rlog.info({ date, angle, s3Key, thumbKey, contentType }, 'photos: presigned upload URLs');
+    rlog.info({ date, s3Key, thumbKey, contentType }, 'photos: presigned upload URLs');
     res.json({ uploadUrl, thumbUploadUrl, s3Key, thumbKey });
   } catch (err) {
-    rlog.error({ ...errContext(err), date, angle }, 'photos upload-url: presign failed');
+    rlog.error({ ...errContext(err), date }, 'photos upload-url: presign failed');
     throw err;
   }
 });
@@ -76,21 +84,23 @@ router.post('/upload-url', async (req, res) => {
 router.post('/', async (req, res) => {
   const rlog = req.log || log;
   const {
-    date, angle = 'other', s3Key, thumbKey, contentType,
+    date, photoTypeId, angle, s3Key, thumbKey, contentType,
     width, height, bytes, takenAt, notes,
   } = req.body || {};
   if (!date || !s3Key || !thumbKey) {
     rlog.warn({ date, hasS3Key: Boolean(s3Key), hasThumb: Boolean(thumbKey) }, 'photos create: missing fields');
     return res.status(400).json({ error: 'date, s3Key, thumbKey required' });
   }
-  if (!ANGLES.includes(angle)) {
-    rlog.warn({ angle }, 'photos create: invalid angle');
-    return res.status(400).json({ error: `angle must be one of ${ANGLES.join(', ')}` });
-  }
   const prefix = `photos/${req.userId}/`;
   if (!s3Key.startsWith(prefix) || !thumbKey.startsWith(prefix)) {
     rlog.warn({ s3Key, thumbKey, prefix }, 'photos create: key does not belong to user');
     return res.status(400).json({ error: 'key does not belong to user' });
+  }
+
+  const photoType = await resolvePhotoType(req.userId, { photoTypeId, angle });
+  if (!photoType) {
+    rlog.warn({ photoTypeId, angle }, 'photos create: photoType not found');
+    return res.status(400).json({ error: 'valid photoTypeId or matching angle required' });
   }
 
   // Backstop cap check. /upload-url already gates, but a client that
@@ -107,13 +117,19 @@ router.post('/', async (req, res) => {
 
   const entry = await Photo.create({
     userId: req.userId,
-    date, angle, s3Key, thumbKey, contentType,
+    date,
+    photoTypeId: photoType._id,
+    // Legacy angle column populated for now so older clients reading older
+    // builds still see something useful. New uploads canonicalize on
+    // photoTypeId; this is removed in the cleanup pass after migration runs.
+    angle: ['front', 'side', 'back', 'other'].includes(photoType.key) ? photoType.key : 'other',
+    s3Key, thumbKey, contentType,
     width, height, bytes,
     takenAt: takenAt ? new Date(takenAt) : undefined,
     notes,
   });
   rlog.info(
-    { photoId: String(entry._id), date, angle, bytes, width, height },
+    { photoId: String(entry._id), date, photoTypeId: String(photoType._id), bytes, width, height },
     'photos: recorded',
   );
   const [url, thumbUrl] = await Promise.all([
@@ -124,14 +140,14 @@ router.post('/', async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-  const { from, to, angle } = req.query;
+  const { from, to, photoTypeId } = req.query;
   const filter = { userId: req.userId };
   if (from || to) {
     filter.date = {};
     if (from) filter.date.$gte = String(from);
     if (to) filter.date.$lte = String(to);
   }
-  if (angle && ANGLES.includes(angle)) filter.angle = angle;
+  if (photoTypeId) filter.photoTypeId = photoTypeId;
 
   const entries = await Photo.find(filter).sort({ date: -1, takenAt: -1 }).lean();
   const t0 = Date.now();
@@ -143,7 +159,7 @@ router.get('/', async (req, res) => {
     })),
   );
   (req.log || log).debug(
-    { from, to, angle, count: entries.length, presignMs: Date.now() - t0 },
+    { from, to, photoTypeId, count: entries.length, presignMs: Date.now() - t0 },
     'photos: listed',
   );
   res.json({ entries: signed });

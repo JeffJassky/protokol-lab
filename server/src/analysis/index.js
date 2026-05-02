@@ -138,7 +138,9 @@ const SCORE_INPUTS = new Set(['calories', 'protein', 'fat', 'carbs']);
 const NUTRIENT_MACROS = new Set(['protein', 'fat', 'carbs']);
 
 function domainOf(seriesId) {
-  if (seriesId === 'weight' || seriesId === 'waist') return 'body';
+  if (seriesId === 'weight') return 'body';
+  // Custom-tracked metrics (waist, arms, body fat, etc.) are body-domain too.
+  if (seriesId.startsWith('metric:')) return 'body';
   if (NUTRITION_DOMAIN.has(seriesId)) return 'nutrition';
   if (seriesId.startsWith('dosage:')) return 'compound';
   if (seriesId.startsWith('symptom:')) return 'symptom';
@@ -155,7 +157,8 @@ function isStructurallyTautological(aId, bId) {
 
 // Within-domain pairs are usually noise: macros co-recorded from one food
 // log, multiple symptoms reflecting one underlying state. Body × body
-// (weight × waist) is the one within-domain exception worth keeping.
+// (weight × waist, weight × body-fat) is the one within-domain exception
+// worth keeping.
 function shouldSkipWithinDomain(aId, bId) {
   const dA = domainOf(aId);
   const dB = domainOf(bId);

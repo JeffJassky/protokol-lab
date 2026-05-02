@@ -7,6 +7,71 @@ const log = childLogger('settings');
 const router = Router();
 
 const ACTIVITY = ['sedentary', 'light', 'moderate', 'very', 'athlete'];
+const FASTING_KINDS = ['none', 'daily', 'weekly'];
+const HM_RE = /^\d{1,2}:\d{2}$/;
+
+// Coerce + clamp the fasting subdocument from a request body. Unknown keys
+// are dropped; missing keys default to schema defaults so a partial UI patch
+// doesn't accidentally null out other knobs.
+function sanitizeFasting(input) {
+  const f = input || {};
+  const kind = FASTING_KINDS.includes(f.kind) ? f.kind : 'daily';
+  const dailyStart = HM_RE.test(f.dailyStartTime) ? f.dailyStartTime : '20:00';
+  const dur = Number.isFinite(Number(f.fastDurationMinutes))
+    ? Math.max(15, Math.min(72 * 60, Math.round(Number(f.fastDurationMinutes))))
+    : 16 * 60;
+  const weeklyRules = Array.isArray(f.weeklyRules)
+    ? f.weeklyRules
+        .filter((r) => r && Number.isInteger(r.weekday) && r.weekday >= 0 && r.weekday <= 6)
+        .map((r) => ({
+          weekday: r.weekday,
+          startTime: HM_RE.test(r.startTime) ? r.startTime : dailyStart,
+          durationMinutes: Number.isFinite(Number(r.durationMinutes))
+            ? Math.max(15, Math.min(72 * 60, Math.round(Number(r.durationMinutes))))
+            : dur,
+        }))
+    : [];
+  return {
+    enabled: Boolean(f.enabled),
+    showOnLog: f.showOnLog !== false,
+    showOnDashboard: f.showOnDashboard !== false,
+    kind,
+    protocol: typeof f.protocol === 'string' ? f.protocol.slice(0, 16) : '16:8',
+    fastDurationMinutes: dur,
+    dailyStartTime: dailyStart,
+    weeklyRules,
+    ianaTz: typeof f.ianaTz === 'string' ? f.ianaTz.slice(0, 64) : 'UTC',
+  };
+}
+
+const WATER_UNITS = ['ml', 'fl_oz'];
+
+function sanitizePhotos(input) {
+  const p = input || {};
+  return {
+    enabled: Boolean(p.enabled),
+    showOnLog: p.showOnLog == null ? true : Boolean(p.showOnLog),
+    showOnDashboard: p.showOnDashboard == null ? true : Boolean(p.showOnDashboard),
+  };
+}
+
+function sanitizeWater(input) {
+  const w = input || {};
+  const unit = WATER_UNITS.includes(w.unit) ? w.unit : 'fl_oz';
+  const target = Number.isFinite(Number(w.dailyTargetMl))
+    ? Math.max(100, Math.min(10000, Math.round(Number(w.dailyTargetMl))))
+    : 2000;
+  const serving = Number.isFinite(Number(w.servingMl))
+    ? Math.max(30, Math.min(2000, Math.round(Number(w.servingMl))))
+    : 250;
+  return {
+    enabled: Boolean(w.enabled),
+    unit,
+    dailyTargetMl: target,
+    servingMl: serving,
+    showOnDashboard: Boolean(w.showOnDashboard),
+  };
+}
 
 router.get('/', async (req, res) => {
   const settings = await UserSettings.findOne({ userId: req.userId });
@@ -37,7 +102,7 @@ router.get('/', async (req, res) => {
 router.put('/', async (req, res) => {
   const allowed = [
     'sex', 'age', 'heightInches', 'currentWeightLbs', 'goalWeightLbs', 'bmr', 'tdee',
-    'activityLevel', 'goalRateLbsPerWeek', 'targets', 'timezone',
+    'activityLevel', 'goalRateLbsPerWeek', 'targets', 'timezone', 'unitSystem',
   ];
   const set = { updatedAt: new Date() };
   for (const k of allowed) {
@@ -51,6 +116,15 @@ router.put('/', async (req, res) => {
       enabled: Boolean(req.body.trackReminder.enabled),
       time: req.body.trackReminder.time || '20:00',
     };
+  }
+  if (req.body.fasting !== undefined) {
+    set.fasting = sanitizeFasting(req.body.fasting);
+  }
+  if (req.body.water !== undefined) {
+    set.water = sanitizeWater(req.body.water);
+  }
+  if (req.body.photos !== undefined) {
+    set.photos = sanitizePhotos(req.body.photos);
   }
 
   const settings = await UserSettings.findOneAndUpdate(
@@ -71,7 +145,7 @@ router.put('/', async (req, res) => {
 router.patch('/', async (req, res) => {
   const allowed = [
     'sex', 'age', 'heightInches', 'currentWeightLbs', 'goalWeightLbs', 'bmr', 'tdee',
-    'activityLevel', 'goalRateLbsPerWeek', 'targets', 'timezone',
+    'activityLevel', 'goalRateLbsPerWeek', 'targets', 'timezone', 'unitSystem',
   ];
   const set = { updatedAt: new Date() };
   for (const k of allowed) {
@@ -85,6 +159,15 @@ router.patch('/', async (req, res) => {
       enabled: Boolean(req.body.trackReminder.enabled),
       time: req.body.trackReminder.time || '20:00',
     };
+  }
+  if (req.body.fasting !== undefined) {
+    set.fasting = sanitizeFasting(req.body.fasting);
+  }
+  if (req.body.water !== undefined) {
+    set.water = sanitizeWater(req.body.water);
+  }
+  if (req.body.photos !== undefined) {
+    set.photos = sanitizePhotos(req.body.photos);
   }
 
   const settings = await UserSettings.findOneAndUpdate(

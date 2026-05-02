@@ -31,14 +31,17 @@ defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
         <span v-if="food.brand && food.source !== 'meal'">{{ food.brand }}&nbsp;</span>{{ food.name }}<span v-if="food.source === 'meal' && food.itemCount != null" class="meal-count"> ({{ food.itemCount }} item{{ food.itemCount === 1 ? '' : 's' }})</span>
       </span>
       <span class="food-meta">
-        {{ food.servingSize || `${food.servingGrams}g` }}
+        <template v-if="food.servingSize">{{ food.servingSize }}</template>
+        <template v-else-if="food.servingAmount && food.servingUnit">{{ Math.round(food.servingAmount) }}{{ food.servingUnit }}</template>
+        <template v-else>—</template>
+        <span v-if="food.servingKnown === false" class="serving-warn" title="No serving size — set portion before logging">⚠</span>
       </span>
     </div>
     <div class="food-macros">
-      <span class="macro cal">{{ food.caloriesPer }} kcal</span>
-      <span class="macro macro-p">{{ food.proteinPer }}p</span>
-      <span class="macro macro-f">{{ food.fatPer }}f</span>
-      <span class="macro macro-c">{{ food.carbsPer }}c</span>
+      <span class="macro cal">{{ Math.round(food.perServing?.calories || 0) }} kcal</span>
+      <span class="macro macro-p">{{ Math.round(food.perServing?.protein || 0) }}p</span>
+      <span class="macro macro-f">{{ Math.round(food.perServing?.fat || 0) }}f</span>
+      <span class="macro macro-c">{{ Math.round(food.perServing?.carbs || 0) }}c</span>
     </div>
     <button class="row-add-btn" type="button" aria-label="Add" @click.stop="$emit('select', food)">+</button>
     <slot name="actions" />
@@ -86,6 +89,11 @@ defineEmits(['select', 'favorite', 'unfavorite', 'update-emoji']);
 .food-meta {
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
+}
+.serving-warn {
+  margin-left: var(--space-1);
+  color: var(--warning, #c87a00);
+  font-size: 0.85em;
 }
 .food-macros {
   display: flex;

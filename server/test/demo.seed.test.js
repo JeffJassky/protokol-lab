@@ -11,7 +11,7 @@ import { seedTemplateFromUser, findTemplate } from '../src/services/demo.js';
 
 async function seedSourceUser() {
   const u = await User.create({ email: 'jeff@example.com', displayName: 'Jeff' });
-  const fi = await FoodItem.create({ userId: u._id, name: 'Eggs', caloriesPer: 80 });
+  const fi = await FoodItem.create({ userId: u._id, name: 'Eggs', perServing: { calories: 80 } });
   await FoodLog.create({
     userId: u._id,
     foodItemId: fi._id,

@@ -3,7 +3,11 @@ import { ref, computed } from 'vue';
 import { api } from '../api/index.js';
 import { prepPhoto } from '../utils/imagePrep.js';
 
-export const ANGLES = ['front', 'side', 'back', 'other'];
+// Legacy poses. Retained as a fallback so older code paths that still pass
+// `angle` (rather than `photoTypeId`) keep working until the migration is
+// rolled out everywhere. New code should resolve photo types via the
+// photoTypes store instead.
+export const LEGACY_ANGLES = ['front', 'side', 'back', 'other'];
 
 export const usePhotosStore = defineStore('photos', () => {
   const entries = ref([]);
@@ -23,8 +27,10 @@ export const usePhotosStore = defineStore('photos', () => {
     return byDate.value.get(date) || [];
   }
 
-  function forDateAngle(date, angle) {
-    return forDate(date).find((p) => p.angle === angle) || null;
+  function forDatePhotoType(date, photoTypeId) {
+    if (!photoTypeId) return null;
+    const target = String(photoTypeId);
+    return forDate(date).find((p) => String(p.photoTypeId) === target) || null;
   }
 
   async function fetchRange(from, to) {
@@ -53,13 +59,14 @@ export const usePhotosStore = defineStore('photos', () => {
     }, 0);
   });
 
-  async function uploadPhoto(file, { date, angle = 'other' }) {
+  async function uploadPhoto(file, { date, photoTypeId }) {
+    if (!photoTypeId) throw new Error('photoTypeId required');
     uploading.value = true;
     try {
       const prepped = await prepPhoto(file);
       const { uploadUrl, thumbUploadUrl, s3Key, thumbKey } = await api.post(
         '/api/photos/upload-url',
-        { date, angle, contentType: prepped.contentType, ext: prepped.ext },
+        { date, contentType: prepped.contentType, ext: prepped.ext },
       );
 
       // Direct-to-Spaces PUTs. ContentType must match what we presigned with.
@@ -81,7 +88,7 @@ export const usePhotosStore = defineStore('photos', () => {
 
       const { entry } = await api.post('/api/photos', {
         date,
-        angle,
+        photoTypeId,
         s3Key,
         thumbKey,
         contentType: prepped.contentType,
@@ -108,7 +115,7 @@ export const usePhotosStore = defineStore('photos', () => {
     byDate,
     currentMonthCount,
     forDate,
-    forDateAngle,
+    forDatePhotoType,
     fetchRange,
     fetchAll,
     uploadPhoto,

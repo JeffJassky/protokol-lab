@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { usePhotosStore } from '../stores/photos.js';
+import { usePhotoTypesStore } from '../stores/photoTypes.js';
 import PhotoCompareModal from './PhotoCompareModal.vue';
 import PhotoViewerModal from './PhotoViewerModal.vue';
 
@@ -10,13 +11,21 @@ const props = defineProps({
 });
 
 const photosStore = usePhotosStore();
+const photoTypesStore = usePhotoTypesStore();
 
-const ROWS = [
-  { key: 'front', label: 'Front' },
-  { key: 'side', label: 'Side' },
-  { key: 'back', label: 'Back' },
-  { key: 'other', label: 'Other' },
-];
+onMounted(async () => {
+  if (!photoTypesStore.photoTypes.length) {
+    await photoTypesStore.fetchPhotoTypes();
+  }
+});
+
+// One row per photoType the user has — including disabled ones, so historical
+// photos still render. Order honors the user's chosen sort.
+const rows = computed(() =>
+  [...photoTypesStore.photoTypes]
+    .sort((a, b) => a.order - b.order)
+    .map((t) => ({ _id: String(t._id), label: t.name })),
+);
 
 // Selection state — tap first thumb = "before", second = "after" → open compare.
 const selected = ref(null); // first tapped photo
@@ -27,21 +36,24 @@ const viewerList = ref([]);
 const compareOpen = ref(false);
 const comparePair = ref({ before: null, after: null });
 
-const photosByAngle = computed(() => {
-  const out = {};
-  for (const r of ROWS) out[r.key] = [];
+const photosByType = computed(() => {
+  const out = new Map();
+  for (const r of rows.value) out.set(r._id, []);
   for (const p of photosStore.entries) {
     if (props.fromDate && p.date < props.fromDate) continue;
-    if (out[p.angle]) out[p.angle].push(p);
+    const id = String(p.photoTypeId);
+    if (out.has(id)) out.get(id).push(p);
   }
   // Oldest → newest within each row so eyes track time left-to-right.
-  for (const k of Object.keys(out)) {
-    out[k].sort((a, b) => a.date.localeCompare(b.date));
+  for (const list of out.values()) {
+    list.sort((a, b) => a.date.localeCompare(b.date));
   }
   return out;
 });
 
-const hasAny = computed(() => Object.values(photosByAngle.value).some((arr) => arr.length > 0));
+const hasAny = computed(() =>
+  [...photosByType.value.values()].some((arr) => arr.length > 0),
+);
 
 function handleThumbClick(photo) {
   // Clicking a single photo opens the viewer. Cmd/Ctrl/Shift-click (or double-
@@ -70,7 +82,7 @@ function clearSelection() {
 }
 
 function openViewer(photo) {
-  const list = photosByAngle.value[photo.angle] || [];
+  const list = photosByType.value.get(String(photo.photoTypeId)) || [];
   const idx = list.findIndex((p) => p._id === photo._id);
   viewerList.value = list;
   viewerIndex.value = Math.max(0, idx);
@@ -106,15 +118,15 @@ function isSelected(photo) {
 
     <div v-else class="tl-rows">
       <div
-        v-for="row in ROWS"
-        :key="row.key"
-        v-show="photosByAngle[row.key].length > 0"
+        v-for="row in rows"
+        :key="row._id"
+        v-show="(photosByType.get(row._id) || []).length > 0"
         class="tl-row"
       >
         <div class="tl-row-label">{{ row.label }}</div>
         <div class="tl-strip">
           <button
-            v-for="p in photosByAngle[row.key]"
+            v-for="p in photosByType.get(row._id) || []"
             :key="p._id"
             class="tl-thumb"
             :class="{ selected: isSelected(p) }"

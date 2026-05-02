@@ -15,10 +15,10 @@ const cascadeLog = childLogger('user.cascade');
 // a test failure instead of silently ignored coverage.
 export const CASCADE_COLLECTIONS = [
   'ChatThread', 'ChatUsage', 'Compound', 'DayNote', 'DoseLog',
-  'FavoriteFood', 'FeatureRequest', 'FoodItem', 'FoodLog',
-  'FunnelEvent', 'Meal', 'MealProposal', 'Photo', 'PushSubscription',
+  'FastingEvent', 'FavoriteFood', 'FeatureRequest', 'FoodItem', 'FoodLog',
+  'FunnelEvent', 'Meal', 'MealProposal', 'Metric', 'MetricLog', 'Photo', 'PhotoType', 'PushSubscription',
   'RecentFood', 'Symptom', 'SymptomLog', 'SupportTicket',
-  'UserSettings', 'WaistLog', 'WeightLog',
+  'UserSettings', 'WeightLog',
 ];
 
 const userSchema = new mongoose.Schema({

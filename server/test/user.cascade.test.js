@@ -45,7 +45,7 @@ describe('User cascade delete', () => {
     vi.clearAllMocks();
   });
 
-  it('deletes user + every userId-referencing row across all 21 collections', async () => {
+  it('deletes user + every userId-referencing row across all 22 collections', async () => {
     const user = await User.create({ email: 'cascade@example.com' });
     await seedAllCollections(user._id);
 

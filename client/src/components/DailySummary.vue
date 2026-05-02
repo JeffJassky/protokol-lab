@@ -7,6 +7,18 @@ const props = defineProps({
   summary: { type: Object, required: true },
 });
 
+// Aggregated nutrition for the day. The summary endpoint returns a perServing
+// subdoc keyed by canonical nutrient names; we only read macros here.
+const totals = computed(() => {
+  const ps = props.summary?.perServing || {};
+  return {
+    calories: ps.calories || 0,
+    protein: ps.protein || 0,
+    fat: ps.fat || 0,
+    carbs: ps.carbs || 0,
+  };
+});
+
 // Shared bar scale across all four macros. When any macro goes over its
 // target the whole group rescales so the most-exceeded one fits at the right
 // edge of the track, and every other bar grows proportionally. Under-target
@@ -14,22 +26,19 @@ const props = defineProps({
 const scaleMax = computed(() => {
   const s = props.summary;
   if (!s || !s.targets) return 1;
+  const t = totals.value;
   const ratios = [
-    s.targets.calories ? s.totalCalories / s.targets.calories : 0,
-    s.targets.proteinGrams ? s.totalProtein / s.targets.proteinGrams : 0,
-    s.targets.fatGrams ? s.totalFat / s.targets.fatGrams : 0,
-    s.targets.carbsGrams ? s.totalCarbs / s.targets.carbsGrams : 0,
+    s.targets.calories ? t.calories / s.targets.calories : 0,
+    s.targets.proteinGrams ? t.protein / s.targets.proteinGrams : 0,
+    s.targets.fatGrams ? t.fat / s.targets.fatGrams : 0,
+    s.targets.carbsGrams ? t.carbs / s.targets.carbsGrams : 0,
   ];
   return Math.max(1, ...ratios);
 });
 
 const scoreDetail = computed(() => {
-  const s = props.summary;
-  if (!s || !s.targets) return null;
-  const value = computeNutritionScore(
-    { calories: s.totalCalories, protein: s.totalProtein, fat: s.totalFat, carbs: s.totalCarbs },
-    s.targets,
-  );
+  if (!props.summary?.targets) return null;
+  const value = computeNutritionScore(totals.value, props.summary.targets);
   return value != null ? { value } : null;
 });
 
@@ -56,10 +65,11 @@ const suggestion = computed(() => {
   const s = props.summary;
   if (!s || !s.targets) return null;
   const t = s.targets;
+  const cur = totals.value;
 
-  const calDelta = s.totalCalories - (t.calories || 0); // + = over
-  const proDelta = s.totalProtein - (t.proteinGrams || 0); // - = under
-  const fatDelta = s.totalFat - (t.fatGrams || 0); // + = over
+  const calDelta = cur.calories - (t.calories || 0); // + = over
+  const proDelta = cur.protein - (t.proteinGrams || 0); // - = under
+  const fatDelta = cur.fat - (t.fatGrams || 0); // + = over
 
   // All primary macros within tolerance.
   if (Math.abs(calDelta) <= TOL_CAL && proDelta >= -TOL_PRO && fatDelta <= TOL_FAT) {
@@ -147,10 +157,10 @@ const suggestion = computed(() => {
         <div v-if="suggestion.detail" class="suggestion-detail">{{ suggestion.detail }}</div>
       </div>
     </div>
-    <MacroBar :index="0" label="Calories" :current="summary.totalCalories" :target="summary.targets?.calories || 0" color="var(--color-cal)" unit=" kcal" :scale-max="scaleMax" />
-    <MacroBar :index="1" label="Protein" :current="summary.totalProtein" :target="summary.targets?.proteinGrams || 0" color="var(--color-protein)" unit="g" :scale-max="scaleMax" />
-    <MacroBar :index="2" label="Fat" :current="summary.totalFat" :target="summary.targets?.fatGrams || 0" color="var(--color-fat)" unit="g" :scale-max="scaleMax" />
-    <MacroBar :index="3" label="Carbs" :current="summary.totalCarbs" :target="summary.targets?.carbsGrams || 0" color="var(--color-carbs)" unit="g" :scale-max="scaleMax" />
+    <MacroBar :index="0" label="Calories" :current="totals.calories" :target="summary.targets?.calories || 0" color="var(--color-cal)" unit=" kcal" :scale-max="scaleMax" />
+    <MacroBar :index="1" label="Protein" :current="totals.protein" :target="summary.targets?.proteinGrams || 0" color="var(--color-protein)" unit="g" :scale-max="scaleMax" />
+    <MacroBar :index="2" label="Fat" :current="totals.fat" :target="summary.targets?.fatGrams || 0" color="var(--color-fat)" unit="g" :scale-max="scaleMax" />
+    <MacroBar :index="3" label="Carbs" :current="totals.carbs" :target="summary.targets?.carbsGrams || 0" color="var(--color-carbs)" unit="g" :scale-max="scaleMax" />
   </div>
 </template>
 

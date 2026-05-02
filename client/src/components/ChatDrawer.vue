@@ -44,7 +44,7 @@ const speechToTextConfig = {
 };
 const introMessage = {
   text:
-    "Hi! I can help you understand your nutrition, weight, symptoms, and health data. Snap a photo of your food and I'll calculate macros.",
+    "Hi, I'm Otto. Ask me about your nutrition, weight, symptoms, or health data — or snap a photo of your food and I'll crunch the macros.",
 };
 
 // Photo-counter badge for plans with a finite lifetime image cap (Free is
@@ -537,51 +537,112 @@ const shadowStyles = computed(() => {
     box-shadow: none !important;
   }
 
-  /* Side buttons (+, camera, image) — flat, transparent, theme-aware */
-  .input-button {
+  /* Side buttons (+, camera, image) — flat, transparent, theme-aware.
+     deep-chat ships .custom-button-container-{default,active,disabled} with
+     hard-coded grays + blue (#edf7ff/#0285ff for "active"). Override every
+     state and kill the icon-recolor filter so glyphs stay theme-tinted. */
+  .input-button,
+  .custom-button-container-default,
+  .custom-button-container-active,
+  .custom-button-container-disabled {
     background: transparent !important;
     border: 1px solid transparent !important;
     border-radius: 0 !important;
     color: ${p.text} !important;
   }
-  .input-button:hover { background: ${p.surfaceAlt} !important; }
+  .input-button:hover,
+  .custom-button-container-default:hover,
+  .custom-button-container-active:hover {
+    background: ${p.surfaceAlt} !important;
+    color: ${p.text} !important;
+  }
+  .custom-button-container-active {
+    background: ${p.surfaceAlt} !important;
+    color: ${p.primary} !important;
+  }
+  .custom-button-container-disabled {
+    color: ${p.textTertiary} !important;
+    cursor: auto !important;
+  }
   .input-button:focus-visible, .input-button:focus,
   .dropup-menu-item:focus-visible, .dropup-menu-item:focus {
     outline: none !important;
     box-shadow: 0 0 0 1px ${p.borderStrong} !important;
   }
-  .input-button svg {
-    /* deep-chat applies a brightness/invert filter to recolor icons; nuke it
-       and use our theme fill directly so + and camera/upload glyphs match
-       the rest of the UI. */
+  /* Kill deep-chat's brightness/invert filter on every button-icon variant
+     so + and camera/upload glyphs match theme color instead of #505050 /
+     #0285ff / #aeaeae. */
+  .input-button svg,
+  .custom-button-container-default > svg,
+  .custom-button-container-active > svg,
+  .custom-button-container-disabled > svg {
     filter: none !important;
     fill: ${p.text} !important;
+    color: ${p.text} !important;
+  }
+  .custom-button-container-active > svg {
+    fill: ${p.primary} !important;
+    color: ${p.primary} !important;
+  }
+  .custom-button-container-disabled > svg {
+    fill: ${p.textTertiary} !important;
+    color: ${p.textTertiary} !important;
   }
 
-  /* ── Dropup menu (Take Photo / Upload Photo) ────────────────────────── */
+  /* ── Dropup menu (Take Photo / Upload Photo) ──────────────────────────
+     Light --surface is #ffffff (deep-chat's default) so we lean on
+     --surface-alt + a strong border so the menu reads as themed in both
+     modes. Mono font matches the rest of the chat shell. */
+  /* deep-chat uses id="dropup-menu" on the wrapper (not a class), so a
+     class selector misses it — target the id explicitly. */
+  #dropup-menu,
   .dropup-menu {
-    background: ${p.surface} !important;
-    border: 1px solid ${p.border} !important;
+    background-color: ${p.surfaceAlt} !important;
+    background: ${p.surfaceAlt} !important;
+    border: 1px solid ${p.borderStrong} !important;
     border-radius: 0 !important;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5) !important;
+    box-shadow: ${isDark.value
+      ? '0 6px 18px rgba(0, 0, 0, 0.5)'
+      : '0 6px 18px rgba(15, 26, 18, 0.18)'} !important;
     padding: 4px 0 !important;
     min-width: 180px !important;
     color: ${p.text} !important;
-    font-family: ${p.fontBody} !important;
+    font-family: ${p.fontMono} !important;
   }
   .dropup-menu-item {
     display: flex !important;
     align-items: center !important;
     gap: 10px !important;
     padding: 8px 12px !important;
+    height: auto !important;
     color: ${p.text} !important;
     font-size: 13px !important;
-    font-family: ${p.fontBody} !important;
+    font-family: ${p.fontMono} !important;
     cursor: pointer !important;
+    background-color: transparent !important;
     background: transparent !important;
     border: none !important;
+    border-radius: 0 !important;
   }
-  .dropup-menu-item:hover { background: ${p.surfaceAlt} !important; }
+  .dropup-menu-item:first-child,
+  .dropup-menu-item:last-child {
+    border-radius: 0 !important;
+  }
+  .dropup-menu-item:hover,
+  .dropup-menu-item:focus-visible {
+    background-color: ${p.surface} !important;
+    background: ${p.surface} !important;
+    color: ${p.primary} !important;
+  }
+  .dropup-menu-item:active {
+    background-color: ${p.primarySoft} !important;
+    background: ${p.primarySoft} !important;
+    color: ${p.primary} !important;
+  }
+  .dropup-menu-item:active:not(:hover) {
+    background-color: transparent !important;
+    background: transparent !important;
+  }
   .dropup-menu-item-icon {
     width: 18px !important; height: 18px !important;
     flex: none !important;
@@ -591,16 +652,27 @@ const shadowStyles = computed(() => {
     color: ${p.text} !important;
   }
   .dropup-menu-item-icon svg,
-  .dropup-menu-item-icon-element-custom {
+  .dropup-menu-item-icon-element-custom,
+  .dropup-menu-item-icon > svg {
     width: 18px !important;
     height: 18px !important;
     filter: none !important;
     fill: ${p.text} !important;
     color: ${p.text} !important;
+    stroke: ${p.text} !important;
+  }
+  .dropup-menu-item:hover .dropup-menu-item-icon svg,
+  .dropup-menu-item:hover .dropup-menu-item-icon-element-custom {
+    fill: ${p.primary} !important;
+    color: ${p.primary} !important;
+    stroke: ${p.primary} !important;
   }
   .dropup-menu-item-text {
-    color: ${p.text} !important;
-    font-family: ${p.fontBody} !important;
+    color: inherit !important;
+    font-family: ${p.fontMono} !important;
+    letter-spacing: ${p.fontMono === 'monospace' ? '0' : '0.03em'} !important;
+    text-transform: uppercase !important;
+    font-size: 12px !important;
   }
 `;
 });
@@ -1665,9 +1737,20 @@ onMounted(() => {
     <!-- Header -->
     <div class="chat-header">
       <div class="chat-header-left">
-        <div class="chat-icon">✦</div>
+        <div class="chat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+            <line x1="12" y1="2.5" x2="12" y2="5" />
+            <circle cx="12" cy="2.2" r="1" fill="currentColor" stroke="none" />
+            <rect x="4" y="6" width="16" height="13" rx="3.5" />
+            <line x1="3" y1="11" x2="3" y2="14" />
+            <line x1="21" y1="11" x2="21" y2="14" />
+            <circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none" />
+            <path d="M9.5 15.5c.7.7 1.6 1 2.5 1s1.8-.3 2.5-1" />
+          </svg>
+        </div>
         <div>
-          <div class="chat-title">Health Assistant</div>
+          <div class="chat-title">Otto</div>
           <div class="chat-subtitle">Ask about your data</div>
         </div>
       </div>
@@ -1829,6 +1912,10 @@ onMounted(() => {
   justify-content: center;
   color: var(--text-on-primary);
   font-size: var(--font-size-m);
+}
+.chat-icon svg {
+  width: 22px;
+  height: 22px;
 }
 .chat-title {
   font-weight: var(--font-weight-bold);

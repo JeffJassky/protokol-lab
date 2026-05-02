@@ -27,7 +27,8 @@ import Meal from '../models/Meal.js';
 import FoodLog from '../models/FoodLog.js';
 import DoseLog from '../models/DoseLog.js';
 import WeightLog from '../models/WeightLog.js';
-import WaistLog from '../models/WaistLog.js';
+import Metric from '../models/Metric.js';
+import MetricLog from '../models/MetricLog.js';
 import SymptomLog from '../models/SymptomLog.js';
 import Photo from '../models/Photo.js';
 import UserSettings from '../models/UserSettings.js';
@@ -71,7 +72,8 @@ const counts = {
   FoodLog: await FoodLog.countDocuments({ userId: source._id }),
   DoseLog: await DoseLog.countDocuments({ userId: source._id }),
   WeightLog: await WeightLog.countDocuments({ userId: source._id }),
-  WaistLog: await WaistLog.countDocuments({ userId: source._id }),
+  Metric: await Metric.countDocuments({ userId: source._id }),
+  MetricLog: await MetricLog.countDocuments({ userId: source._id }),
   SymptomLog: await SymptomLog.countDocuments({ userId: source._id }),
   DayNote: await DayNote.countDocuments({ userId: source._id }),
   Photo: await Photo.countDocuments({ userId: source._id }),

@@ -14,10 +14,11 @@ export const useMealsStore = defineStore('meals', () => {
     for (const item of meal.items || []) {
       const food = item.foodItemId;
       if (!food || typeof food !== 'object') continue;
-      cal += (food.caloriesPer || 0) * item.servingCount;
-      p += (food.proteinPer || 0) * item.servingCount;
-      f += (food.fatPer || 0) * item.servingCount;
-      c += (food.carbsPer || 0) * item.servingCount;
+      const ps = food.perServing || {};
+      cal += (ps.calories || 0) * item.servingCount;
+      p += (ps.protein || 0) * item.servingCount;
+      f += (ps.fat || 0) * item.servingCount;
+      c += (ps.carbs || 0) * item.servingCount;
     }
     return {
       cal: Math.round(cal),
