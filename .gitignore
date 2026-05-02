@@ -7,6 +7,10 @@ dist-native
 client_secret_*.json
 .DS_Store
 *.app
+
+# macOS Cmd+Shift+4 dumps these into whatever folder Finder is pointed at,
+# which is often the repo root. They're never code and shouldn't ship.
+Screenshot *.png
 .claude/
 plans/
 test-results/
