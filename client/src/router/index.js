@@ -37,6 +37,13 @@ const MetricsSettingsPage = () => import('../pages/settings/MetricsPage.vue');
 const PhotosSettingsPage = () => import('../pages/settings/PhotosPage.vue');
 const AccountPage = () => import('../pages/settings/AccountPage.vue');
 const SubscriptionPage = () => import('../pages/settings/SubscriptionPage.vue');
+const MenstruationSettingsPage = () => import('../pages/settings/MenstruationPage.vue');
+const BloodworkSettingsPage = () => import('../pages/settings/BloodworkPage.vue');
+const ConditionsSettingsPage = () => import('../pages/settings/ConditionsPage.vue');
+const GeneticsSettingsPage = () => import('../pages/settings/GeneticsPage.vue');
+const ExerciseSettingsPage = () => import('../pages/settings/ExercisePage.vue');
+const ExercisesSettingsPage = () => import('../pages/settings/ExercisesPage.vue');
+const TrackingSettingsPage = () => import('../pages/settings/TrackingPage.vue');
 const LogPage = () => import('../pages/LogPage.vue');
 const WelcomePage = () => import('../pages/WelcomePage.vue');
 const FoodSearchPage = () => import('../pages/FoodSearchPage.vue');
@@ -132,6 +139,13 @@ const routes = [
   { path: '/profile/settings/appearance', name: 'profile-settings-appearance', component: AppearancePage, meta: { requiresAuth: true } },
   { path: '/profile/settings/metrics', name: 'profile-settings-metrics', component: MetricsSettingsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/photos', name: 'profile-settings-photos', component: PhotosSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/menstruation', name: 'profile-settings-menstruation', component: MenstruationSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/bloodwork', name: 'profile-settings-bloodwork', component: BloodworkSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/conditions', name: 'profile-settings-conditions', component: ConditionsSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/genetics', name: 'profile-settings-genetics', component: GeneticsSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/exercise', name: 'profile-settings-exercise', component: ExerciseSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/exercises', name: 'profile-settings-exercises', component: ExercisesSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/tracking', name: 'profile-settings-tracking', component: TrackingSettingsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/account', name: 'profile-settings-account', component: AccountPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/account/subscription', name: 'profile-settings-subscription', component: SubscriptionPage, meta: { requiresAuth: true } },
   // Old routes — redirect bookmarks + in-flight Stripe redirects to the new locations.

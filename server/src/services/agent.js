@@ -12,6 +12,13 @@ import SymptomLog from "../models/SymptomLog.js";
 import UserSettings from "../models/UserSettings.js";
 import Meal from "../models/Meal.js";
 import MealProposal from "../models/MealProposal.js";
+import BloodworkProposal from "../models/BloodworkProposal.js";
+import {
+  BLOODWORK_PANELS,
+  BLOODWORK_FIELD_INDEX,
+  sanitizeBloodworkValue,
+  flattenBloodworkNested,
+} from "../../../shared/bloodworkPanels.js";
 import User from "../models/User.js";
 import { childLogger, errContext } from "../lib/logger.js";
 import { parseLogDate } from "../lib/date.js";
@@ -383,6 +390,45 @@ const functionDeclarations = [
         to: { type: Type.STRING, description: "End date (YYYY-MM-DD)" },
       },
       required: ["series", "from", "to"],
+    },
+  },
+  {
+    name: "get_user_bloodwork",
+    description:
+      "Read the user's current bloodwork values. Returns a flat map of `panelId.fieldKey -> value` for every field the user has set, plus the catalog of all known fields with reference ranges and units. Read-only; safe to call without confirmation. Use this before proposing changes so you can show the user a diff and avoid re-asking for values they've already provided.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "propose_bloodwork_update",
+    description:
+      "Propose new or updated lab values for the user's bloodwork. NEVER writes directly — the client renders an inline confirmation card so the user must explicitly approve before anything is saved. Use the dot-path keys exactly as returned by get_user_bloodwork (e.g. `metabolic.glucose_mg_dL`). Group every change from the same panel/result into ONE call so the user sees them together. After calling, briefly narrate what you proposed and stop — do not call again until the user responds.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        notes: {
+          type: Type.STRING,
+          description: 'Optional free-form note shown to the user. Use it to cite the source ("From the panel dated 2026-04-12") or call out anything unusual.',
+        },
+        changes: {
+          type: Type.ARRAY,
+          description: "One entry per lab field to update.",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              key: {
+                type: Type.STRING,
+                description: 'Dot-path key, e.g. "metabolic.glucose_mg_dL". Must match a known field returned by get_user_bloodwork.',
+              },
+              value: {
+                type: Type.NUMBER,
+                description: "The new numeric value. Use the unit shown in the field catalog — do not convert.",
+              },
+            },
+            required: ["key", "value"],
+          },
+        },
+      },
+      required: ["changes"],
     },
   },
   {
@@ -866,6 +912,82 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
       });
     }
 
+    case "get_user_bloodwork": {
+      const settings = await UserSettings.findOne({ userId }).select('bloodwork').lean();
+      const flat = flattenBloodworkNested(settings?.bloodwork);
+      const catalog = [];
+      for (const panel of BLOODWORK_PANELS) {
+        for (const f of panel.fields) {
+          catalog.push({
+            key: f.key,
+            panel: panel.id,
+            panelLabel: panel.label,
+            label: f.label,
+            unit: f.unit,
+            refMin: f.refMin,
+            refMax: f.refMax,
+            default: f.default,
+          });
+        }
+      }
+      return {
+        ok: true,
+        userValues: flat,
+        catalog,
+        message: 'Read-only. To change values, call propose_bloodwork_update so the user can confirm.',
+      };
+    }
+
+    case "propose_bloodwork_update": {
+      if (!Array.isArray(args.changes) || args.changes.length === 0) {
+        return { error: 'changes array required' };
+      }
+      const settings = await UserSettings.findOne({ userId }).select('bloodwork').lean();
+      const existing = flattenBloodworkNested(settings?.bloodwork);
+      const cleaned = [];
+      const skipped = [];
+      for (const c of args.changes) {
+        const key = String(c?.key || '');
+        const field = BLOODWORK_FIELD_INDEX.get(key);
+        if (!field) {
+          skipped.push({ key, reason: 'unknown field' });
+          continue;
+        }
+        const v = sanitizeBloodworkValue(key, c?.value);
+        if (v == null) {
+          skipped.push({ key, reason: 'invalid value' });
+          continue;
+        }
+        cleaned.push({
+          key,
+          label: field.label,
+          unit: field.unit,
+          value: v,
+          oldValue: existing[key] != null ? Number(existing[key]) : null,
+        });
+      }
+      if (!cleaned.length) {
+        return { error: 'No valid changes after validation', skipped };
+      }
+      const proposal = await BloodworkProposal.create({
+        userId,
+        threadId: ctx.threadId || null,
+        notes: typeof args.notes === 'string' ? args.notes.slice(0, 500) : '',
+        changes: cleaned,
+      });
+      return {
+        ok: true,
+        proposalId: proposal._id.toString(),
+        kind: 'bloodwork',
+        changeCount: cleaned.length,
+        skipped,
+        notes: proposal.notes,
+        status: 'awaiting_confirmation',
+        message:
+          'Bloodwork proposal shown to the user with Confirm / Cancel buttons. Do not call propose_bloodwork_update again or claim the change is saved until the user responds.',
+      };
+    }
+
     case "propose_food_entries": {
       const validMeals = ["breakfast", "lunch", "dinner", "snack"];
       if (!args.mealType || !validMeals.includes(args.mealType)) {
@@ -1161,6 +1283,12 @@ You already have the last 7 days of user data above. Tool usage:
   - After calling propose_food_entries, STOP. Briefly narrate what you identified and tell the user to review the card. Do not repeat the macro table in prose. Do not call log_food_entry afterward.
   - NEVER claim food has been logged, added, recorded, or saved unless you actually invoked propose_food_entries (or the rare log_food_entry exception) IN THIS TURN. The proposal card itself shows the user "Proposed", "✓ Added to your food log", or "Cancelled" — those phrases belong to the card UI, not your prose. Do NOT write "Logged to <meal>", "✓ Added to your food log", or any imitation of the card layout in your text reply. If you forgot to call the tool, tell the user honestly and call it now.
   - For "today" use today's date from the LOCAL DATE/TIME block below — that already accounts for the user's timezone. Default mealType from local hour (block below): before 11 → breakfast, 11–15 → lunch, 15–20 → dinner, else snack.
+- Bloodwork tools (get_user_bloodwork, propose_bloodwork_update):
+  - When the user shares lab results (text, photo, screenshot), call get_user_bloodwork first to see the current values + the catalog of supported field keys. Match the user's reported labels to catalog \`label\`s and use the corresponding \`key\` (e.g. "metabolic.glucose_mg_dL") in the proposal.
+  - ALWAYS use propose_bloodwork_update — never write directly. The client renders a confirmation card with Confirm / Cancel; values are only saved after the user confirms. Group every change from the same panel/result into ONE call.
+  - After proposing, STOP. Narrate briefly ("Pulled 7 values from your panel — review and confirm") and wait. Do not call propose_bloodwork_update again until the user responds.
+  - Don't invent values. If the user gave you a unit you don't recognize, ask them to clarify rather than guessing a conversion.
+  - Bloodwork values shape the simulation engine's subject — that's why we ask for confirmation. Mention this once if the user asks why we don't auto-save.
 - Direct-log tool (log_food_entry) — RARE EXCEPTION ONLY:
   - Only use when the user EXPLICITLY says they want to skip confirmation (e.g. "just log it, don't ask", "no need to confirm"). If you are uncertain, use propose_food_entries instead.
   - Requires a real foodItemId from search_food_items or create_food_item.
@@ -1427,6 +1555,22 @@ LOCAL DATE/TIME (in the user's timezone — use this, NOT UTC, for any "today" /
           totals: r.output.totals,
         };
       }
+      // Same inline-card flow for bloodwork. Tagged kind='bloodwork' so
+      // the chat client picks the right renderer.
+      if (r.name === "propose_bloodwork_update" && r.output?.proposalId) {
+        yield {
+          type: "tool_proposal",
+          kind: "bloodwork",
+          proposalId: r.output.proposalId,
+          notes: r.output.notes || '',
+          // Re-fetch the proposal so we send the post-validation `changes`
+          // (with labels/units/oldValue) to the client, not the raw agent args.
+          changes: await (async () => {
+            const p = await BloodworkProposal.findById(r.output.proposalId).lean();
+            return p?.changes || [];
+          })(),
+        };
+      }
     }
 
     // Send tool responses back as a user turn
@@ -1538,6 +1682,12 @@ function describeToolCall(name, args) {
     case "propose_food_entries": {
       const n = Array.isArray(args?.items) ? args.items.length : 0;
       return `Preparing a ${args?.mealType || "meal"} summary (${n} item${n === 1 ? "" : "s"}) for you to confirm`;
+    }
+    case "get_user_bloodwork":
+      return 'Reading your bloodwork values';
+    case "propose_bloodwork_update": {
+      const n = Array.isArray(args?.changes) ? args.changes.length : 0;
+      return `Preparing ${n} bloodwork change${n === 1 ? '' : 's'} for you to confirm`;
     }
     case "correlate_series": {
       const lag = args?.lag === 'auto' ? 'auto-lag' : `lag=${args?.lag ?? 0}d`;

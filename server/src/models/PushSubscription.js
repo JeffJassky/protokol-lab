@@ -35,6 +35,8 @@ const pushSubscriptionSchema = new mongoose.Schema(
       // default-on so reminders don't silently disappear after an update).
       doseReminder: { type: Boolean, default: true },
       trackReminder: { type: Boolean, default: true },
+      menstruationReminder: { type: Boolean, default: true },
+      fastingReminder: { type: Boolean, default: true },
       test: { type: Boolean, default: true },
     },
     lastSentAt: { type: Date },

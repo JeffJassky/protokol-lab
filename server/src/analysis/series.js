@@ -13,6 +13,7 @@ import FoodLog from '../models/FoodLog.js';
 import WeightLog from '../models/WeightLog.js';
 import DoseLog from '../models/DoseLog.js';
 import Compound from '../models/Compound.js';
+import { PEPTIDE_CATALOG_INDEX } from '@kyneticbio/core';
 import Symptom from '../models/Symptom.js';
 import SymptomLog from '../models/SymptomLog.js';
 import Metric from '../models/Metric.js';
@@ -123,13 +124,41 @@ async function fetchNutritionDaily(uid, fromDate, toDate) {
   return byDay;
 }
 
-async function fetchCompoundDaily(uid, compoundId, fromDate, toDate) {
-  const compound = await Compound.findOne({ _id: compoundId, userId: uid }).lean();
-  if (!compound) return { values: new Map(), unit: '', label: 'Compound', kind: 'modeled' };
+// Resolve the PK params + display metadata for a series ref. The ref
+// can be either a custom Compound _id or a canonical core key
+// (prefixed with `core:` to disambiguate). Returns null when the
+// reference is dangling — caller emits an empty series in that case.
+async function resolveCompoundRef(uid, ref) {
+  if (ref.startsWith('core:')) {
+    const key = ref.slice('core:'.length);
+    const entry = PEPTIDE_CATALOG_INDEX.get(key);
+    if (!entry) return null;
+    return {
+      filter: { userId: uid, coreInterventionKey: key },
+      halfLifeDays: entry.defaultHalfLifeDays,
+      kineticsShape: entry.defaultKineticsShape,
+      doseUnit: entry.defaultDoseUnit,
+      label: entry.label,
+    };
+  }
+  // Default path: ref is a custom Compound _id.
+  const compound = await Compound.findOne({ _id: ref, userId: uid }).lean();
+  if (!compound) return null;
+  return {
+    filter: { userId: uid, compoundId: ref },
+    halfLifeDays: compound.halfLifeDays,
+    kineticsShape: compound.kineticsShape || 'subq',
+    doseUnit: compound.doseUnit || 'mg',
+    label: compound.name || 'Compound',
+  };
+}
+
+async function fetchCompoundDaily(uid, ref, fromDate, toDate) {
+  const pk = await resolveCompoundRef(uid, ref);
+  if (!pk) return { values: new Map(), unit: '', label: 'Compound', kind: 'modeled' };
   // PK at noon UTC each day — anchor at the same time-of-day so day-to-day
   // values aren't biased by sample-time drift.
-  const allDoses = await DoseLog.find({ userId: uid, compoundId }).sort({ date: 1 }).lean();
-  const shape = compound.kineticsShape || 'subq';
+  const allDoses = await DoseLog.find(pk.filter).sort({ date: 1 }).lean();
   const values = new Map();
   for (const day of eachDay(fromDate, toDate)) {
     const sampleAt = new Date(`${day}T12:00:00.000Z`);
@@ -137,7 +166,7 @@ async function fetchCompoundDaily(uid, compoundId, fromDate, toDate) {
     for (const dose of allDoses) {
       const daysSince = (sampleAt - dose.date) / 86400000;
       if (daysSince < 0) continue;
-      active += activeAmount(dose.value, compound.halfLifeDays, shape, daysSince);
+      active += activeAmount(dose.value, pk.halfLifeDays, pk.kineticsShape, daysSince);
     }
     // Don't emit zeros for days entirely before the first dose — those are
     // genuinely "no data" rather than "zero active level we measured".
@@ -147,8 +176,8 @@ async function fetchCompoundDaily(uid, compoundId, fromDate, toDate) {
   }
   return {
     values,
-    unit: compound.doseUnit || 'mg',
-    label: compound.name || 'Compound',
+    unit: pk.doseUnit,
+    label: pk.label,
     kind: 'modeled',
   };
 }
@@ -297,12 +326,17 @@ function addDays(isoDate, days) {
 // insights aggregator when it scans for top correlations.
 export async function listAvailableSeriesIds(uid) {
   const ids = ['weight', 'calories', 'protein', 'fat', 'carbs', 'score'];
-  const [compounds, symptoms, metrics] = await Promise.all([
+  const [compounds, symptoms, metrics, canonicalDoseKeys] = await Promise.all([
     Compound.find({ userId: uid, enabled: true }).select('_id name').lean(),
     Symptom.find({ userId: uid }).select('_id name').lean(),
     Metric.find({ userId: uid, enabled: true }).select('_id name').lean(),
+    // Distinct canonical-compound keys with at least one dose logged.
+    DoseLog.distinct('coreInterventionKey', { userId: uid, coreInterventionKey: { $ne: null } }),
   ]);
   for (const c of compounds) ids.push(`dosage:${c._id}`);
+  for (const key of canonicalDoseKeys) {
+    if (key) ids.push(`dosage:core:${key}`);
+  }
   for (const s of symptoms) ids.push(`symptom:${s._id}`);
   for (const m of metrics) ids.push(`metric:${m._id}`);
   return ids;

@@ -8,13 +8,19 @@ onMounted(async () => {
   if (!compounds.loaded) await compounds.fetchAll();
 });
 
-// Only system compounds get toggled here. Custom ones live in Settings.
-function systemOnly() {
-  return compounds.compounds.filter((c) => c.isSystem);
+// Onboarding only surfaces canonical (core-catalog) compounds — custom
+// ones live in Settings, where users define them with their own PK
+// parameters.
+function canonicalOnly() {
+  return compounds.compounds.filter((c) => c.source === 'core');
 }
 
 async function toggle(c) {
-  await compounds.update(c._id, { enabled: !c.enabled });
+  await compounds.update(
+    c.coreInterventionKey,
+    { enabled: !c.enabled },
+    { source: 'core' },
+  );
 }
 
 // Brand names lead, generic appended last. The generic is a synonym, not a
@@ -39,8 +45,8 @@ function displayNames(c) {
       and overlay levels on your weight chart. Skip if not applicable.
     </p>
 
-    <ul v-if="systemOnly().length" class="list">
-      <li v-for="c in systemOnly()" :key="c._id">
+    <ul v-if="canonicalOnly().length" class="list">
+      <li v-for="c in canonicalOnly()" :key="c.coreInterventionKey">
         <button
           type="button"
           class="row"

@@ -128,8 +128,10 @@ describe('Path A — Cold → Demo → Real account', () => {
     const tirz = compoundList.body.compounds.find((c) => c.name === 'Tirzepatide');
     expect(tirz).toBeTruthy();
 
+    // Tirzepatide is a canonical compound post-migration — referenced
+    // via coreInterventionKey, not a Compound _id.
     const dose = await agent.post('/api/doses').send({
-      compoundId: tirz._id,
+      coreInterventionKey: tirz.coreInterventionKey,
       value: 5,
       date: new Date().toISOString(),
     });

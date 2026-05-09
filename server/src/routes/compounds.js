@@ -1,79 +1,124 @@
 import { Router } from 'express';
 import Compound from '../models/Compound.js';
 import DoseLog from '../models/DoseLog.js';
+import UserSettings from '../models/UserSettings.js';
 import { childLogger, errContext } from '../lib/logger.js';
 import { evaluateStorageCap } from '../lib/planLimits.js';
+import { PEPTIDE_CATALOG, PEPTIDE_CATALOG_INDEX } from '@kyneticbio/core';
 
 const log = childLogger('compounds');
 const router = Router();
 
-// System compounds are limited to FDA-approved GLP-1 receptor agonists.
-// Half-lives + intervals match the marketing /compounds reference page and
-// the citations listed there. Anything outside this list is a custom
-// (isSystem=false) compound created via POST /.
-const SYSTEM_COMPOUNDS = [
-  { name: 'Tirzepatide',        brandNames: ['Mounjaro', 'Zepbound'],   halfLifeDays: 5,    intervalDays: 7, doseUnit: 'mg', color: '#10b981', kineticsShape: 'subq',  enabledByDefault: true  },
-  { name: 'Semaglutide',        brandNames: ['Ozempic', 'Wegovy'],      halfLifeDays: 7,    intervalDays: 7, doseUnit: 'mg', color: '#3b82f6', kineticsShape: 'depot', enabledByDefault: false },
-  { name: 'Semaglutide (oral)', brandNames: ['Rybelsus'],               halfLifeDays: 7,    intervalDays: 1, doseUnit: 'mg', color: '#06b6d4', kineticsShape: 'subq',  enabledByDefault: false },
-  { name: 'Liraglutide',        brandNames: ['Saxenda', 'Victoza'],     halfLifeDays: 0.54, intervalDays: 1, doseUnit: 'mg', color: '#f59e0b', kineticsShape: 'subq',  enabledByDefault: false },
-  { name: 'Dulaglutide',        brandNames: ['Trulicity'],              halfLifeDays: 5,    intervalDays: 7, doseUnit: 'mg', color: '#8b5cf6', kineticsShape: 'depot', enabledByDefault: false },
-];
+const KINETICS_SHAPES = ['bolus', 'subq', 'depot'];
+const HM_RE = /^\d{2}:\d{2}$/;
 
-async function ensureDefaults(userId) {
-  const existing = await Compound.find({ userId, isSystem: true })
-    .select('name brandNames')
-    .lean();
-  const have = new Map(existing.map((c) => [c.name, c]));
-  const missing = SYSTEM_COMPOUNDS.filter((c) => !have.has(c.name));
-
-  if (missing.length) {
-    const docs = missing.map((c, i) => ({
-      userId,
-      name: c.name,
-      brandNames: c.brandNames || [],
-      isSystem: true,
-      enabled: c.enabledByDefault,
-      halfLifeDays: c.halfLifeDays,
-      intervalDays: c.intervalDays,
-      doseUnit: c.doseUnit,
-      color: c.color,
-      kineticsShape: c.kineticsShape,
-      order: existing.length + i,
-    }));
-    try {
-      await Compound.insertMany(docs, { ordered: false });
-      log.info({ userId: String(userId), count: docs.length, names: missing.map((m) => m.name) }, 'compounds: seeded system');
-    } catch (err) {
-      if (err.code !== 11000) {
-        log.error({ ...errContext(err), userId: String(userId) }, 'compounds: seed failed');
-        throw err;
-      }
-      log.debug({ userId: String(userId) }, 'compounds: seed race (duplicate, ignored)');
-    }
-  }
-
-  // Back-fill brandNames on existing system docs that pre-date the field.
-  // One-shot per user — once populated, the filter matches nothing.
-  const stale = SYSTEM_COMPOUNDS.filter((c) => {
-    const e = have.get(c.name);
-    return e && (!Array.isArray(e.brandNames) || e.brandNames.length === 0) && (c.brandNames?.length);
-  });
-  if (stale.length) {
-    await Promise.all(stale.map((c) =>
-      Compound.updateOne(
-        { userId, name: c.name, isSystem: true },
-        { $set: { brandNames: c.brandNames } },
-      ),
-    ));
-    log.info({ userId: String(userId), names: stale.map((s) => s.name) }, 'compounds: backfilled brandNames');
-  }
+// Compose a single canonical-compound entry by merging the catalog row
+// with the user's per-compound preferences (color override, custom
+// interval, reminder setup, enabled/disabled, ordering). The result has
+// the same shape consumers used to expect from a Compound row, plus a
+// `source: 'core'` discriminator and a stable `coreInterventionKey`.
+function composeCanonical(entry, prefs = {}) {
+  return {
+    source: 'core',
+    coreInterventionKey: entry.key,
+    name: entry.label,
+    brandNames: entry.brandNames || [],
+    isSystem: true, // legacy field — kept for client compatibility, do not mutate
+    enabled: prefs.enabled !== false, // default true unless explicitly disabled
+    halfLifeDays: entry.defaultHalfLifeDays,
+    intervalDays: prefs.intervalDays != null ? prefs.intervalDays : entry.defaultIntervalDays,
+    doseUnit: entry.defaultDoseUnit, // intrinsic, not user-customizable
+    color: prefs.color || entry.defaultColor,
+    kineticsShape: entry.defaultKineticsShape,
+    order: prefs.order != null ? prefs.order : 1000,
+    reminderEnabled: !!prefs.reminderEnabled,
+    reminderTime: prefs.reminderTime || '',
+    reference: entry.reference || null,
+  };
 }
 
+// Decorate a custom Compound document with the source discriminator so
+// the unified GET response is uniformly shaped. Kept lightweight —
+// custom rows already have the right field names.
+function shapeCustom(compound) {
+  const c = compound.toObject ? compound.toObject() : compound;
+  return {
+    ...c,
+    source: 'custom',
+    coreInterventionKey: null,
+  };
+}
+
+// Unified list. Returns every canonical compound (merged with the
+// user's prefs) followed by every custom compound. Sorted by `order`,
+// ties broken by name. Clients render this as a single picker — the
+// `source` field disambiguates writes.
 router.get('/', async (req, res) => {
-  await ensureDefaults(req.userId);
-  const compounds = await Compound.find({ userId: req.userId }).sort({ order: 1, createdAt: 1 });
-  (req.log || log).debug({ count: compounds.length }, 'compounds: list');
-  res.json({ compounds });
+  const rlog = req.log || log;
+  const [customs, settings] = await Promise.all([
+    Compound.find({ userId: req.userId }).sort({ order: 1, createdAt: 1 }),
+    UserSettings.findOne({ userId: req.userId }).select('compoundPreferences').lean(),
+  ]);
+  const prefs = (settings && settings.compoundPreferences) || {};
+
+  const canonical = PEPTIDE_CATALOG.map((entry) => composeCanonical(entry, prefs[entry.key] || {}));
+  const customsShaped = customs.map(shapeCustom);
+
+  const merged = [...canonical, ...customsShaped].sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return a.name.localeCompare(b.name);
+  });
+
+  rlog.debug({ canonical: canonical.length, custom: customsShaped.length }, 'compounds: list');
+  res.json({ compounds: merged });
+});
+
+// Update a per-user preference for a canonical compound. Body fields:
+// `enabled`, `color`, `intervalDays`, `reminderEnabled`, `reminderTime`,
+// `order`. doseUnit deliberately not customizable.
+router.patch('/core/:key', async (req, res) => {
+  const rlog = req.log || log;
+  const { key } = req.params;
+  if (!PEPTIDE_CATALOG_INDEX.has(key)) {
+    return res.status(404).json({ error: 'Unknown canonical compound' });
+  }
+  const updates = {};
+  const { enabled, color, intervalDays, reminderEnabled, reminderTime, order } = req.body || {};
+  if (enabled !== undefined) updates.enabled = Boolean(enabled);
+  if (color !== undefined && typeof color === 'string') updates.color = color.slice(0, 16);
+  if (intervalDays !== undefined && Number.isFinite(Number(intervalDays))) {
+    updates.intervalDays = Math.max(0.5, Math.min(30, Number(intervalDays)));
+  }
+  if (reminderEnabled !== undefined) updates.reminderEnabled = Boolean(reminderEnabled);
+  if (reminderTime !== undefined) {
+    updates.reminderTime = typeof reminderTime === 'string' && HM_RE.test(reminderTime)
+      ? reminderTime
+      : '';
+  }
+  if (order !== undefined && Number.isFinite(Number(order))) {
+    updates.order = Math.round(Number(order));
+  }
+
+  if (!Object.keys(updates).length) {
+    return res.status(400).json({ error: 'No valid fields to update' });
+  }
+
+  const setObj = Object.fromEntries(
+    Object.entries(updates).map(([k, v]) => [`compoundPreferences.${key}.${k}`, v]),
+  );
+  await UserSettings.updateOne(
+    { userId: req.userId },
+    { $set: setObj, $setOnInsert: { userId: req.userId } },
+    { upsert: true },
+  );
+  rlog.info({ key, fields: Object.keys(updates) }, 'compounds: canonical pref updated');
+
+  // Re-shape the affected entry so the client gets the post-update view
+  // without a second GET round-trip.
+  const settings = await UserSettings.findOne({ userId: req.userId }).select('compoundPreferences').lean();
+  const entry = PEPTIDE_CATALOG_INDEX.get(key);
+  const compound = composeCanonical(entry, settings?.compoundPreferences?.[key] || {});
+  res.json({ compound });
 });
 
 router.post('/', async (req, res) => {
@@ -88,12 +133,21 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'halfLifeDays and intervalDays required' });
   }
 
-  // Plan cap: only count user-created (custom) compounds. System compounds
-  // are universal and never count toward the cap.
-  const customCount = await Compound.countDocuments({
-    userId: req.userId,
-    isSystem: false,
-  });
+  // Names that collide with a canonical compound get rejected — those
+  // are already represented via the catalog and shouldn't shadow.
+  const lower = name.trim().toLowerCase();
+  for (const entry of PEPTIDE_CATALOG) {
+    if (entry.label.toLowerCase() === lower) {
+      return res.status(409).json({ error: 'A canonical compound with this name already exists' });
+    }
+    if ((entry.brandNames || []).some((b) => b.toLowerCase() === lower)) {
+      return res.status(409).json({ error: 'This is a brand name of a canonical compound' });
+    }
+  }
+
+  // Plan cap: count existing custom rows. Canonical compounds don't
+  // count toward the cap.
+  const customCount = await Compound.countDocuments({ userId: req.userId });
   const denial = evaluateStorageCap(req.user, 'customCompounds', customCount);
   if (denial) {
     rlog.warn(
@@ -124,14 +178,14 @@ router.post('/', async (req, res) => {
       intervalDays: Number(intervalDays),
       doseUnit: doseUnit || 'mg',
       color: color || '',
-      kineticsShape: ['bolus', 'subq', 'depot'].includes(kineticsShape) ? kineticsShape : 'subq',
+      kineticsShape: KINETICS_SHAPES.includes(kineticsShape) ? kineticsShape : 'subq',
       order,
     });
     rlog.info(
       { compoundId: String(compound._id), name: compound.name, halfLifeDays, intervalDays, kineticsShape: compound.kineticsShape },
       'compounds: created',
     );
-    res.status(201).json({ compound });
+    res.status(201).json({ compound: shapeCustom(compound) });
   } catch (err) {
     if (err.code === 11000) {
       rlog.warn({ name }, 'compounds create: duplicate name');
@@ -148,26 +202,19 @@ router.patch('/:id', async (req, res) => {
     rlog.warn({ compoundId: req.params.id }, 'compounds patch: not found');
     return res.status(404).json({ error: 'Not found' });
   }
+  // Defensive: any stray isSystem=true row that escaped the migration
+  // is read-only via this endpoint. Use /core/:key for canonical edits.
+  if (compound.isSystem) {
+    return res.status(400).json({ error: 'System compounds are managed via PATCH /api/compounds/core/:key' });
+  }
 
   const {
     name, brandNames, enabled, halfLifeDays, intervalDays, doseUnit, color, kineticsShape,
     reminderEnabled, reminderTime,
   } = req.body;
 
-  if (compound.isSystem) {
-    if (name !== undefined && name !== compound.name) {
-      rlog.warn({ compoundId: req.params.id }, 'compounds patch: cannot rename system compound');
-      return res.status(400).json({ error: 'Cannot rename a system compound' });
-    }
-    if (doseUnit !== undefined && doseUnit !== compound.doseUnit) {
-      rlog.warn({ compoundId: req.params.id }, 'compounds patch: cannot change system doseUnit');
-      return res.status(400).json({ error: 'Cannot change doseUnit on a system compound' });
-    }
-  } else if (name !== undefined) {
-    compound.name = String(name).trim();
-  }
-
-  if (!compound.isSystem && brandNames !== undefined) {
+  if (name !== undefined) compound.name = String(name).trim();
+  if (brandNames !== undefined) {
     compound.brandNames = Array.isArray(brandNames)
       ? brandNames.map((b) => String(b).trim()).filter(Boolean)
       : [];
@@ -177,22 +224,22 @@ router.patch('/:id', async (req, res) => {
   if (enabled !== undefined && compound.enabled !== Boolean(enabled)) { compound.enabled = Boolean(enabled); changed.push('enabled'); }
   if (halfLifeDays !== undefined) { compound.halfLifeDays = Number(halfLifeDays); changed.push('halfLifeDays'); }
   if (intervalDays !== undefined) { compound.intervalDays = Number(intervalDays); changed.push('intervalDays'); }
-  if (!compound.isSystem && doseUnit !== undefined) { compound.doseUnit = doseUnit; changed.push('doseUnit'); }
+  if (doseUnit !== undefined) { compound.doseUnit = doseUnit; changed.push('doseUnit'); }
   if (color !== undefined) { compound.color = color; changed.push('color'); }
-  if (kineticsShape !== undefined && ['bolus', 'subq', 'depot'].includes(kineticsShape)) {
+  if (kineticsShape !== undefined && KINETICS_SHAPES.includes(kineticsShape)) {
     compound.kineticsShape = kineticsShape;
     changed.push('kineticsShape');
   }
   if (reminderEnabled !== undefined) { compound.reminderEnabled = Boolean(reminderEnabled); changed.push('reminderEnabled'); }
   if (reminderTime !== undefined) {
-    compound.reminderTime = /^\d{2}:\d{2}$/.test(reminderTime) ? reminderTime : '';
+    compound.reminderTime = HM_RE.test(reminderTime) ? reminderTime : '';
     changed.push('reminderTime');
   }
 
   try {
     await compound.save();
     rlog.info({ compoundId: req.params.id, name: compound.name, changed }, 'compounds: patched');
-    res.json({ compound });
+    res.json({ compound: shapeCustom(compound) });
   } catch (err) {
     if (err.code === 11000) {
       rlog.warn({ compoundId: req.params.id, name: compound.name }, 'compounds patch: duplicate name');
@@ -210,8 +257,7 @@ router.delete('/:id', async (req, res) => {
     return res.status(404).json({ error: 'Not found' });
   }
   if (compound.isSystem) {
-    rlog.warn({ compoundId: req.params.id, name: compound.name }, 'compounds delete: system compound blocked');
-    return res.status(400).json({ error: 'System compounds cannot be deleted. Disable instead.' });
+    return res.status(400).json({ error: 'System compounds cannot be deleted. Use PATCH /api/compounds/core/:key with { enabled: false }.' });
   }
   const { deletedCount } = await DoseLog.deleteMany({ userId: req.userId, compoundId: compound._id });
   await compound.deleteOne();

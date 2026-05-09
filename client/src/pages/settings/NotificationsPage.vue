@@ -180,6 +180,28 @@ onMounted(async () => {
                 >Evening nudge if you haven't logged yet.</span
               >
             </label>
+            <label class="notif-cat">
+              <input
+                type="checkbox"
+                :checked="pushStore.subscriptionDoc?.categories?.fastingReminder !== false"
+                @change="toggleCategory('fastingReminder')"
+              />
+              <span>Fasting reminders</span>
+              <span class="notif-cat-sub"
+                >Fast start + complete (configure under Fasting).</span
+              >
+            </label>
+            <label class="notif-cat">
+              <input
+                type="checkbox"
+                :checked="pushStore.subscriptionDoc?.categories?.menstruationReminder !== false"
+                @change="toggleCategory('menstruationReminder')"
+              />
+              <span>Cycle reminders</span>
+              <span class="notif-cat-sub"
+                >Predicted period, ovulation, etc. (configure under Menstrual cycle).</span
+              >
+            </label>
           </div>
 
           <!-- Daily tracking time picker, merged from the old "Daily tracking" card. -->

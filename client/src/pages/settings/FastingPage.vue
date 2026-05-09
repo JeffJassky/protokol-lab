@@ -30,6 +30,23 @@ const oneOffNotes = ref('');
 const oneOffError = ref('');
 const oneOffSaving = ref(false);
 
+const notifEnabled = ref(false);
+const notifFastStart = ref(true);
+const notifFastStartBefore = ref(0);
+const notifFastEnd = ref(true);
+const notifFastEndBefore = ref(0);
+
+// Friendly preset offsets for lead-time pickers. Custom is the "Other"
+// branch — surfaces a number input so users aren't capped to presets.
+const LEAD_PRESETS = [
+  { value: 0,   label: 'At time' },
+  { value: 5,   label: '5 min before' },
+  { value: 15,  label: '15 min before' },
+  { value: 30,  label: '30 min before' },
+  { value: 60,  label: '1 hour before' },
+  { value: 120, label: '2 hours before' },
+];
+
 const WEEKDAYS = [
   { value: 0, label: 'Sun' },
   { value: 1, label: 'Mon' },
@@ -83,6 +100,13 @@ onMounted(async () => {
   dailyStartTime.value = f.dailyStartTime || '20:00';
   weeklyRules.value = Array.isArray(f.weeklyRules) ? [...f.weeklyRules] : [];
 
+  const fn = f.notifications || {};
+  notifEnabled.value = Boolean(fn.enabled);
+  notifFastStart.value = fn.fastStart?.enabled !== false;
+  notifFastStartBefore.value = Number(fn.fastStart?.minutesBefore) || 0;
+  notifFastEnd.value = fn.fastEnd?.enabled !== false;
+  notifFastEndBefore.value = Number(fn.fastEnd?.minutesBefore) || 0;
+
   // Sensible default for the one-off composer: today's date.
   const today = new Date();
   oneOffStartDate.value = today.toISOString().slice(0, 10);
@@ -98,6 +122,11 @@ function scheduleSave() {
 
 async function persist() {
   await store.patchSettings({
+    // Refresh the global tz alongside fasting changes — the scheduler reads
+    // settings.timezone for all reminder dispatch, and IF is a wall-clock
+    // habit (8pm = 8pm wherever you are), so the user's current device tz
+    // is the right answer when they save their schedule.
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     fasting: {
       enabled: enabled.value,
       showOnLog: showOnLog.value,
@@ -108,6 +137,17 @@ async function persist() {
       dailyStartTime: dailyStartTime.value,
       weeklyRules: weeklyRules.value,
       ianaTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      notifications: {
+        enabled: notifEnabled.value,
+        fastStart: {
+          enabled: notifFastStart.value,
+          minutesBefore: Number(notifFastStartBefore.value) || 0,
+        },
+        fastEnd: {
+          enabled: notifFastEnd.value,
+          minutesBefore: Number(notifFastEndBefore.value) || 0,
+        },
+      },
     },
   });
 }
@@ -116,6 +156,8 @@ watch(
   [
     enabled, showOnLog, showOnDashboard, kind, protocol,
     fastDurationMinutes, dailyStartTime, weeklyRules,
+    notifEnabled, notifFastStart, notifFastStartBefore,
+    notifFastEnd, notifFastEndBefore,
   ],
   scheduleSave,
   { deep: true },
@@ -274,6 +316,56 @@ async function deleteOneOff(id) {
             Tap each day you want to fast. Each day uses the start time and
             duration above.
           </p>
+        </template>
+      </div>
+
+      <div class="card">
+        <h3>Reminders</h3>
+        <label class="row toggle-row">
+          <span class="toggle-label">
+            <span class="toggle-name">Enable reminders</span>
+            <span class="toggle-sub">Push notifications at fast-window boundaries.</span>
+          </span>
+          <input type="checkbox" v-model="notifEnabled" />
+        </label>
+
+        <template v-if="notifEnabled">
+          <div class="event-row">
+            <label class="event-toggle">
+              <input type="checkbox" v-model="notifFastStart" />
+              <span class="event-text">
+                <span class="event-name">Fast started</span>
+                <span class="event-desc">When your fasting window begins.</span>
+              </span>
+            </label>
+            <select
+              v-if="notifFastStart"
+              v-model.number="notifFastStartBefore"
+              class="bio-input narrow"
+            >
+              <option v-for="p in LEAD_PRESETS" :key="p.value" :value="p.value">
+                {{ p.label }}
+              </option>
+            </select>
+          </div>
+          <div class="event-row">
+            <label class="event-toggle">
+              <input type="checkbox" v-model="notifFastEnd" />
+              <span class="event-text">
+                <span class="event-name">Fast complete</span>
+                <span class="event-desc">When you reach your goal duration.</span>
+              </span>
+            </label>
+            <select
+              v-if="notifFastEnd"
+              v-model.number="notifFastEndBefore"
+              class="bio-input narrow"
+            >
+              <option v-for="p in LEAD_PRESETS" :key="p.value" :value="p.value">
+                {{ p.label }}
+              </option>
+            </select>
+          </div>
         </template>
       </div>
 
@@ -547,4 +639,32 @@ async function deleteOneOff(id) {
 .oneoff-delete:hover { color: var(--danger); }
 
 .error { color: var(--danger); font-size: var(--font-size-s); }
+
+.event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+.event-row:first-of-type { border-top: none; }
+.event-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1;
+  cursor: pointer;
+}
+.event-text { display: flex; flex-direction: column; gap: 2px; }
+.event-name {
+  font-size: var(--font-size-s);
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+}
+.event-desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+.bio-input.narrow { width: auto; min-width: 120px; }
 </style>

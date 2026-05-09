@@ -249,6 +249,248 @@ export function computeFastingStatus(schedule, events, now = new Date()) {
   return { state: 'eating_no_next' };
 }
 
+// Build the list of fasting notifications that should fire this minute.
+//
+// Inputs:
+//   - schedule:   UserSettings.fasting (with .notifications subdoc)
+//   - events:     recent FastingEvent[] (active + upcoming one-offs)
+//   - now:        Date — should be the scheduler tick instant
+//   - userHhmm:   "HH:MM" of `now` rendered in the user's tz (the scheduler
+//                 already computes this for every user). Recurring rules use
+//                 this to fire at the right wall-clock minute regardless of
+//                 server tz / DST.
+//   - userWeekday: 0–6 weekday of `now` in the user's tz, for `kind=weekly`.
+//
+// Output: array of { kind, title, body, tag, eventId } — tag is stable per
+// (event, kind) so the scheduler can dedupe across overlapping ticks.
+//
+// Two events are dispatched (per user-chosen toggle):
+//   - fastStart: at the fast's planned start instant
+//   - fastEnd:   at the fast's planned end instant (target reached)
+//
+// We fire when the relevant instant falls within the *current* minute. The
+// scheduler runs every minute on a 30s heartbeat with up to 60s lock — a
+// 1-minute window matches that cadence with no double-fire risk because of
+// the stable tag.
+export function computeFastingNotifications({
+  schedule,
+  events,
+  now,
+  userHhmm,
+  userWeekday,
+}) {
+  const out = [];
+  if (!schedule || !schedule.enabled) return out;
+  const n = schedule.notifications;
+  if (!n || !n.enabled) return out;
+  const fireStart = n.fastStart?.enabled !== false;
+  const fireEnd = n.fastEnd?.enabled !== false;
+  if (!fireStart && !fireEnd) return out;
+  const startLead = Math.max(0, Math.min(720, Number(n.fastStart?.minutesBefore) || 0));
+  const endLead   = Math.max(0, Math.min(720, Number(n.fastEnd?.minutesBefore)   || 0));
+
+  const minuteKey = formatMinuteKey(now);
+  const sameMinute = (instant) => formatMinuteKey(instant) === minuteKey;
+
+  // 1. Recurring schedule. The rule is anchored on user-local wall-clock —
+  //    compare HH:MM directly (no Date math, so DST jitter is irrelevant).
+  //    Lead time shifts the trigger HH:MM backward modulo 24h so a "30 min
+  //    before 20:00" alert lands at 19:30 the same day, and "60 min before
+  //    00:30" wraps to 23:30 the previous day. The wrap is correct because
+  //    the user's wall clock at "yesterday 23:30" is the same minute we
+  //    want to fire — the rule is purely time-of-day.
+  if (schedule.kind === 'daily' || schedule.kind === 'weekly') {
+    const rule = ruleForUserDay(schedule, userWeekday);
+    if (rule) {
+      if (fireStart) {
+        const triggerHhmm = addMinutesToHhmm(rule.startTime, -startLead);
+        if (triggerHhmm === userHhmm) {
+          // Compute the "real" planned start = now + leadMinutes so the
+          // notification copy can name the imminent event. This is correct
+          // when leadTime is 0 (now == start) and when >0 (now < start).
+          const plannedStart = new Date(now.getTime() + startLead * 60_000);
+          const plannedEnd = new Date(plannedStart.getTime() + rule.durationMin * 60_000);
+          out.push(buildStartNotif({
+            minuteKey: formatMinuteKey(plannedStart),
+            leadMinutes: startLead,
+            plannedStart,
+            plannedEnd,
+          }));
+        }
+      }
+      if (fireEnd) {
+        const endHhmm = addMinutesToHhmm(rule.startTime, rule.durationMin);
+        const triggerHhmm = addMinutesToHhmm(endHhmm, -endLead);
+        if (triggerHhmm === userHhmm) {
+          const plannedEnd = new Date(now.getTime() + endLead * 60_000);
+          out.push(buildEndNotif({
+            minuteKey: formatMinuteKey(plannedEnd),
+            leadMinutes: endLead,
+            plannedEnd,
+          }));
+        }
+      }
+    }
+  }
+
+  // 2. Per-event triggers (manual starts, one-offs, retroactive edits). We
+  //    check both planned and actual instants so a manual-start fast still
+  //    fires at the moment the user tapped Start. Lead-time shifts the
+  //    trigger instant earlier; we still tag by the real start/end so
+  //    multiple ticks (or recurring + event paths) collapse to one notif.
+  if (Array.isArray(events)) {
+    for (const ev of events) {
+      if (!ev) continue;
+      const id = ev._id || ev.id || null;
+      const startInstant = ev.actualStartAt
+        ? new Date(ev.actualStartAt)
+        : (ev.plannedStartAt ? new Date(ev.plannedStartAt) : null);
+      const endInstant = ev.actualEndAt
+        ? new Date(ev.actualEndAt)
+        : (ev.plannedEndAt ? new Date(ev.plannedEndAt) : null);
+
+      if (fireStart && startInstant) {
+        const trigger = new Date(startInstant.getTime() - startLead * 60_000);
+        // Skip pre-fast lead alerts for fasts that already started — the
+        // user tapped Start manually, the moment is now, not earlier.
+        const skipLead = startLead > 0 && Boolean(ev.actualStartAt);
+        if (!skipLead && sameMinute(trigger)) {
+          out.push(buildStartNotif({
+            minuteKey: formatMinuteKey(startInstant),
+            leadMinutes: startLead,
+            eventId: id,
+            plannedStart: startInstant,
+            plannedEnd: endInstant,
+          }));
+        }
+      }
+      // Only fire end-of-fast for events that are currently underway. A
+      // pure "scheduled" event with no actualStartAt represents an
+      // upcoming planned fast — its end instant is the recurring rule's
+      // end above, not a separate event-driven trigger.
+      const isUnderway = ev.actualStartAt && !ev.actualEndAt;
+      if (fireEnd && endInstant && (isUnderway || ev.source === 'one_off')) {
+        const trigger = new Date(endInstant.getTime() - endLead * 60_000);
+        if (sameMinute(trigger)) {
+          out.push(buildEndNotif({
+            minuteKey: formatMinuteKey(endInstant),
+            leadMinutes: endLead,
+            eventId: id,
+            plannedEnd: endInstant,
+          }));
+        }
+      }
+    }
+  }
+
+  // Dedupe by tag — recurring + event paths can both produce a hit when an
+  // event was materialized at the same minute as the rule. Tag is
+  // (kind, minute) so both paths collapse to one notification.
+  const seen = new Set();
+  return out.filter((t) => {
+    if (seen.has(t.tag)) return false;
+    seen.add(t.tag);
+    return true;
+  });
+}
+
+function ruleForUserDay(schedule, userWeekday) {
+  const startTime = parseHm(schedule.dailyStartTime || '20:00') ? schedule.dailyStartTime : '20:00';
+  const durationMin = Number(schedule.fastDurationMinutes) || 0;
+  if (durationMin <= 0) return null;
+
+  if (schedule.kind === 'daily') {
+    return { startTime, durationMin };
+  }
+  if (schedule.kind === 'weekly' && Array.isArray(schedule.weeklyRules)) {
+    const r = schedule.weeklyRules.find((x) => x && x.weekday === userWeekday);
+    if (!r) return null;
+    const ruleStart = parseHm(r.startTime) ? r.startTime : startTime;
+    const ruleDur = Number(r.durationMinutes) || durationMin;
+    if (!parseHm(ruleStart) || ruleDur <= 0) return null;
+    return { startTime: ruleStart, durationMin: ruleDur };
+  }
+  return null;
+}
+
+function addMinutesToHhmm(hhmm, addMin) {
+  const hm = parseHm(hhmm);
+  if (!hm) return null;
+  const total = (hm.hours * 60 + hm.minutes + Math.round(addMin)) % (24 * 60);
+  const wrapped = (total + 24 * 60) % (24 * 60);
+  const h = Math.floor(wrapped / 60);
+  const m = wrapped % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatMinuteKey(d) {
+  // YYYY-MM-DDTHH:MM (UTC) — dedupes across ticks within the same minute,
+  // and (combined with the rule key) across days too.
+  return new Date(d).toISOString().slice(0, 16);
+}
+
+function buildStartNotif({ minuteKey, leadMinutes = 0, eventId = null, plannedStart, plannedEnd }) {
+  const startLabel = plannedStart
+    ? new Date(plannedStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : null;
+  const endLabel = plannedEnd
+    ? new Date(plannedEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : null;
+  if (leadMinutes > 0) {
+    return {
+      kind: 'fastStart',
+      title: 'Fast starting soon',
+      body: startLabel
+        ? `Fast begins at ${startLabel} — ${formatLead(leadMinutes)} to go.`
+        : `Fast begins in ${formatLead(leadMinutes)}.`,
+      tag: `fasting:start:${minuteKey}`,
+      eventId,
+    };
+  }
+  return {
+    kind: 'fastStart',
+    title: 'Fast started',
+    body: endLabel
+      ? `Fast underway. Goal: ${endLabel}.`
+      : 'Your fast is underway.',
+    tag: `fasting:start:${minuteKey}`,
+    eventId,
+  };
+}
+
+function buildEndNotif({ minuteKey, leadMinutes = 0, eventId = null, plannedEnd }) {
+  const endLabel = plannedEnd
+    ? new Date(plannedEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : null;
+  if (leadMinutes > 0) {
+    return {
+      kind: 'fastEnd',
+      title: 'Fast ending soon',
+      body: endLabel
+        ? `Goal at ${endLabel} — ${formatLead(leadMinutes)} to go.`
+        : `Goal reached in ${formatLead(leadMinutes)}.`,
+      tag: `fasting:end:${minuteKey}`,
+      eventId,
+    };
+  }
+  return {
+    kind: 'fastEnd',
+    title: 'Fast complete',
+    body: 'Goal reached. You can break your fast now.',
+    tag: `fasting:end:${minuteKey}`,
+    eventId,
+  };
+}
+
+function formatLead(minutes) {
+  const m = Math.max(0, Math.round(Number(minutes) || 0));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (mm === 0) return h === 1 ? '1 hour' : `${h} hours`;
+  return `${h}h ${mm}m`;
+}
+
 // Format minutes as compact "Hh Mm" / "Mm". Negative input clamps to "0m".
 export function formatDuration(minutes) {
   const m = Math.max(0, Math.round(Number(minutes) || 0));

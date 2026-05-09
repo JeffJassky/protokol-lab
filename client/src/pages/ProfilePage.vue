@@ -390,6 +390,48 @@ watch(
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
+    <router-link to="/profile/settings/menstruation" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Menstrual cycle</span>
+        <span class="settings-link-sub">Cycle tracking, predictions + reminders</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/bloodwork" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Bloodwork</span>
+        <span class="settings-link-sub">Lab values that personalize the simulation engine</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/conditions" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Conditions</span>
+        <span class="settings-link-sub">ADHD, POTS, MCAS, PCOS, depression, anxiety…</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/genetics" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Genetics</span>
+        <span class="settings-link-sub">Pharmacogenomics, methylation, lipid + fitness markers</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/exercise" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Exercise</span>
+        <span class="settings-link-sub">Tracking, energy mode, activity catalog</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/tracking" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Tracking</span>
+        <span class="settings-link-sub">How missing days affect rolling-window math</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
     <router-link to="/profile/settings/fasting" class="card settings-link">
       <span class="settings-link-text">
         <span class="settings-link-label">Fasting</span>

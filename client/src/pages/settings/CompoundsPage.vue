@@ -11,9 +11,25 @@ const dosesStore = useDosesStore();
 const planLimits = usePlanLimits();
 const upgradeModal = useUpgradeModalStore();
 
-// System (built-in) compounds are universal and don't count toward the cap.
+// Stable key for both canonical (core: prefix + intervention key) and
+// custom (compound _id) rows. Used everywhere the prior code keyed off
+// `compound._id`, so canonical rows — which have no `_id` — get a
+// reliable identity in the drafts/saveState maps and the patch routes.
+function compoundKey(c) {
+  if (!c) return null;
+  return c.source === 'core' ? `core:${c.coreInterventionKey}` : c._id;
+}
+
+// Core compounds are catalog-defined; their PK shape is fixed. Only
+// custom rows let the user edit halfLife / kineticsShape directly.
+function canEditPk(c) {
+  return c.source !== 'core';
+}
+
+// Canonical compounds are universal and don't count toward the
+// custom-compound plan cap.
 const customCompoundCount = computed(() =>
-  compoundsStore.compounds.filter((c) => !c.isSystem).length,
+  compoundsStore.compounds.filter((c) => c.source === 'custom').length,
 );
 const customCompoundCap = computed(() => planLimits.storageCap('customCompounds'));
 const compoundsAtCap = computed(
@@ -69,7 +85,7 @@ const newCompound = reactive({
 const compoundsError = ref('');
 
 function startCompoundDraft(c) {
-  compoundDrafts[c._id] = {
+  compoundDrafts[compoundKey(c)] = {
     halfLifeDays: c.halfLifeDays,
     intervalDays: c.intervalDays,
     color: c.color || '',
@@ -80,18 +96,23 @@ function startCompoundDraft(c) {
 }
 
 async function saveCompoundReminder(compound) {
-  const draft = compoundDrafts[compound._id];
+  const key = compoundKey(compound);
+  const draft = compoundDrafts[key];
   if (!draft) return;
-  compoundSaveState[compound._id] = 'saving';
+  compoundSaveState[key] = 'saving';
   try {
-    await compoundsStore.update(compound._id, {
-      reminderEnabled: draft.reminderEnabled,
-      reminderTime: /^\d{2}:\d{2}$/.test(draft.reminderTime) ? draft.reminderTime : '',
-    });
-    compoundSaveState[compound._id] = 'saved';
-    setTimeout(() => { compoundSaveState[compound._id] = null; }, 1200);
+    await compoundsStore.update(
+      compound.source === 'core' ? compound.coreInterventionKey : compound._id,
+      {
+        reminderEnabled: draft.reminderEnabled,
+        reminderTime: /^\d{2}:\d{2}$/.test(draft.reminderTime) ? draft.reminderTime : '',
+      },
+      { source: compound.source },
+    );
+    compoundSaveState[key] = 'saved';
+    setTimeout(() => { compoundSaveState[key] = null; }, 1200);
   } catch (err) {
-    compoundSaveState[compound._id] = 'error';
+    compoundSaveState[key] = 'error';
     compoundsError.value = err.message;
   }
 }
@@ -115,33 +136,56 @@ function displayCompoundNames(c) {
 async function toggleCompoundEnabled(compound) {
   compoundsError.value = '';
   try {
-    await compoundsStore.update(compound._id, { enabled: !compound.enabled });
+    await compoundsStore.update(
+      compound.source === 'core' ? compound.coreInterventionKey : compound._id,
+      { enabled: !compound.enabled },
+      { source: compound.source },
+    );
   } catch (err) {
     compoundsError.value = err.message;
   }
 }
 
 async function saveCompoundDraft(compound) {
-  const draft = compoundDrafts[compound._id];
+  const key = compoundKey(compound);
+  const draft = compoundDrafts[key];
   if (!draft) return;
-  compoundSaveState[compound._id] = 'saving';
+  compoundSaveState[key] = 'saving';
   try {
-    await compoundsStore.update(compound._id, {
-      halfLifeDays: Number(draft.halfLifeDays),
-      intervalDays: Number(draft.intervalDays),
-      color: draft.color,
-      kineticsShape: draft.kineticsShape,
-    });
-    compoundSaveState[compound._id] = 'saved';
-    setTimeout(() => { compoundSaveState[compound._id] = null; }, 1200);
+    // For canonical compounds, halfLife/kineticsShape come from core's
+    // catalog and aren't editable — only intervalDays + color are
+    // user-customizable. Build a per-source patch.
+    const patch = compound.source === 'core'
+      ? {
+          intervalDays: Number(draft.intervalDays),
+          color: draft.color,
+        }
+      : {
+          halfLifeDays: Number(draft.halfLifeDays),
+          intervalDays: Number(draft.intervalDays),
+          color: draft.color,
+          kineticsShape: draft.kineticsShape,
+        };
+    await compoundsStore.update(
+      compound.source === 'core' ? compound.coreInterventionKey : compound._id,
+      patch,
+      { source: compound.source },
+    );
+    compoundSaveState[key] = 'saved';
+    setTimeout(() => { compoundSaveState[key] = null; }, 1200);
   } catch (err) {
-    compoundSaveState[compound._id] = 'error';
+    compoundSaveState[key] = 'error';
     compoundsError.value = err.message;
   }
 }
 
 async function handleDeleteCompound(compound) {
   compoundsError.value = '';
+  if (compound.source === 'core') {
+    // Canonical compounds aren't deletable — disable instead.
+    await toggleCompoundEnabled(compound);
+    return;
+  }
   if (!confirm(`Delete "${compound.name}"? All dose entries for this compound will be removed.`)) return;
   try {
     await compoundsStore.remove(compound._id);
@@ -187,7 +231,7 @@ async function handleAddCompound() {
 }
 
 function nextDoseInfo(compound) {
-  const last = dosesStore.latestDoseFor(compound._id);
+  const last = dosesStore.latestDoseFor(compound);
   if (!last) return { label: 'No doses logged', status: 'none' };
   const interval = Number(compound.intervalDays) || 0;
   if (!interval) return { label: '—', status: 'none' };
@@ -228,7 +272,7 @@ onMounted(async () => {
       <ul class="compound-list">
         <li
           v-for="c in compoundsStore.compounds"
-          :key="c._id"
+          :key="compoundKey(c)"
           class="compound-row"
           :class="{ disabled: !c.enabled }"
           :style="c.enabled && c.color ? { borderLeftColor: c.color, borderLeftWidth: '3px' } : null"
@@ -254,7 +298,7 @@ onMounted(async () => {
                     >{{ displayCompoundNames(c) }}</span
                   >
                   <svg
-                    v-if="c.isSystem"
+                    v-if="c.source === 'core'"
                     class="compound-lock"
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
@@ -277,7 +321,7 @@ onMounted(async () => {
                 >
               </div>
               <button
-                v-if="!c.isSystem"
+                v-if="c.source !== 'core'"
                 type="button"
                 class="compound-del"
                 @click.stop="handleDeleteCompound(c)"
@@ -286,14 +330,16 @@ onMounted(async () => {
                 ×
               </button>
             </div>
-            <div v-if="draftFor(c._id) && c.enabled" class="compound-params">
-              <label class="param-chip">
+            <div v-if="draftFor(compoundKey(c)) && c.enabled" class="compound-params">
+              <label class="param-chip" :class="{ 'param-chip-readonly': !canEditPk(c) }">
                 <span class="param-label">Half-life</span>
                 <input
                   type="number"
                   step="0.25"
                   min="0.1"
-                  v-model.number="draftFor(c._id).halfLifeDays"
+                  :disabled="!canEditPk(c)"
+                  :title="canEditPk(c) ? '' : 'Set by core PK catalog'"
+                  v-model.number="draftFor(compoundKey(c)).halfLifeDays"
                   @change="saveCompoundDraft(c)"
                 />
                 <span class="param-unit">d</span>
@@ -304,7 +350,7 @@ onMounted(async () => {
                   type="number"
                   step="0.5"
                   min="0.5"
-                  v-model.number="draftFor(c._id).intervalDays"
+                  v-model.number="draftFor(compoundKey(c)).intervalDays"
                   @change="saveCompoundDraft(c)"
                 />
                 <span class="param-unit">d</span>
@@ -316,10 +362,15 @@ onMounted(async () => {
                 placement="bottom-start"
                 :distance="6"
               >
-                <div class="param-chip shape-chip">
+                <div
+                  class="param-chip shape-chip"
+                  :class="{ 'param-chip-readonly': !canEditPk(c) }"
+                >
                   <span class="param-label">Profile</span>
                   <select
-                    v-model="draftFor(c._id).kineticsShape"
+                    v-model="draftFor(compoundKey(c)).kineticsShape"
+                    :disabled="!canEditPk(c)"
+                    :title="canEditPk(c) ? '' : 'Set by core PK catalog'"
                     @change="saveCompoundDraft(c)"
                   >
                     <option
@@ -373,30 +424,30 @@ onMounted(async () => {
                 <span class="param-label">Color</span>
                 <input
                   type="color"
-                  v-model="draftFor(c._id).color"
+                  v-model="draftFor(compoundKey(c)).color"
                   @change="saveCompoundDraft(c)"
                 />
               </label>
               <span
-                v-if="compoundSaveState[c._id] === 'saved'"
+                v-if="compoundSaveState[compoundKey(c)] === 'saved'"
                 class="compound-status ok"
                 >saved</span
               >
               <span
-                v-else-if="compoundSaveState[c._id] === 'saving'"
+                v-else-if="compoundSaveState[compoundKey(c)] === 'saving'"
                 class="compound-status"
                 >saving...</span
               >
             </div>
 
-            <div v-if="draftFor(c._id) && c.enabled" class="compound-reminder">
+            <div v-if="draftFor(compoundKey(c)) && c.enabled" class="compound-reminder">
               <label
                 class="switch"
-                :title="draftFor(c._id).reminderEnabled ? 'Reminder on' : 'Reminder off'"
+                :title="draftFor(compoundKey(c)).reminderEnabled ? 'Reminder on' : 'Reminder off'"
               >
                 <input
                   type="checkbox"
-                  v-model="draftFor(c._id).reminderEnabled"
+                  v-model="draftFor(compoundKey(c)).reminderEnabled"
                   @change="saveCompoundReminder(c)"
                 />
                 <span class="switch-track"><span class="switch-thumb" /></span>
@@ -405,8 +456,8 @@ onMounted(async () => {
               <input
                 type="time"
                 class="reminder-time"
-                v-model="draftFor(c._id).reminderTime"
-                :disabled="!draftFor(c._id).reminderEnabled"
+                v-model="draftFor(compoundKey(c)).reminderTime"
+                :disabled="!draftFor(compoundKey(c)).reminderEnabled"
                 @change="saveCompoundReminder(c)"
               />
             </div>

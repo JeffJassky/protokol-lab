@@ -16,7 +16,7 @@ const cascadeLog = childLogger('user.cascade');
 export const CASCADE_COLLECTIONS = [
   'ChatThread', 'ChatUsage', 'Compound', 'DayNote', 'DoseLog',
   'FastingEvent', 'FavoriteFood', 'FeatureRequest', 'FoodItem', 'FoodLog',
-  'FunnelEvent', 'Meal', 'MealProposal', 'Metric', 'MetricLog', 'Photo', 'PhotoType', 'PushSubscription',
+  'FunnelEvent', 'Meal', 'MealProposal', 'BloodworkProposal', 'Exercise', 'ExerciseLog', 'DayStatus', 'Metric', 'MetricLog', 'Photo', 'PhotoType', 'PushSubscription',
   'RecentFood', 'Symptom', 'SymptomLog', 'SupportTicket',
   'UserSettings', 'WeightLog',
 ];

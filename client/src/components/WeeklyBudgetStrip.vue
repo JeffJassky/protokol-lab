@@ -1,13 +1,87 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useWeeklyBudget } from '../composables/useWeeklyBudget.js';
+import { useDayStatusStore } from '../stores/dayStatus.js';
 import MacroBar from './MacroBar.vue';
 
 const props = defineProps({
   defaultExpanded: { type: Boolean, default: false },
 });
 
-const { targets, weekTarget, perDay, consumed, delta, adjustedToday } = useWeeklyBudget();
+const {
+  targets, weekTarget, perDay, counted, countedDays,
+  consumed, delta, adjustedToday, energyMode, windowLabel,
+} = useWeeklyBudget();
+const dayStatusStore = useDayStatusStore();
+
+// Day-status menu state. `menuDate` holds the YYYY-MM-DD whose menu is
+// open; null means closed. The menu lets the user override auto-
+// classification: mark a day tracked / untracked, pick a reason, or
+// clear the explicit row to revert to auto.
+const menuDate = ref(null);
+const menuStatus = ref('tracked');
+const menuReason = ref('other');
+
+const VALID_REASONS = {
+  tracked: [
+    { key: 'fasted', label: 'Fasted' },
+    { key: 'other',  label: 'Other' },
+  ],
+  untracked: [
+    { key: 'forgot',   label: 'Forgot to log' },
+    { key: 'partial',  label: 'Partial / unreliable' },
+    { key: 'vacation', label: 'Vacation' },
+    { key: 'holiday',  label: 'Holiday' },
+    { key: 'illness',  label: 'Illness' },
+    { key: 'other',    label: 'Other' },
+  ],
+};
+
+function openDayMenu(day) {
+  menuDate.value = day.date;
+  // If user already explicitly set this day, prefill from their choice.
+  // Otherwise prefill the inverse of the current effective status —
+  // tapping a day usually means "I want to flip this".
+  const explicit = dayStatusStore.getStatus(day.date);
+  if (explicit) {
+    menuStatus.value = explicit.status;
+    menuReason.value = explicit.reason || 'other';
+  } else {
+    menuStatus.value = day.disposition === 'untracked' ? 'tracked' : 'untracked';
+    menuReason.value = menuStatus.value === 'tracked' ? 'fasted' : 'forgot';
+  }
+}
+
+function closeDayMenu() {
+  menuDate.value = null;
+}
+
+async function applyDayMenu() {
+  if (!menuDate.value) return;
+  await dayStatusStore.setStatus(menuDate.value, {
+    status: menuStatus.value,
+    reason: menuReason.value,
+  });
+  menuDate.value = null;
+}
+
+async function revertDayMenu() {
+  if (!menuDate.value) return;
+  await dayStatusStore.clearStatus(menuDate.value);
+  menuDate.value = null;
+}
+
+// Reason picker keeps options consistent with the chosen status.
+const menuReasonOptions = computed(() => VALID_REASONS[menuStatus.value] || []);
+
+// When the user flips status mid-menu, drop the reason if it doesn't
+// belong on the new status. (Keeps `tracked + partial` etc. impossible.)
+function onMenuStatusChange() {
+  const valid = new Set(VALID_REASONS[menuStatus.value].map((r) => r.key));
+  if (!valid.has(menuReason.value)) {
+    menuReason.value = menuStatus.value === 'tracked' ? 'fasted' : 'forgot';
+  }
+}
 const expanded = ref(props.defaultExpanded);
 
 function r(n) { return Math.round(n); }
@@ -197,7 +271,7 @@ const targetLinePct = computed(() => {
       @click="toggleExpanded"
     >
       <div class="wb-stat">
-        <span class="wb-stat-label">7-day budget</span>
+        <span class="wb-stat-label">{{ windowLabel || '7-day budget' }}</span>
         <span class="wb-stat-value">
           {{ fmt(consumed.calories)
 
@@ -268,42 +342,62 @@ const targetLinePct = computed(() => {
     </button>
 
     <div v-if="expanded" class="wb-body">
+      <div class="wb-counted-row">
+        <span class="wb-counted-label">
+          {{ countedDays }} of 7 days counted
+        </span>
+        <span v-if="countedDays === 0" class="wb-counted-empty">
+          Log something to see your weekly pace.
+        </span>
+      </div>
+
       <div class="wb-strip">
-        <div
+        <button
           v-for="(day, i) in perDay"
           :key="day.date"
+          type="button"
           class="wb-day"
-          :class="{ 'is-today': day.isToday }"
+          :class="{
+            'is-today': day.isToday,
+            'is-untracked': day.disposition === 'untracked',
+            'is-explicit': day.dispositionSource === 'explicit',
+          }"
           :style="{ '--bar-index': i }"
+          @click.stop="openDayMenu(day)"
         >
           <div class="wb-day-label">
             {{ dayShortLabel(day.date, day.isToday) }}
           </div>
           <div class="wb-day-track">
             <div
+              v-if="day.isCounted"
               class="wb-day-fill"
               :style="{ height: normalHeightPct(day.calories) + '%' }"
             />
             <div
+              v-if="day.isCounted"
               class="wb-day-over"
               :style="{ height: overHeightPct(day.calories) + '%' }"
             />
             <div
+              v-if="day.isCounted"
               class="wb-day-target-line"
               :style="{ bottom: targetLinePct + '%' }"
               title="Daily target"
             />
+            <div v-if="!day.isCounted" class="wb-day-untracked-mark">↷</div>
           </div>
           <div
             class="wb-day-value"
-            :class="{ over: day.calories > (targets.calories || 0) }"
+            :class="{ over: day.isCounted && day.calories > (targets.calories || 0) }"
           >
-            {{ day.calories ? fmt(day.calories) : '' }}
+            <template v-if="day.isCounted">{{ day.calories ? fmt(day.calories) : '' }}</template>
+            <template v-else>untracked</template>
           </div>
-        </div>
+        </button>
       </div>
 
-      <div class="wb-macros">
+      <div v-if="countedDays > 0" class="wb-macros">
         <MacroBar
           v-for="(m, i) in weekMacroBars"
           :key="m.key"
@@ -317,6 +411,65 @@ const targetLinePct = computed(() => {
           :note="m.note"
           :note-tone="m.noteTone"
         />
+      </div>
+    </div>
+
+    <!-- Day-status menu. Inline popover anchored at the bottom of the
+         strip — keeps the user's eye on the day they tapped instead of
+         a full-screen modal context shift. -->
+    <div
+      v-if="menuDate"
+      class="wb-menu-backdrop"
+      @click.self="closeDayMenu"
+    >
+      <div class="wb-menu">
+        <h4>{{ menuDate }}</h4>
+        <div class="wb-menu-row">
+          <span class="wb-menu-label">Status</span>
+          <div class="wb-status-tabs">
+            <button
+              type="button"
+              class="wb-status-tab"
+              :class="{ active: menuStatus === 'tracked' }"
+              @click="menuStatus = 'tracked'; onMenuStatusChange()"
+            >Tracked</button>
+            <button
+              type="button"
+              class="wb-status-tab"
+              :class="{ active: menuStatus === 'untracked' }"
+              @click="menuStatus = 'untracked'; onMenuStatusChange()"
+            >Untracked</button>
+          </div>
+        </div>
+        <div class="wb-menu-row">
+          <span class="wb-menu-label">Reason</span>
+          <select v-model="menuReason" class="wb-menu-select">
+            <option
+              v-for="opt in menuReasonOptions"
+              :key="opt.key"
+              :value="opt.key"
+            >{{ opt.label }}</option>
+          </select>
+        </div>
+        <p class="wb-menu-hint">
+          <template v-if="menuStatus === 'tracked'">
+            Day counts in the rolling budget. Use "Fasted" for intentional zero-calorie days.
+          </template>
+          <template v-else>
+            Day excluded from rolling math — no banked calories from this day.
+          </template>
+        </p>
+        <div class="wb-menu-actions">
+          <button type="button" class="wb-menu-btn-text" @click="revertDayMenu">
+            Revert to auto
+          </button>
+          <button type="button" class="wb-menu-btn-secondary" @click="closeDayMenu">
+            Cancel
+          </button>
+          <button type="button" class="wb-menu-btn-primary" @click="applyDayMenu">
+            Save
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -482,4 +635,168 @@ const targetLinePct = computed(() => {
 
 /* Weekly macro bars */
 .wb-macros { margin-bottom: var(--space-1); }
+
+/* Counted-day row + untracked day styling */
+.wb-counted-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+.wb-counted-label {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
+}
+.wb-counted-empty {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+/* Day cells now act as buttons (tap to open status menu) */
+.wb-day {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+.wb-day:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Untracked styling — dashed outline + greyed track */
+.wb-day.is-untracked .wb-day-track {
+  outline: 1px dashed var(--border-strong);
+  outline-offset: 0;
+  background: var(--bg);
+}
+.wb-day.is-untracked .wb-day-label,
+.wb-day.is-untracked .wb-day-value {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.wb-day.is-untracked.is-explicit .wb-day-track {
+  /* Solid outline when the user explicitly chose untracked, dashed when auto. */
+  outline-style: solid;
+}
+.wb-day-untracked-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: var(--font-size-l);
+  color: var(--text-tertiary);
+  opacity: 0.6;
+}
+
+/* Day-status menu */
+.wb-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+}
+.wb-menu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--space-4);
+  width: 92%;
+  max-width: 420px;
+}
+.wb-menu h4 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-s);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.wb-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.wb-menu-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.wb-status-tabs {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 2px;
+  gap: 2px;
+}
+.wb-status-tab {
+  padding: 4px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  font-family: inherit;
+}
+.wb-status-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+}
+.wb-menu-select {
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-s);
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.wb-menu-hint {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border-left: 2px solid var(--border);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.wb-menu-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.wb-menu-btn-text,
+.wb-menu-btn-secondary,
+.wb-menu-btn-primary {
+  padding: 6px 14px;
+  font-size: var(--font-size-s);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  font-family: inherit;
+}
+.wb-menu-btn-text {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-tertiary);
+  margin-right: auto;
+}
+.wb-menu-btn-text:hover { color: var(--text); }
+.wb-menu-btn-secondary { background: var(--surface); color: var(--text-secondary); }
+.wb-menu-btn-primary {
+  background: var(--primary);
+  color: var(--primary-fg, #fff);
+  border-color: var(--primary);
+}
 </style>

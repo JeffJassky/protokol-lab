@@ -14,6 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeFastingStatus,
+  computeFastingNotifications,
   formatDuration,
   protocolDurationMinutes,
   stageForElapsedMinutes,
@@ -165,6 +166,302 @@ describe('protocolDurationMinutes', () => {
     expect(protocolDurationMinutes('OMAD')).toBe(23 * 60);
     expect(protocolDurationMinutes('custom')).toBeNull();
     expect(protocolDurationMinutes('???')).toBeNull();
+  });
+});
+
+describe('computeFastingNotifications', () => {
+  const SCHEDULE = {
+    ...FASTING_ENABLED,
+    notifications: {
+      enabled: true,
+      fastStart: { enabled: true },
+      fastEnd: { enabled: true },
+    },
+  };
+
+  it('returns empty when fasting disabled', () => {
+    const out = computeFastingNotifications({
+      schedule: { ...SCHEDULE, enabled: false },
+      events: [],
+      now: new Date('2026-05-02T20:00:00Z'),
+      userHhmm: '20:00',
+      userWeekday: 6,
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('returns empty when notifications disabled', () => {
+    const out = computeFastingNotifications({
+      schedule: { ...SCHEDULE, notifications: { enabled: false, fastStart: { enabled: true }, fastEnd: { enabled: true } } },
+      events: [],
+      now: new Date('2026-05-02T20:00:00Z'),
+      userHhmm: '20:00',
+      userWeekday: 6,
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('fires fastStart when daily rule start matches user-tz hhmm', () => {
+    const out = computeFastingNotifications({
+      schedule: SCHEDULE,
+      events: [],
+      now: new Date('2026-05-02T20:00:00Z'),
+      userHhmm: '20:00',
+      userWeekday: 6,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe('fastStart');
+  });
+
+  it('fires fastEnd when daily rule end (start + duration) matches', () => {
+    // Start 20:00 + 16h = 12:00 next day.
+    const out = computeFastingNotifications({
+      schedule: SCHEDULE,
+      events: [],
+      now: new Date('2026-05-03T12:00:00Z'),
+      userHhmm: '12:00',
+      userWeekday: 0,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe('fastEnd');
+  });
+
+  it('skips fastStart when toggle is off', () => {
+    const out = computeFastingNotifications({
+      schedule: { ...SCHEDULE, notifications: { enabled: true, fastStart: { enabled: false }, fastEnd: { enabled: true } } },
+      events: [],
+      now: new Date('2026-05-02T20:00:00Z'),
+      userHhmm: '20:00',
+      userWeekday: 6,
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('fires fastStart for a manual_start event in the current minute', () => {
+    const startAt = new Date('2026-05-02T15:00:00Z');
+    const events = [{
+      _id: 'm1',
+      source: 'manual_start',
+      actualStartAt: startAt,
+      actualEndAt: null,
+      plannedStartAt: startAt,
+      plannedEndAt: new Date('2026-05-03T07:00:00Z'),
+    }];
+    const out = computeFastingNotifications({
+      schedule: SCHEDULE,
+      events,
+      now: startAt,
+      userHhmm: '15:00',
+      userWeekday: 6,
+    });
+    expect(out.some((t) => t.kind === 'fastStart')).toBe(true);
+  });
+
+  it('fires fastEnd for an active event whose plannedEnd matches now', () => {
+    const startAt = new Date('2026-05-02T20:00:00Z');
+    const plannedEnd = new Date('2026-05-03T12:00:00Z');
+    const events = [{
+      _id: 'a1',
+      source: 'manual_start',
+      actualStartAt: startAt,
+      actualEndAt: null,
+      plannedStartAt: startAt,
+      plannedEndAt: plannedEnd,
+    }];
+    const out = computeFastingNotifications({
+      schedule: SCHEDULE,
+      events,
+      now: plannedEnd,
+      userHhmm: '12:00',
+      userWeekday: 0,
+    });
+    expect(out.some((t) => t.kind === 'fastEnd')).toBe(true);
+  });
+
+  it('dedupes recurring + event hits at the same instant', () => {
+    // Daily rule starts 20:00; an event already exists with actualStartAt
+    // = 20:00. Helper should still emit one fastStart total.
+    const startAt = new Date('2026-05-02T20:00:00Z');
+    const out = computeFastingNotifications({
+      schedule: SCHEDULE,
+      events: [{
+        _id: 'e1',
+        source: 'scheduled',
+        actualStartAt: startAt,
+        actualEndAt: null,
+        plannedStartAt: startAt,
+        plannedEndAt: new Date('2026-05-03T12:00:00Z'),
+      }],
+      now: startAt,
+      userHhmm: '20:00',
+      userWeekday: 6,
+    });
+    const starts = out.filter((t) => t.kind === 'fastStart');
+    expect(starts).toHaveLength(1);
+  });
+
+  it('lead-time fires fastStart 30 min before recurring rule start', () => {
+    const schedule = {
+      ...FASTING_ENABLED,
+      notifications: {
+        enabled: true,
+        fastStart: { enabled: true, minutesBefore: 30 },
+        fastEnd: { enabled: true, minutesBefore: 0 },
+      },
+    };
+    // Fast starts at 20:00 → trigger at 19:30.
+    const out = computeFastingNotifications({
+      schedule,
+      events: [],
+      now: new Date('2026-05-02T19:30:00Z'),
+      userHhmm: '19:30',
+      userWeekday: 6,
+    });
+    const start = out.find((t) => t.kind === 'fastStart');
+    expect(start).toBeDefined();
+    expect(start.title).toBe('Fast starting soon');
+    expect(start.body).toContain('30 min');
+    // No notification at the actual start instant when lead-time > 0.
+    const at = computeFastingNotifications({
+      schedule,
+      events: [],
+      now: new Date('2026-05-02T20:00:00Z'),
+      userHhmm: '20:00',
+      userWeekday: 6,
+    });
+    expect(at.find((t) => t.kind === 'fastStart')).toBeUndefined();
+  });
+
+  it('lead-time fires fastEnd 1h before goal', () => {
+    const schedule = {
+      ...FASTING_ENABLED,
+      notifications: {
+        enabled: true,
+        fastStart: { enabled: false, minutesBefore: 0 },
+        fastEnd: { enabled: true, minutesBefore: 60 },
+      },
+    };
+    // 20:00 + 16h = 12:00. Trigger 60 min earlier = 11:00.
+    const out = computeFastingNotifications({
+      schedule,
+      events: [],
+      now: new Date('2026-05-03T11:00:00Z'),
+      userHhmm: '11:00',
+      userWeekday: 0,
+    });
+    const end = out.find((t) => t.kind === 'fastEnd');
+    expect(end).toBeDefined();
+    expect(end.title).toBe('Fast ending soon');
+  });
+
+  it('lead-time wraps across midnight in HH:MM math', () => {
+    // 60 min before 00:30 wraps to 23:30 the previous day.
+    const schedule = {
+      ...FASTING_ENABLED,
+      dailyStartTime: '00:30',
+      notifications: {
+        enabled: true,
+        fastStart: { enabled: true, minutesBefore: 60 },
+        fastEnd: { enabled: false, minutesBefore: 0 },
+      },
+    };
+    const out = computeFastingNotifications({
+      schedule,
+      events: [],
+      now: new Date('2026-05-02T23:30:00Z'),
+      userHhmm: '23:30',
+      userWeekday: 6,
+    });
+    expect(out.find((t) => t.kind === 'fastStart')).toBeDefined();
+  });
+
+  it('lead-time on event-driven planned-end fires before goal', () => {
+    const schedule = {
+      ...FASTING_ENABLED,
+      notifications: {
+        enabled: true,
+        fastStart: { enabled: false, minutesBefore: 0 },
+        fastEnd: { enabled: true, minutesBefore: 30 },
+      },
+    };
+    const startAt = new Date('2026-05-02T15:00:00Z');
+    const plannedEnd = new Date('2026-05-03T07:00:00Z'); // 16h fast
+    const events = [{
+      _id: 'a1',
+      source: 'manual_start',
+      actualStartAt: startAt,
+      actualEndAt: null,
+      plannedStartAt: startAt,
+      plannedEndAt: plannedEnd,
+    }];
+    // Trigger 30 min before 07:00 = 06:30.
+    const out = computeFastingNotifications({
+      schedule,
+      events,
+      now: new Date('2026-05-03T06:30:00Z'),
+      userHhmm: '06:30',
+      userWeekday: 0,
+    });
+    expect(out.find((t) => t.kind === 'fastEnd')).toBeDefined();
+  });
+
+  it('lead-time on a manual_start fastStart is suppressed (already started)', () => {
+    // A manual-start event represents "the user tapped Start now" — there's
+    // no future start instant to give a heads-up about. Skip pre-fast lead.
+    const schedule = {
+      ...FASTING_ENABLED,
+      kind: 'none',
+      notifications: {
+        enabled: true,
+        fastStart: { enabled: true, minutesBefore: 30 },
+        fastEnd: { enabled: false, minutesBefore: 0 },
+      },
+    };
+    const startAt = new Date('2026-05-02T15:00:00Z');
+    const events = [{
+      _id: 'm1',
+      source: 'manual_start',
+      actualStartAt: startAt,
+      actualEndAt: null,
+      plannedStartAt: startAt,
+      plannedEndAt: new Date('2026-05-03T07:00:00Z'),
+    }];
+    // 30 min before startAt = 14:30.
+    const out = computeFastingNotifications({
+      schedule,
+      events,
+      now: new Date('2026-05-02T14:30:00Z'),
+      userHhmm: '14:30',
+      userWeekday: 6,
+    });
+    expect(out.find((t) => t.kind === 'fastStart')).toBeUndefined();
+  });
+
+  it('weekly rule only fires on selected weekday', () => {
+    const schedule = {
+      ...SCHEDULE,
+      kind: 'weekly',
+      weeklyRules: [{ weekday: 3, startTime: '20:00', durationMinutes: 16 * 60 }],
+    };
+    // Wednesday → fires.
+    const wed = computeFastingNotifications({
+      schedule,
+      events: [],
+      now: new Date('2026-05-06T20:00:00Z'),
+      userHhmm: '20:00',
+      userWeekday: 3,
+    });
+    expect(wed.some((t) => t.kind === 'fastStart')).toBe(true);
+
+    // Friday → silent.
+    const fri = computeFastingNotifications({
+      schedule,
+      events: [],
+      now: new Date('2026-05-08T20:00:00Z'),
+      userHhmm: '20:00',
+      userWeekday: 5,
+    });
+    expect(fri).toEqual([]);
   });
 });
 

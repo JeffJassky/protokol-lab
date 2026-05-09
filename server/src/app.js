@@ -16,6 +16,9 @@ import metricsRoutes from './routes/metrics.js';
 import waterRoutes from './routes/water.js';
 import doseRoutes from './routes/doses.js';
 import compoundsRoutes from './routes/compounds.js';
+import exercisesRoutes from './routes/exercises.js';
+import exerciselogRoutes from './routes/exerciselog.js';
+import dayStatusRoutes from './routes/dayStatus.js';
 import fastingRoutes from './routes/fasting.js';
 import chatRoutes from './routes/chat.js';
 import notesRoutes from './routes/notes.js';
@@ -171,6 +174,9 @@ export function createApp({ serveClient = true } = {}) {
   app.use('/api/water', requireAuth, waterRoutes);
   app.use('/api/doses', requireAuth, doseRoutes);
   app.use('/api/compounds', requireAuth, compoundsRoutes);
+  app.use('/api/exercises', requireAuth, exercisesRoutes);
+  app.use('/api/exerciselog', requireAuth, exerciselogRoutes);
+  app.use('/api/day-status', requireAuth, dayStatusRoutes);
   app.use('/api/fasting', requireAuth, fastingRoutes);
   // Chat is disabled in demo entirely — anon sessions have no quota account
   // and authed-demo users would chat against sandbox-scoped threads.

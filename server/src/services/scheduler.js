@@ -8,6 +8,8 @@ import WeightLog from '../models/WeightLog.js';
 import FoodLog from '../models/FoodLog.js';
 import SymptomLog from '../models/SymptomLog.js';
 import DoseLog from '../models/DoseLog.js';
+import FastingEvent from '../models/FastingEvent.js';
+import { computeFastingNotifications } from '../../../shared/fasting.js';
 import { sendToUser } from './push.js';
 import { deleteSandbox, refillPool } from './demo.js';
 import { childLogger, errContext } from '../lib/logger.js';
@@ -44,6 +46,19 @@ function localDayKey(date, timeZone) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(date);
+}
+
+function weekdayInZone(date, timeZone) {
+  // 0 (Sun) – 6 (Sat) — matches Date#getDay() and the schedule's
+  // weeklyRules.weekday convention.
+  const SHORT = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' });
+    const tag = fmt.format(date);
+    return SHORT[tag] ?? date.getUTCDay();
+  } catch {
+    return date.getUTCDay();
+  }
 }
 
 function daysBetweenDayKeys(a, b) {
@@ -101,8 +116,10 @@ async function runTick() {
   const users = await UserSettings.find({
     $or: [
       { 'trackReminder.enabled': true },
+      { 'menstruation.enabled': true, 'menstruation.notifications.enabled': true },
+      { 'fasting.enabled': true, 'fasting.notifications.enabled': true },
     ],
-  }).select('userId timezone trackReminder').lean();
+  }).select('userId timezone trackReminder menstruation fasting').lean();
 
   const compoundReminders = await Compound.find({
     reminderEnabled: true,
@@ -175,6 +192,146 @@ async function runTick() {
       });
       log.info({ userId: uid, compound: c.name, ...result }, 'scheduler: dose reminder fanout');
       doseFired++;
+    }
+
+    // Menstrual-cycle notifications. Predicted dates are derived from
+    // lastPeriodStart + cycleLength + lutealPhaseLength; each enabled
+    // event has its own offset (daysBefore for everything except late-
+    // period which uses daysAfter). We only fire when both the predicted
+    // event date matches today's local day key AND the user's chosen
+    // notification time matches the current hhmm.
+    const m = settings.menstruation;
+    if (m?.enabled && m.notifications?.enabled && m.notifications.time === hhmm && m.lastPeriodStart) {
+      const start = new Date(m.lastPeriodStart);
+      if (!Number.isNaN(start.getTime())) {
+        const cl = Math.max(15, Math.min(60, Number(m.cycleLength) || 28));
+        const lp = Math.max(7, Math.min(20, Number(m.lutealPhaseLength) || 14));
+        const ms = 86400000;
+        // Roll forward to the first predicted-period date that's not in
+        // the past relative to today's local midnight. Anchor everything
+        // on UTC math — predictions are day-grained, so DST jitter is
+        // <24h and harmless for "did today match the prediction" checks.
+        const todayUtc = new Date(`${todayKey}T00:00:00.000Z`);
+        let nextPeriod = new Date(start.getTime());
+        while (nextPeriod < todayUtc) nextPeriod = new Date(nextPeriod.getTime() + cl * ms);
+        // Backtrack one cycle so predictions for "few days before next
+        // period" don't always land in the future when today is between
+        // events. nextPeriod becomes the upcoming or just-passed period.
+        if (nextPeriod.getTime() - todayUtc.getTime() > cl * ms / 2) {
+          nextPeriod = new Date(nextPeriod.getTime() - cl * ms);
+        }
+        const ovulation = new Date(nextPeriod.getTime() - lp * ms);
+        const fertileStart = new Date(ovulation.getTime() - 5 * ms);
+
+        const dayKeyOf = (d) => localDayKey(d, tz);
+        const offsetDayKey = (d, days) => dayKeyOf(new Date(d.getTime() + days * ms));
+
+        const targets = [];
+        const n = m.notifications;
+        if (n.periodExpected?.enabled) {
+          targets.push({
+            event: 'periodExpected',
+            day: offsetDayKey(nextPeriod, -(Number(n.periodExpected.daysBefore) || 0)),
+            title: 'Period expected soon',
+            body: `Your next period is predicted for ${nextPeriod.toLocaleDateString([], { month: 'short', day: 'numeric' })}.`,
+          });
+        }
+        if (n.ovulationExpected?.enabled) {
+          targets.push({
+            event: 'ovulationExpected',
+            day: offsetDayKey(ovulation, -(Number(n.ovulationExpected.daysBefore) || 0)),
+            title: 'Ovulation day',
+            body: `Predicted ovulation: ${ovulation.toLocaleDateString([], { month: 'short', day: 'numeric' })}.`,
+          });
+        }
+        if (n.fertileWindow?.enabled) {
+          targets.push({
+            event: 'fertileWindow',
+            day: offsetDayKey(fertileStart, -(Number(n.fertileWindow.daysBefore) || 0)),
+            title: 'Fertile window opens',
+            body: 'Predicted start of your fertile window.',
+          });
+        }
+        if (n.pmsWindow?.enabled) {
+          targets.push({
+            event: 'pmsWindow',
+            day: offsetDayKey(nextPeriod, -(Number(n.pmsWindow.daysBefore) || 5)),
+            title: 'PMS window',
+            body: 'Period coming up — good moment to log how you\'re feeling.',
+          });
+        }
+        if (n.latePeriod?.enabled) {
+          targets.push({
+            event: 'latePeriod',
+            day: offsetDayKey(nextPeriod, Number(n.latePeriod.daysAfter) || 2),
+            title: 'Period is late',
+            body: 'Your predicted period date has passed. Update Last period start when it begins.',
+          });
+        }
+
+        for (const t of targets) {
+          if (t.day !== todayKey) continue;
+          const tag = `cycle:${t.event}:${todayKey}`;
+          log.info({ userId: uid, event: t.event, tz, hhmm }, 'scheduler: firing cycle notification');
+          const result = await sendToUser(uid, 'menstruationReminder', {
+            title: t.title,
+            body: t.body,
+            url: '/profile/settings/menstruation',
+            category: 'menstruationReminder',
+            tag,
+            data: { event: t.event },
+          });
+          log.info({ userId: uid, event: t.event, ...result }, 'scheduler: cycle notification fanout');
+        }
+      }
+    }
+
+    // Fasting notifications. Two events fire (per user toggle): fastStart
+    // at the planned/actual start instant, fastEnd at the planned end. Logic
+    // is in shared/fasting.js (testable, runs identically client + server).
+    // We pass the user-tz hhmm + weekday so recurring rules anchor on local
+    // wall-clock independent of server tz / DST drift.
+    const f = settings.fasting;
+    if (f?.enabled && f.notifications?.enabled) {
+      // Pull recent + upcoming events: anything whose start or end could fall
+      // within ±2h of `now`. Window is generous to cover server lag, retroactive
+      // edits, and the helper's same-minute matching for actualStart instants
+      // logged by manual_start. No timezone math here — instants are absolute.
+      const winMs = 2 * 60 * 60 * 1000;
+      const lo = new Date(now.getTime() - winMs);
+      const hi = new Date(now.getTime() + winMs);
+      const fevents = await FastingEvent.find({
+        userId: uid,
+        $or: [
+          { plannedStartAt: { $gte: lo, $lte: hi } },
+          { plannedEndAt:   { $gte: lo, $lte: hi } },
+          { actualStartAt:  { $gte: lo, $lte: hi } },
+          { actualEndAt:    { $gte: lo, $lte: hi } },
+          { actualStartAt: { $ne: null }, actualEndAt: null },
+        ],
+      }).lean();
+
+      const userWeekday = weekdayInZone(now, tz);
+      const fastNotifs = computeFastingNotifications({
+        schedule: f,
+        events: fevents,
+        now,
+        userHhmm: hhmm,
+        userWeekday,
+      });
+
+      for (const t of fastNotifs) {
+        log.info({ userId: uid, kind: t.kind, tz, hhmm }, 'scheduler: firing fasting notification');
+        const result = await sendToUser(uid, 'fastingReminder', {
+          title: t.title,
+          body: t.body,
+          url: '/profile/settings/fasting',
+          category: 'fastingReminder',
+          tag: t.tag,
+          data: { kind: t.kind, eventId: t.eventId ? String(t.eventId) : null },
+        });
+        log.info({ userId: uid, kind: t.kind, ...result }, 'scheduler: fasting notification fanout');
+      }
     }
 
     if (settings.trackReminder?.enabled && settings.trackReminder.time === hhmm) {

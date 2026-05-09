@@ -10,6 +10,20 @@ import { NUTRIENT_KEYS, addNutrients, scaleNutrients, roundNutrients } from '../
 const log = childLogger('foodlog');
 const router = Router();
 
+// New-entry timestamp policy: when the client passes only a date (YYYY-MM-DD),
+// anchor to that date with the *current local time*. So logging at 14:30
+// today reads as today @ 14:30; backfilling yesterday at 14:30 reads as
+// yesterday @ 14:30 (which is what the user typically means when they
+// log retroactively from "around now"). Full ISO strings pass through
+// unchanged.
+function resolveLogTimestamp(input) {
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const now = new Date();
+    return new Date(`${input}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`);
+  }
+  return parseLogDate(input);
+}
+
 function cleanPerServing(input) {
   if (!input || typeof input !== 'object') return {};
   const out = {};
@@ -160,6 +174,51 @@ router.get('/daily-calories', async (req, res) => {
   res.json({ days });
 });
 
+// Per-event food entries across a range. Each FoodLog row becomes one
+// event in the simulation, anchored to its *recorded* timestamp instead
+// of a synthesized meal-type offset. Powers the endogenous-signal
+// simulation — the worker fires each meal event at its real time of
+// day. Aggregating by mealType is purely a UI concern (food card
+// columns), not a simulation one.
+router.get('/range-meals', async (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) {
+    (req.log || log).warn({ from, to }, 'range-meals: missing from/to');
+    return res.status(400).json({ error: 'from and to required' });
+  }
+
+  const rangeStart = new Date(from);
+  const rangeEnd = new Date(to);
+  rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
+
+  const entries = await FoodLog.find({
+    userId: req.userId,
+    date: { $gte: rangeStart, $lt: rangeEnd },
+    consumed: true,
+  }).populate('foodItemId').sort({ date: 1 });
+
+  const meals = [];
+  for (const entry of entries) {
+    const food = entry.foodItemId;
+    if (!food) continue;
+    const nutrients = roundNutrients(
+      scaleNutrients(food.perServing, entry.servingCount),
+      1,
+    );
+    meals.push({
+      logId: String(entry._id),
+      // Full ISO timestamp — the worker derives both the calendar day
+      // and the minute-of-day for engine startMin from this.
+      timestamp: entry.date.toISOString(),
+      mealType: entry.mealType,
+      nutrients,
+    });
+  }
+
+  (req.log || log).debug({ from, to, meals: meals.length }, 'foodlog: range-meals');
+  res.json({ meals });
+});
+
 router.get('/summary', async (req, res) => {
   const { date } = req.query;
   const dayStart = new Date(date);
@@ -203,10 +262,15 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Could not resolve food item' });
   }
 
+  // Default new entries to the current time on the requested date.
+  // Old behavior anchored to noon UTC, which lost time-of-day fidelity
+  // and forced the simulation pipeline to synthesize meal-type offsets.
+  // The client may still send a full ISO timestamp explicitly (chat
+  // agent backfills, or future "log at HH:MM" flows) — those win.
   const entry = await FoodLog.create({
     userId: req.userId,
     foodItemId,
-    date: parseLogDate(req.body.date),
+    date: resolveLogTimestamp(req.body.date),
     mealType: req.body.mealType,
     servingCount: req.body.servingCount || 1,
   });
@@ -308,6 +372,12 @@ router.put('/:id', async (req, res) => {
   if (req.body.servingCount != null) update.servingCount = req.body.servingCount;
   if (req.body.mealType) update.mealType = req.body.mealType;
   if (req.body.consumed != null) update.consumed = req.body.consumed;
+  // Allow time-of-day edits. Accept full ISO timestamps; everything else
+  // gets dropped to avoid silently storing junk strings.
+  if (req.body.date) {
+    const d = new Date(req.body.date);
+    if (!Number.isNaN(d.getTime())) update.date = d;
+  }
 
   const entry = await FoodLog.findOneAndUpdate(
     { _id: req.params.id, userId: req.userId },

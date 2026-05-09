@@ -38,4 +38,10 @@ features:
   - title: Insights Engine
     details: How the dashboard ranks correlations, change-points, and projections across the user's series — and the causal-direction priors that decide what gets surfaced.
     link: /insights
+  - title: Tracked vs Untracked Days
+    details: Day-disposition contract for handling vacation, illness, and forgot-to-log gaps in rolling-window math. Universal across food, exercise, supplements, and compounds.
+    link: /tracked-untracked-days
+  - title: Exercise Energy Modes
+    details: Three accounting policies for how logged workouts interact with the calorie-deficit math — baseline, earn, and hidden — plus how each plays with the rolling-7 budget.
+    link: /exercise-energy-modes
 ---

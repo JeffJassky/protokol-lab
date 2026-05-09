@@ -3,6 +3,9 @@ import { Router } from 'express';
 import ChatThread from '../models/ChatThread.js';
 import ChatUsage from '../models/ChatUsage.js';
 import MealProposal from '../models/MealProposal.js';
+import BloodworkProposal from '../models/BloodworkProposal.js';
+import UserSettings from '../models/UserSettings.js';
+import { BLOODWORK_FIELD_INDEX, sanitizeBloodworkValue, expandBloodworkFlat, flattenBloodworkNested } from '../../../shared/bloodworkPanels.js';
 import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
 import User from '../models/User.js';
@@ -449,6 +452,92 @@ router.post('/proposals/:id/cancel', async (req, res) => {
     date: proposal.date,
     mealType: proposal.mealType,
   });
+});
+
+// ── Bloodwork proposal confirm / cancel ─────────────────────────────────────
+// A bloodwork proposal is a set of AI-suggested lab-value updates awaiting
+// user review. Confirming merges every change into UserSettings.bloodwork
+// (the same shape Subject.bloodwork uses), so the next simulation run picks
+// them up automatically. Cancel just flips status — values stay untouched.
+
+router.post('/bloodwork-proposals/:id/confirm', async (req, res) => {
+  const rlog = req.log || log;
+  const { id } = req.params;
+  const overrides = Array.isArray(req.body?.changes) ? req.body.changes : null;
+
+  const proposal = await BloodworkProposal.findOne({ _id: id, userId: req.authUserId });
+  if (!proposal) {
+    rlog.warn({ proposalId: id }, 'bloodwork-proposal confirm: not found');
+    return res.status(404).json({ error: 'Proposal not found' });
+  }
+  if (proposal.status !== 'pending') {
+    return res.status(409).json({ error: `Proposal already ${proposal.status}` });
+  }
+
+  const source = overrides && overrides.length ? overrides : proposal.changes;
+
+  // Re-validate every change at confirm time. Even though propose_bloodwork_update
+  // already validated, the user's edits in the inline card are user input and
+  // need the same gauntlet (clamp + drop unknowns).
+  const cleanedFlat = {};
+  const dropped = [];
+  for (const c of source) {
+    const key = String(c?.key || '');
+    if (!BLOODWORK_FIELD_INDEX.has(key)) {
+      dropped.push({ key, reason: 'unknown field' });
+      continue;
+    }
+    const v = sanitizeBloodworkValue(key, c?.value);
+    if (v == null) {
+      dropped.push({ key, reason: 'invalid value' });
+      continue;
+    }
+    cleanedFlat[key] = v;
+  }
+  if (!Object.keys(cleanedFlat).length) {
+    return res.status(400).json({ error: 'No valid changes to apply', dropped });
+  }
+
+  // Merge into existing bloodwork. Keep prior values for fields we're not
+  // touching; overwrite the ones in the proposal.
+  const settings = await UserSettings.findOne({ userId: req.authUserId }).select('bloodwork');
+  const existingFlat = flattenBloodworkNested(settings?.bloodwork);
+  const mergedFlat = { ...existingFlat, ...cleanedFlat };
+  const nested = expandBloodworkFlat(mergedFlat);
+
+  await UserSettings.findOneAndUpdate(
+    { userId: req.authUserId },
+    { $set: { bloodwork: nested, updatedAt: new Date() }, $setOnInsert: { userId: req.authUserId } },
+    { upsert: true, runValidators: true },
+  );
+
+  proposal.status = 'confirmed';
+  await proposal.save();
+
+  rlog.info(
+    { proposalId: id, applied: Object.keys(cleanedFlat).length, dropped: dropped.length },
+    'bloodwork-proposal: confirmed',
+  );
+  res.json({
+    ok: true,
+    proposalId: id,
+    applied: Object.keys(cleanedFlat).length,
+    changes: proposal.changes,
+    dropped,
+  });
+});
+
+router.post('/bloodwork-proposals/:id/cancel', async (req, res) => {
+  const rlog = req.log || log;
+  const proposal = await BloodworkProposal.findOne({ _id: req.params.id, userId: req.authUserId });
+  if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+  if (proposal.status !== 'pending') {
+    return res.status(409).json({ error: `Proposal already ${proposal.status}` });
+  }
+  proposal.status = 'cancelled';
+  await proposal.save();
+  rlog.info({ proposalId: req.params.id }, 'bloodwork-proposal: cancelled');
+  res.json({ ok: true, proposalId: req.params.id, changes: proposal.changes });
 });
 
 router.post('/title', async (req, res) => {

@@ -2,6 +2,16 @@ import { Router } from 'express';
 import UserSettings from '../models/UserSettings.js';
 import WeightLog from '../models/WeightLog.js';
 import { childLogger } from '../lib/logger.js';
+import {
+  sanitizeBloodworkValue,
+  expandBloodworkFlat,
+} from '../../../shared/bloodworkPanels.js';
+import { sanitizeConditionsState } from '../../../shared/conditionsCatalog.js';
+import {
+  sanitizeGeneticsValue,
+  expandGeneticsFlat,
+} from '../../../shared/geneticsPanels.js';
+import { PEPTIDE_CATALOG_INDEX } from '@kyneticbio/core';
 
 const log = childLogger('settings');
 const router = Router();
@@ -31,6 +41,13 @@ function sanitizeFasting(input) {
             : dur,
         }))
     : [];
+  const n = f.notifications || {};
+  const eventOffset = (e) => {
+    const obj = e || {};
+    const raw = Number(obj.minutesBefore);
+    const m = Number.isFinite(raw) ? Math.max(0, Math.min(720, Math.round(raw))) : 0;
+    return { enabled: obj.enabled !== false, minutesBefore: m };
+  };
   return {
     enabled: Boolean(f.enabled),
     showOnLog: f.showOnLog !== false,
@@ -41,6 +58,11 @@ function sanitizeFasting(input) {
     dailyStartTime: dailyStart,
     weeklyRules,
     ianaTz: typeof f.ianaTz === 'string' ? f.ianaTz.slice(0, 64) : 'UTC',
+    notifications: {
+      enabled: Boolean(n.enabled),
+      fastStart: eventOffset(n.fastStart),
+      fastEnd:   eventOffset(n.fastEnd),
+    },
   };
 }
 
@@ -52,6 +74,153 @@ function sanitizePhotos(input) {
     enabled: Boolean(p.enabled),
     showOnLog: p.showOnLog == null ? true : Boolean(p.showOnLog),
     showOnDashboard: p.showOnDashboard == null ? true : Boolean(p.showOnDashboard),
+  };
+}
+
+// Sanitize the compoundPreferences map. Each value is a partial spec
+// — only fields the user explicitly customized are kept. Unknown
+// canonical keys are filtered against core's PEPTIDE_CATALOG_INDEX so a
+// stale client can't pollute the doc with garbage keys. Boolean and
+// numeric fields are coerced; strings are trimmed and length-capped.
+function sanitizeCompoundPreferences(input) {
+  if (!input || typeof input !== 'object') return {};
+  const out = {};
+  for (const [key, raw] of Object.entries(input)) {
+    if (!key || typeof key !== 'string') continue;
+    if (!PEPTIDE_CATALOG_INDEX.has(key)) continue;
+    if (!raw || typeof raw !== 'object') continue;
+    const cleaned = {};
+    if (raw.enabled != null) cleaned.enabled = Boolean(raw.enabled);
+    if (raw.color != null && typeof raw.color === 'string') {
+      cleaned.color = raw.color.slice(0, 16);
+    }
+    if (Number.isFinite(Number(raw.intervalDays))) {
+      cleaned.intervalDays = Math.max(0.5, Math.min(30, Number(raw.intervalDays)));
+    }
+    if (Number.isFinite(Number(raw.order))) cleaned.order = Math.round(Number(raw.order));
+    if (raw.reminderEnabled != null) cleaned.reminderEnabled = Boolean(raw.reminderEnabled);
+    if (raw.reminderTime != null && typeof raw.reminderTime === 'string') {
+      cleaned.reminderTime = raw.reminderTime.slice(0, 8); // HH:mm tolerance
+    }
+    if (Object.keys(cleaned).length) out[key] = cleaned;
+  }
+  return out;
+}
+
+function sanitizeTracking(input) {
+  const t = input || {};
+  const mode = ['passive', 'affirmative'].includes(t.confirmationMode) ? t.confirmationMode : 'passive';
+  return { confirmationMode: mode };
+}
+
+function sanitizeExercise(input) {
+  const e = input || {};
+  const mode = ['baseline', 'earn', 'hidden'].includes(e.energyMode) ? e.energyMode : 'baseline';
+  return {
+    enabled: Boolean(e.enabled),
+    showOnLog: e.showOnLog == null ? true : Boolean(e.showOnLog),
+    showOnDashboard: e.showOnDashboard == null ? true : Boolean(e.showOnDashboard),
+    energyMode: mode,
+  };
+}
+
+function sanitizeBloodwork(input) {
+  // Accepts either flat `{ 'metabolic.glucose_mg_dL': 95 }` or nested
+  // `{ metabolic: { glucose_mg_dL: 95 } }` and emits the nested shape the
+  // engine expects. Drops anything not in the panel index — protects
+  // against agent typos or stale clients writing unknown fields.
+  if (!input || typeof input !== 'object') return {};
+  const flat = {};
+  // Detect shape: if first value is an object, treat as nested.
+  const first = Object.values(input)[0];
+  if (first && typeof first === 'object') {
+    for (const [panel, fields] of Object.entries(input)) {
+      if (!fields || typeof fields !== 'object') continue;
+      for (const [field, value] of Object.entries(fields)) {
+        flat[`${panel}.${field}`] = value;
+      }
+    }
+  } else {
+    Object.assign(flat, input);
+  }
+  const cleaned = {};
+  for (const [dotPath, raw] of Object.entries(flat)) {
+    const v = sanitizeBloodworkValue(dotPath, raw);
+    if (v == null) continue;
+    cleaned[dotPath] = v;
+  }
+  return expandBloodworkFlat(cleaned);
+}
+
+function sanitizeGenetics(input) {
+  // Same flat-or-nested forgiveness as bloodwork. Drops anything not in
+  // the curated panels (so the agent or a stale client can't write
+  // unrecognized markers).
+  if (!input || typeof input !== 'object') return {};
+  const flat = {};
+  const first = Object.values(input)[0];
+  if (first && typeof first === 'object') {
+    for (const [panel, fields] of Object.entries(input)) {
+      if (!fields || typeof fields !== 'object') continue;
+      for (const [field, value] of Object.entries(fields)) {
+        flat[`${panel}.${field}`] = value;
+      }
+    }
+  } else {
+    Object.assign(flat, input);
+  }
+  const cleaned = {};
+  for (const [dotPath, raw] of Object.entries(flat)) {
+    const v = sanitizeGeneticsValue(dotPath, raw);
+    if (v == null) continue;
+    cleaned[dotPath] = v;
+  }
+  return expandGeneticsFlat(cleaned);
+}
+
+function sanitizeMenstruation(input) {
+  const m = input || {};
+  let last = null;
+  if (m.lastPeriodStart) {
+    const d = new Date(m.lastPeriodStart);
+    if (!Number.isNaN(d.getTime())) last = d;
+  }
+  const cycle = Number.isFinite(Number(m.cycleLength))
+    ? Math.max(15, Math.min(60, Math.round(Number(m.cycleLength))))
+    : 28;
+  const luteal = Number.isFinite(Number(m.lutealPhaseLength))
+    ? Math.max(7, Math.min(20, Math.round(Number(m.lutealPhaseLength))))
+    : 14;
+
+  const n = m.notifications || {};
+  // HH:MM 24h. Anything malformed falls back to 09:00 — same lenient
+  // approach as trackReminder.
+  const time = typeof n.time === 'string' && /^\d{2}:\d{2}$/.test(n.time) ? n.time : '09:00';
+  const ev = (e, defaultDaysBefore = 0, key = 'daysBefore') => {
+    const obj = e || {};
+    const raw = Number(obj[key]);
+    const days = Number.isFinite(raw)
+      ? Math.max(0, Math.min(14, Math.round(raw)))
+      : defaultDaysBefore;
+    return { enabled: Boolean(obj.enabled), [key]: days };
+  };
+
+  return {
+    enabled: Boolean(m.enabled),
+    lastPeriodStart: last,
+    cycleLength: cycle,
+    lutealPhaseLength: luteal,
+    showOnLog: m.showOnLog == null ? true : Boolean(m.showOnLog),
+    showOnDashboard: m.showOnDashboard == null ? true : Boolean(m.showOnDashboard),
+    notifications: {
+      enabled: Boolean(n.enabled),
+      time,
+      periodExpected:    ev(n.periodExpected,    1, 'daysBefore'),
+      ovulationExpected: ev(n.ovulationExpected, 0, 'daysBefore'),
+      fertileWindow:     ev(n.fertileWindow,     0, 'daysBefore'),
+      pmsWindow:         ev(n.pmsWindow,         5, 'daysBefore'),
+      latePeriod:        ev(n.latePeriod,        2, 'daysAfter'),
+    },
   };
 }
 
@@ -126,6 +295,27 @@ router.put('/', async (req, res) => {
   if (req.body.photos !== undefined) {
     set.photos = sanitizePhotos(req.body.photos);
   }
+  if (req.body.menstruation !== undefined) {
+    set.menstruation = sanitizeMenstruation(req.body.menstruation);
+  }
+  if (req.body.bloodwork !== undefined) {
+    set.bloodwork = sanitizeBloodwork(req.body.bloodwork);
+  }
+  if (req.body.exercise !== undefined) {
+    set.exercise = sanitizeExercise(req.body.exercise);
+  }
+  if (req.body.tracking !== undefined) {
+    set.tracking = sanitizeTracking(req.body.tracking);
+  }
+  if (req.body.compoundPreferences !== undefined) {
+    set.compoundPreferences = sanitizeCompoundPreferences(req.body.compoundPreferences);
+  }
+  if (req.body.conditions !== undefined) {
+    set.conditions = sanitizeConditionsState(req.body.conditions);
+  }
+  if (req.body.genetics !== undefined) {
+    set.genetics = sanitizeGenetics(req.body.genetics);
+  }
 
   const settings = await UserSettings.findOneAndUpdate(
     { userId: req.userId },
@@ -168,6 +358,27 @@ router.patch('/', async (req, res) => {
   }
   if (req.body.photos !== undefined) {
     set.photos = sanitizePhotos(req.body.photos);
+  }
+  if (req.body.menstruation !== undefined) {
+    set.menstruation = sanitizeMenstruation(req.body.menstruation);
+  }
+  if (req.body.bloodwork !== undefined) {
+    set.bloodwork = sanitizeBloodwork(req.body.bloodwork);
+  }
+  if (req.body.exercise !== undefined) {
+    set.exercise = sanitizeExercise(req.body.exercise);
+  }
+  if (req.body.tracking !== undefined) {
+    set.tracking = sanitizeTracking(req.body.tracking);
+  }
+  if (req.body.compoundPreferences !== undefined) {
+    set.compoundPreferences = sanitizeCompoundPreferences(req.body.compoundPreferences);
+  }
+  if (req.body.conditions !== undefined) {
+    set.conditions = sanitizeConditionsState(req.body.conditions);
+  }
+  if (req.body.genetics !== undefined) {
+    set.genetics = sanitizeGenetics(req.body.genetics);
   }
 
   const settings = await UserSettings.findOneAndUpdate(

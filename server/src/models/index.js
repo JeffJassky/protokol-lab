@@ -18,6 +18,10 @@ import FoodLog from './FoodLog.js';
 import FunnelEvent from './FunnelEvent.js';
 import Meal from './Meal.js';
 import MealProposal from './MealProposal.js';
+import BloodworkProposal from './BloodworkProposal.js';
+import Exercise from './Exercise.js';
+import ExerciseLog from './ExerciseLog.js';
+import DayStatus from './DayStatus.js';
 import Metric from './Metric.js';
 import MetricLog from './MetricLog.js';
 import Photo from './Photo.js';
@@ -35,7 +39,7 @@ import WeightLog from './WeightLog.js';
 export {
   ChatThread, ChatUsage, Compound, DayNote, DoseLog,
   FastingEvent, FavoriteFood, FeatureRequest, FoodItem, FoodLog,
-  FunnelEvent, Meal, MealProposal, Metric, MetricLog, Photo, PhotoType, PushSubscription,
+  FunnelEvent, Meal, MealProposal, BloodworkProposal, Exercise, ExerciseLog, DayStatus, Metric, MetricLog, Photo, PhotoType, PushSubscription,
   RecentFood, SupportTicket, Symptom, SymptomLog,
   User, UserSettings, WaterLog, WeightLog,
 };

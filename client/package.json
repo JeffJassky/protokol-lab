@@ -37,6 +37,7 @@
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@capgo/capacitor-social-login": "^8.3.20",
+    "@kyneticbio/core": "file:../../core",
     "@sentry/capacitor": "^4.0.0",
     "@sentry/vite-plugin": "^5.2.0",
     "@sentry/vue": "10.43.0",

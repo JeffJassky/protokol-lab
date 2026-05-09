@@ -71,6 +71,8 @@ router.post("/subscribe", async (req, res) => {
     update.categories = {
       doseReminder: categories.doseReminder !== false,
       trackReminder: categories.trackReminder !== false,
+      menstruationReminder: categories.menstruationReminder !== false,
+      fastingReminder: categories.fastingReminder !== false,
       test: categories.test !== false,
     };
   }
@@ -149,6 +151,10 @@ router.patch("/categories", async (req, res) => {
     update["categories.doseReminder"] = Boolean(categories.doseReminder);
   if (categories.trackReminder !== undefined)
     update["categories.trackReminder"] = Boolean(categories.trackReminder);
+  if (categories.menstruationReminder !== undefined)
+    update["categories.menstruationReminder"] = Boolean(categories.menstruationReminder);
+  if (categories.fastingReminder !== undefined)
+    update["categories.fastingReminder"] = Boolean(categories.fastingReminder);
   if (categories.test !== undefined)
     update["categories.test"] = Boolean(categories.test);
 

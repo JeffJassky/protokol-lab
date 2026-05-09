@@ -65,6 +65,24 @@ const userSettingsSchema = new mongoose.Schema({
       default: [],
     },
     ianaTz: { type: String, default: 'UTC' },
+    // Push notifications fired at fast-window boundaries. Triggered by the
+    // scheduler at the *event's* time (start instant or planned-end instant),
+    // not at a user-chosen clock time — fasts already declare when they
+    // start/end. Master `enabled` gates both events.
+    notifications: {
+      enabled: { type: Boolean, default: false },
+      // Each toggle has a `minutesBefore` offset. 0 = at the instant; >0
+      // fires N minutes earlier (e.g. 30 min before fast starts). Clamped
+      // server-side to [0, 720] (12h).
+      fastStart: {
+        enabled: { type: Boolean, default: true },
+        minutesBefore: { type: Number, default: 0 },
+      },
+      fastEnd: {
+        enabled: { type: Boolean, default: true },
+        minutesBefore: { type: Number, default: 0 },
+      },
+    },
   },
   // Progress photos. Off by default; enabling reveals the photo capture
   // card on the log page (per `showOnLog`) and the photo timeline on the
@@ -86,6 +104,88 @@ const userSettingsSchema = new mongoose.Schema({
     dailyTargetMl: { type: Number, default: 2000 },
     servingMl: { type: Number, default: 250 },
     showOnDashboard: { type: Boolean, default: false },
+  },
+  // Universal tracking-completeness behavior. Governs how the rolling-
+  // window math (currently the 7-day budget; future supplement /
+  // exercise-streak views) treats days with missing or partial data.
+  // See docs/tracked-untracked-days.md for the full contract.
+  //   'passive'      — any FoodLog entries → tracked; zero entries →
+  //                    auto-untracked; user can override per-day.
+  //   'affirmative'  — every past day defaults to untracked until the
+  //                    user explicitly marks it tracked. Today is
+  //                    always tracked-pending and counts toward
+  //                    consumed during the day.
+  tracking: {
+    confirmationMode: { type: String, enum: ['passive', 'affirmative'], default: 'passive' },
+  },
+  // Per-user customization for canonical compounds in core's
+  // PEPTIDE_CATALOG. Keyed by core intervention key (e.g. 'tirzepatide').
+  // Sparse — only persisted when the user diverges from defaults.
+  // doseUnit deliberately not here: it's intrinsic to the compound, not
+  // a user preference.
+  compoundPreferences: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Exercise feature settings. Off by default. Enabling reveals the
+  // exercise card on the log page (per `showOnLog`) and the burn / net-
+  // calorie series on the dashboard (per `showOnDashboard`). `energyMode`
+  // governs how logged exercise interacts with the calorie-deficit math:
+  //   'baseline' — TDEE multiplier already covers workouts; burn shown
+  //                for awareness only, target stays put. (default)
+  //   'earn'     — calorie target bumps proportionally to burn; exercise
+  //                "earns" calories.
+  //   'hidden'   — burn not displayed.
+  exercise: {
+    enabled: { type: Boolean, default: false },
+    showOnLog: { type: Boolean, default: true },
+    showOnDashboard: { type: Boolean, default: true },
+    energyMode: { type: String, enum: ['baseline', 'earn', 'hidden'], default: 'baseline' },
+  },
+  // Lab bloodwork values. Stored as the same nested shape the engine
+  // consumes (Subject.bloodwork): `bloodwork[panelId][fieldKey] = number`.
+  // Mongoose Mixed type so we can write any subset of panels/fields the
+  // user has filled in without an exhaustive schema. Sanitation +
+  // allowed-key enforcement happen at the route level via shared/
+  // bloodworkPanels.js — anything not in BLOODWORK_FIELD_INDEX is dropped.
+  bloodwork: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Active condition profiles. Stored as `{ [conditionKey]: { enabled,
+  // params: { ... } } }` matching the engine's ConditionStateSnapshot.
+  // The simulation worker calls buildConditionAdjustments(state) and
+  // forwards the resulting receptor/baseline/coupling overrides via
+  // engine options. Only keys in shared/conditionsCatalog.CONDITION_KEYS
+  // survive sanitation.
+  conditions: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Genetic profile. Same nested shape as Subject.genetics so we can
+  // pass it through to the engine untouched. Curated subset of fields
+  // surfaced via shared/geneticsPanels.GENETICS_PANELS — sanitation
+  // drops anything outside that catalog and any value that isn't one
+  // of the declared option strings.
+  genetics: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Menstrual cycle inputs. Off by default. The simulation engine's
+  // estrogen/progesterone/LH/FSH signal definitions read
+  // ctx.subject.{cycleDay, cycleLength, lutealPhaseLength}; cycleDay is
+  // derived client-side from `lastPeriodStart`. Surface flags gate the
+  // cycle-day banner on Log and the cycle-driven hormone series on
+  // Dashboard, independently of each other. Notifications are fired by
+  // the reminder scheduler at `notifications.time` on the predicted
+  // event day for each enabled event type.
+  menstruation: {
+    enabled: { type: Boolean, default: false },
+    lastPeriodStart: { type: Date, default: null },
+    cycleLength: { type: Number, default: 28 },
+    lutealPhaseLength: { type: Number, default: 14 },
+    showOnLog: { type: Boolean, default: true },
+    showOnDashboard: { type: Boolean, default: true },
+    notifications: {
+      enabled: { type: Boolean, default: false },
+      time: { type: String, default: '09:00' },
+      // Each event toggle fires at `time` on the predicted day, offset by
+      // its own `daysBefore` (0 = day-of). Predictions follow from
+      // lastPeriodStart + cycleLength + lutealPhaseLength.
+      periodExpected:    { enabled: { type: Boolean, default: true  }, daysBefore: { type: Number, default: 1 } },
+      ovulationExpected: { enabled: { type: Boolean, default: false }, daysBefore: { type: Number, default: 0 } },
+      fertileWindow:     { enabled: { type: Boolean, default: false }, daysBefore: { type: Number, default: 0 } },
+      pmsWindow:         { enabled: { type: Boolean, default: false }, daysBefore: { type: Number, default: 5 } },
+      latePeriod:        { enabled: { type: Boolean, default: false }, daysAfter:  { type: Number, default: 2 } },
+    },
   },
   updatedAt: { type: Date, default: Date.now },
 });

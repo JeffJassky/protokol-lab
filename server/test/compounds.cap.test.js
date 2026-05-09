@@ -11,11 +11,15 @@ import { PLAN_IDS } from '../../shared/plans.js';
 
 const app = createApp({ serveClient: false });
 
+// Custom compound — name deliberately unique so it doesn't shadow a
+// canonical entry in core's PEPTIDE_CATALOG (Tirzepatide, Semaglutide,
+// Liraglutide, Dulaglutide, Retatrutide, oral Semaglutide). Canonical
+// names + brand names are reserved post-migration.
 const VALID_BODY = {
-  name: 'Retatrutide',
-  halfLifeDays: 5,
-  intervalDays: 7,
-  doseUnit: 'mg',
+  name: 'BPC-157 custom',
+  halfLifeDays: 0.25,
+  intervalDays: 1,
+  doseUnit: 'mcg',
   kineticsShape: 'subq',
 };
 
@@ -73,17 +77,20 @@ describe('POST /api/compounds — plan cap', () => {
     }
   });
 
-  it('System (built-in) compounds do NOT count toward the cap', async () => {
+  it('Canonical compounds do NOT count toward the cap', async () => {
     const { agent, userId } = await registerAgent();
     await setPlan(userId, PLAN_IDS.PREMIUM);
 
-    // Trigger system compound seeding (GET ensureDefaults).
+    // The canonical-compound migration moved system rows out of the
+    // Compound table and onto core's PEPTIDE_CATALOG. The unified GET
+    // returns those alongside customs with `source: 'core'`.
     const list = await agent.get('/api/compounds');
     expect(list.status).toBe(200);
-    const systemCount = list.body.compounds.filter((c) => c.isSystem).length;
-    expect(systemCount).toBeGreaterThan(0);
+    const canonicalCount = list.body.compounds.filter((c) => c.source === 'core').length;
+    expect(canonicalCount).toBeGreaterThan(0);
 
-    // Premium cap is 3 custom — system seeding shouldn't have eaten any of it.
+    // Premium cap is 3 custom — canonical compounds in the merged list
+    // shouldn't have eaten any of it.
     for (let i = 1; i <= 3; i++) {
       const res = await agent.post('/api/compounds').send({ ...VALID_BODY, name: `Custom ${i}` });
       expect(res.status, `creating compound ${i}`).toBe(201);

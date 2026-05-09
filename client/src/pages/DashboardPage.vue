@@ -28,6 +28,7 @@ import {
 import { useNotesStore } from '../stores/notes.js';
 import { useCompoundsStore } from '../stores/compounds.js';
 import { useDosesStore } from '../stores/doses.js';
+import { useExerciseLogStore } from '../stores/exerciselog.js';
 import { usePhotosStore } from '../stores/photos.js';
 import { useWaterStore, mlToUnit } from '../stores/water.js';
 import { computeNutritionScore } from '../utils/nutritionScore.js';
@@ -39,7 +40,9 @@ import UpgradeBadge from '../components/UpgradeBadge.vue';
 import FastingBanner from '../components/FastingBanner.vue';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
+import { useEndogenousSim } from '../composables/useEndogenousSim.js';
 import { localYmd } from '../utils/date.js';
+import { getAllUnifiedDefinitions } from '@kyneticbio/core';
 
 ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Filler, Legend);
 
@@ -94,6 +97,7 @@ const photosVisibleOnDashboard = computed(() => {
 const notesStore = useNotesStore();
 const compoundsStore = useCompoundsStore();
 const dosesStore = useDosesStore();
+const exerciseLogStore = useExerciseLogStore();
 const photosStore = usePhotosStore();
 const waterStore = useWaterStore();
 
@@ -177,7 +181,7 @@ onUnmounted(() => {
 // Color lookups read live from the theme so dark mode re-renders correctly.
 const CORE_SERIES = computed(() => {
   themeTick.value; // reactive dependency
-  return [
+  const out = [
     { id: 'weight', label: 'Weight', unit: 'lbs', color: cssVar('--color-weight', '#4f46e5'), cat: 'Body', axis: 'y', fill: true },
     { id: 'calories', label: 'Calories', unit: 'kcal', color: cssVar('--color-cal', '#3b82f6'), cat: 'Nutrition', axis: 'yCal', fill: true },
     { id: 'protein', label: 'Protein', unit: 'g', color: cssVar('--color-protein', '#16a34a'), cat: 'Nutrition', axis: 'yGrams', fill: false },
@@ -185,6 +189,18 @@ const CORE_SERIES = computed(() => {
     { id: 'carbs', label: 'Carbs', unit: 'g', color: cssVar('--color-carbs', '#ef4444'), cat: 'Nutrition', axis: 'yGrams', fill: false, dash: [4, 3] },
     { id: 'score', label: 'Score', unit: '/100', color: cssVar('--color-score', '#8b5cf6'), cat: 'Nutrition', axis: 'yScore', fill: false },
   ];
+  // Exercise-derived series. Surfaces only when the user enabled exercise
+  // tracking AND opted to show it on the dashboard. Burn shares the same
+  // calorie axis (yCal) as the food-calorie series so the "in vs out"
+  // comparison is visually honest. Net = consumed − burned, derived
+  // per-day from the same two stores.
+  const ex = settingsStore.settings?.exercise;
+  if (ex?.enabled && ex?.showOnDashboard) {
+    out.push({ id: 'caloriesBurned', label: 'Calories burned', unit: 'kcal', color: cssVar('--color-burn', '#dc2626'), cat: 'Exercise', axis: 'yCal', fill: false, dash: [3, 3] });
+    out.push({ id: 'caloriesNet', label: 'Net calories', unit: 'kcal', color: cssVar('--color-net', '#0ea5e9'), cat: 'Exercise', axis: 'yCal', fill: false });
+    out.push({ id: 'exerciseMinutes', label: 'Exercise minutes', unit: 'min', color: cssVar('--color-burn-time', '#f97316'), cat: 'Exercise', axis: 'yMinutes', fill: false });
+  }
+  return out;
 });
 
 // One dashboard series per enabled compound. ID is `dosage:<compoundId>` so
@@ -192,18 +208,31 @@ const CORE_SERIES = computed(() => {
 const DEFAULT_DOSE_COLOR = '#f59e0b';
 const compoundSeries = computed(() => {
   themeTick.value; // reactive dep
-  return compoundsStore.enabled.map((c) => ({
-    id: `dosage:${c._id}`,
-    label: c.name,
-    unit: c.doseUnit,
-    color: c.color || DEFAULT_DOSE_COLOR,
-    cat: 'Compounds',
-    axis: 'yDose',
-    fill: true,
-    dash: [4, 3],
-    compoundId: c._id,
-    doseUnit: c.doseUnit,
-  }));
+  return compoundsStore.enabled.map((c) => {
+    // Canonical compounds have no _id and live behind a coreInterventionKey;
+    // custom compounds keep their existing identity. Series id encodes
+    // both via the `dosage:` prefix the analysis layer recognizes:
+    //   dosage:<compoundId>           — custom
+    //   dosage:core:<interventionKey> — canonical
+    const isCanonical = c.source === 'core';
+    const ref = isCanonical ? `core:${c.coreInterventionKey}` : c._id;
+    return {
+      id: `dosage:${ref}`,
+      label: c.name,
+      unit: c.doseUnit,
+      color: c.color || DEFAULT_DOSE_COLOR,
+      cat: 'Compounds',
+      axis: 'yDose',
+      fill: true,
+      dash: [4, 3],
+      // Carry both ref slots so getSeriesDataPoints can route through
+      // the right dose-curve lookup without re-parsing the id.
+      compoundId: isCanonical ? null : c._id,
+      coreInterventionKey: isCanonical ? c.coreInterventionKey : null,
+      compoundRefKey: isCanonical ? `core:${c.coreInterventionKey}` : c._id,
+      doseUnit: c.doseUnit,
+    };
+  });
 });
 
 const SYMPTOM_COLOR_VARS = [
@@ -255,6 +284,66 @@ const metricSeries = computed(() => {
     });
 });
 
+// Endogenous signals — experimental. We pick which signal keys to expose
+// in the chart picker and which palette color each one gets, but `label`,
+// `unit`, and `description` come straight from core's signal definitions
+// (`getAllUnifiedDefinitions()`). Re-defining them here would risk drift
+// from whatever core renames or re-units a signal to.
+//
+// Flags here govern UI gating only:
+//   cyclical — hidden unless menstrual tracking is on + show-on-dashboard
+//   fasting  — hidden unless fasting feature is on + show-on-dashboard
+const SIGNAL_DEFS = getAllUnifiedDefinitions();
+
+const ENDO_SIGNALS = [
+  { key: 'glucose',      color: '#ef4444' },
+  { key: 'insulin',      color: '#06b6d4' },
+  { key: 'glp1',         color: '#10b981' },
+  { key: 'ghrelin',      color: '#f59e0b' },
+  { key: 'leptin',       color: '#8b5cf6' },
+  { key: 'cortisol',     color: '#ec4899' },
+  // Cycle-driven hormones — flat for non-cycling users, so gated.
+  { key: 'estrogen',     color: '#d946ef', cyclical: true },
+  { key: 'progesterone', color: '#a855f7', cyclical: true },
+  { key: 'lh',           color: '#0ea5e9', cyclical: true },
+  { key: 'fsh',          color: '#14b8a6', cyclical: true },
+  // Fasting-responsive signals — gated on the fasting feature toggle.
+  { key: 'ketone',        color: '#16a34a', fasting: true },
+  { key: 'glucagon',      color: '#f97316', fasting: true },
+  { key: 'growthHormone', color: '#22d3ee', fasting: true },
+  { key: 'ampk',          color: '#84cc16', fasting: true },
+  { key: 'mtor',          color: '#e11d48', fasting: true },
+];
+
+// Cycle-driven hormones only surface in the picker when the user has
+// menstrual tracking enabled and opted in to dashboard cycle data —
+// otherwise they'd render as flat baselines for everyone else. Fasting-
+// responsive signals follow the same gate against the fasting feature.
+const endoSeries = computed(() => {
+  const m = settingsStore.settings?.menstruation;
+  const f = settingsStore.settings?.fasting;
+  const showCyclical = Boolean(m?.enabled && m?.showOnDashboard);
+  const showFasting = Boolean(f?.enabled && f?.showOnDashboard);
+  return ENDO_SIGNALS
+    .filter((s) => (!s.cyclical || showCyclical) && (!s.fasting || showFasting))
+    .map((s) => {
+      // Pull display metadata straight from core's signal definitions.
+      // Falls back to the signal key if the def is missing (shouldn't
+      // happen — guards against typos in ENDO_SIGNALS).
+      const def = SIGNAL_DEFS[s.key];
+      return {
+        id: `endo:${s.key}`,
+        label: def?.label || s.key,
+        unit: def?.unit || '',
+        color: s.color,
+        cat: 'Signal Simulations',
+        axis: `yEndo_${s.key}`,
+        fill: false,
+        endoSignal: s.key,
+      };
+    });
+});
+
 // For any series, build a sibling "trend" def — same color/category/axis,
 // dashed best-fit line. Compounds get one too even though their PK curve
 // is modeled rather than measured — the regression slope still tells the
@@ -282,6 +371,7 @@ const allSeries = computed(() => {
     ...metricSeries.value,
     ...compoundSeries.value,
     ...symptomSeries.value,
+    ...endoSeries.value,
   ]) {
     out.push(s);
     out.push(makeTrendDef(s));
@@ -378,13 +468,13 @@ const pillLabelsPlugin = {
     // compound's `_injection` dataset, so we filter to only those defs whose
     // dataset is actually in this chart — otherwise rows would offset based
     // on the global compound count and pills would float in empty space.
-    const allCompoundDefs = activeSeriesDefs.value.filter((d) => d.compoundId);
+    const allCompoundDefs = activeSeriesDefs.value.filter((d) => d.compoundRefKey);
     const compoundDefs = allCompoundDefs.filter((def) =>
-      chart.data.datasets.some((d) => d?.label === `_injection:${def.compoundId}`),
+      chart.data.datasets.some((d) => d?.label === `_injection:${def.compoundRefKey}`),
     );
     const topBase = chart.chartArea.top + 14;
     compoundDefs.forEach((def, row) => {
-      const injLabel = `_injection:${def.compoundId}`;
+      const injLabel = `_injection:${def.compoundRefKey}`;
       const injIdx = chart.data.datasets.findIndex((d) => d?.label === injLabel);
       if (injIdx === -1) return;
       const meta = chart.getDatasetMeta(injIdx);
@@ -722,8 +812,121 @@ async function loadRangeData() {
     symptomsStore.fetchRangeLogs(from, to),
     metricsStore.fetchRangeLogs(from, to),
     notesStore.fetchRange(from, to),
+    // Cheap aggregator query — one row per day with totals. Always
+    // fetched so the user toggling the burn series later doesn't pay
+    // for a refetch.
+    exerciseLogStore.fetchRangeBurn(from, to),
   ]);
+  await maybeRunEndoSim();
 }
+
+// ---- Endogenous-signal simulation (experimental) ------------------------
+//
+// Re-runs whenever the active set toggles an endo signal on, or the date
+// range changes. No caching for v1 — each trigger refetches meals and
+// re-simulates the full window. Cap at 60 days to keep the test bounded;
+// longer ranges short-circuit until we measure perf and decide on chunking.
+const endoSim = useEndogenousSim();
+const ENDO_MAX_DAYS = 60;
+
+// Extract the underlying signal keys for any active endo entry, including
+// trend variants (`endo:glucose-trend` resolves to `glucose` so a trend-only
+// selection still triggers the sim and the value series feeds the trend
+// regression). Deduped so the worker doesn't compute the same signal twice.
+const activeEndoSignals = computed(() => {
+  const out = new Set();
+  for (const id of activeSeries) {
+    if (!id.startsWith('endo:')) continue;
+    const key = id.slice(5).replace(/-trend$/, '');
+    out.add(key);
+  }
+  return [...out];
+});
+
+// Maps the user's settings (lbs/inches, partial fields) to the worker's
+// expected SI units. Anything missing falls through to the worker which
+// patches it from DEFAULT_SUBJECT — that's why the keys can be undefined.
+function endoSubjectFromSettings() {
+  const s = settingsStore.settings || {};
+  const heightCm = s.heightInches != null ? Number(s.heightInches) * 2.54 : undefined;
+  const weightKg = s.currentWeightLbs != null
+    ? Number(s.currentWeightLbs) * 0.45359237
+    : undefined;
+
+  // Cycle inputs are only meaningful for female users with the toggle on
+  // and a starting date. cycleDay is derived here (today minus start,
+  // mod cycle length) so the worker stays a pure function of the message.
+  let cycleDay, cycleLengthOut, lutealPhaseLength;
+  const m = s.menstruation;
+  if (s.sex === 'female' && m?.enabled && m.lastPeriodStart) {
+    const start = new Date(m.lastPeriodStart);
+    if (!Number.isNaN(start.getTime())) {
+      const cl = Math.max(15, Math.min(60, Number(m.cycleLength) || 28));
+      const lp = Math.max(7, Math.min(20, Number(m.lutealPhaseLength) || 14));
+      const daysSince = Math.floor((Date.now() - start.getTime()) / 86400000);
+      cycleDay = ((daysSince % cl) + cl) % cl;
+      cycleLengthOut = cl;
+      lutealPhaseLength = lp;
+    }
+  }
+
+  // Bloodwork is stored nested (matches Subject.bloodwork directly) so
+  // we can pass it through to the worker untouched. Empty object is fine —
+  // the worker merger leaves DEFAULT_SUBJECT.bloodwork alone in that case.
+  const bloodwork = s.bloodwork && typeof s.bloodwork === 'object' ? s.bloodwork : undefined;
+  // Genetics: same — nested { panelId: { fieldKey: value } } already in
+  // Subject.genetics shape.
+  const genetics = s.genetics && typeof s.genetics === 'object' ? s.genetics : undefined;
+
+  return {
+    sex: s.sex || undefined,
+    ageYears: s.age != null ? Number(s.age) : undefined,
+    weightKg: Number.isFinite(weightKg) ? weightKg : undefined,
+    heightCm: Number.isFinite(heightCm) ? heightCm : undefined,
+    cycleDay,
+    cycleLength: cycleLengthOut,
+    lutealPhaseLength,
+    bloodwork,
+    genetics,
+  };
+}
+
+async function maybeRunEndoSim() {
+  const signals = activeEndoSignals.value;
+  if (!signals.length) return;
+  const days = selectedRange.value.days;
+  if (days != null && days > ENDO_MAX_DAYS) return; // skip — too expensive for test
+  const { from, to } = rangeDates(Math.min(days ?? ENDO_MAX_DAYS, ENDO_MAX_DAYS));
+  const conditions = settingsStore.settings?.conditions || {};
+  await endoSim.run({
+    from, to, signals,
+    subject: endoSubjectFromSettings(),
+    conditions,
+  });
+}
+
+watch(activeEndoSignals, maybeRunEndoSim);
+// Re-sim whenever the user's profile changes — biological sex, age,
+// weight, and height all flow into the engine's physiology derivation
+// (BMR, total body water, drug clearance, etc.) and shift signal curves.
+watch(
+  () => {
+    const s = settingsStore.settings;
+    if (!s) return null;
+    const m = s.menstruation || {};
+    return [
+      s.sex, s.age, s.heightInches, s.currentWeightLbs,
+      m.enabled, m.lastPeriodStart, m.cycleLength, m.lutealPhaseLength,
+      // JSON-stringify so the watcher fires on any nested bloodwork /
+      // conditions / genetics edit without paying for deep-traversal
+      // reactivity setup.
+      JSON.stringify(s.bloodwork || {}),
+      JSON.stringify(s.conditions || {}),
+      JSON.stringify(s.genetics || {}),
+    ];
+  },
+  maybeRunEndoSim,
+);
 
 // Gate the chart on the first data load so we don't paint cached store
 // values, then animate again when fresh data arrives. The chart only
@@ -770,16 +973,23 @@ function filterByRange(arr, dateField = 'date') {
 
 const filteredWeight = computed(() => filterByRange(weightStore.entries));
 const filteredNutrition = computed(() => foodLogStore.dailyNutrition || []);
-function filteredDosesFor(compoundId) {
-  const all = dosesStore.entries.filter((d) => d.compoundId === compoundId);
+// Polymorphic ref lookup. `ref` is either a custom compound _id or
+// a `core:<key>` token built from the canonical intervention key.
+function filteredDosesFor(ref) {
+  const all = dosesStore.entries.filter((d) => {
+    if (typeof ref === 'string' && ref.startsWith('core:')) {
+      return d.coreInterventionKey === ref.slice('core:'.length);
+    }
+    return d.compoundId === ref;
+  });
   if (!selectedRange.value.days) return all;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - selectedRange.value.days);
   return all.filter((d) => new Date(d.date) >= cutoff);
 }
 
-function filteredPkFor(compoundId) {
-  const entry = dosesStore.curvesByCompound[compoundId];
+function filteredPkFor(ref) {
+  const entry = dosesStore.curvesByCompound[ref];
   if (!entry?.curve?.length) return [];
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -857,6 +1067,36 @@ function getSeriesDataPoints(def) {
       return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.fat }));
     case 'carbs':
       return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.carbs }));
+    case 'caloriesBurned': {
+      const days = filterByRange(exerciseLogStore.dailyBurn || []);
+      return days.map((d) => ({
+        x: parseLocalDate(d.date),
+        y: Math.round(d.caloriesBurned || 0),
+      }));
+    }
+    case 'caloriesNet': {
+      // Net = consumed − burned. Days with only one side present fall
+      // back to that side (so a workout-only day doesn't disappear).
+      const burnByDay = new Map(
+        (exerciseLogStore.dailyBurn || []).map((d) => [d.date, d.caloriesBurned || 0]),
+      );
+      const calByDay = new Map(
+        filteredNutrition.value.map((d) => [d.date, d.calories || 0]),
+      );
+      const dates = new Set([...burnByDay.keys(), ...calByDay.keys()]);
+      const sorted = [...dates].sort();
+      return filterByRange(sorted.map((d) => ({ date: d }))).map(({ date }) => ({
+        x: parseLocalDate(date),
+        y: Math.round((calByDay.get(date) || 0) - (burnByDay.get(date) || 0)),
+      }));
+    }
+    case 'exerciseMinutes': {
+      const days = filterByRange(exerciseLogStore.dailyBurn || []);
+      return days.map((d) => ({
+        x: parseLocalDate(d.date),
+        y: Math.round(d.durationMin || 0),
+      }));
+    }
     case 'score': {
       const targets = settingsStore.settings?.targets;
       if (!targets) return [];
@@ -871,8 +1111,8 @@ function getSeriesDataPoints(def) {
         .filter(Boolean);
     }
     default:
-      if (def.compoundId) {
-        return filteredPkFor(def.compoundId).map((p) => ({
+      if (def.compoundRefKey) {
+        return filteredPkFor(def.compoundRefKey).map((p) => ({
           x: new Date(p.date),
           y: p.activeValue,
         }));
@@ -888,6 +1128,18 @@ function getSeriesDataPoints(def) {
           x: parseLocalDate(l.date),
           y: fromCanonical(l.value, unit),
         }));
+      }
+      if (def.endoSignal) {
+        const r = endoSim.result.value;
+        const arr = r.series?.[def.endoSignal];
+        if (!arr || !r.timestamps?.length) return [];
+        // Pair timestamps with the per-signal sample buffer. Both arrays
+        // are dense (same length), produced by the worker.
+        const pts = new Array(arr.length);
+        for (let i = 0; i < arr.length; i++) {
+          pts[i] = { x: new Date(r.timestamps[i]), y: arr[i] };
+        }
+        return pts;
       }
       return [];
   }
@@ -921,7 +1173,7 @@ function smartRoundForTooltip(v) {
 // endpoints) so Chart.js's index-mode tooltip can pair a trend value with
 // every hover position. With `tension: 0` the line is straight, so this is
 // visually identical to a two-endpoint version.
-function buildTrendLineDataset(data, { color, label, yAxisID }) {
+function buildTrendLineDataset(data, { color, label, yAxisID, unit }) {
   if (data.length < 2) return null;
   const t0 = data[0].x.getTime();
   const n = data.length;
@@ -952,6 +1204,7 @@ function buildTrendLineDataset(data, { color, label, yAxisID }) {
     borderWidth: 2,
     borderDash: [6, 4],
     yAxisID,
+    unit,
   };
 }
 
@@ -971,6 +1224,7 @@ function buildChartData(defs) {
         color: def.color,
         label: `${source.label} trend`,
         yAxisID: def.axis,
+        unit: source.unit,
       });
       if (trend) datasets.push(trend);
       continue;
@@ -979,7 +1233,7 @@ function buildChartData(defs) {
     const data = getSeriesDataPoints(def);
     if (!data.length) continue;
 
-    const isCompound = !!def.compoundId;
+    const isCompound = !!def.compoundRefKey;
     datasets.push({
       label: def.label,
       data,
@@ -992,6 +1246,7 @@ function buildChartData(defs) {
       borderWidth: 2,
       borderDash: def.dash || [],
       yAxisID: def.axis,
+      unit: def.unit,
     });
   }
 
@@ -999,11 +1254,11 @@ function buildChartData(defs) {
   // can draw value/unit annotations at each dose point.
   for (const def of defs) {
     if (def.isTrend) continue;
-    if (!def.compoundId) continue;
-    const doses = filteredDosesFor(def.compoundId);
+    if (!def.compoundRefKey) continue;
+    const doses = filteredDosesFor(def.compoundRefKey);
     if (!doses.length) continue;
     datasets.push({
-      label: `_injection:${def.compoundId}`,
+      label: `_injection:${def.compoundRefKey}`,
       data: doses.map((d) => ({
         x: parseLocalDate(d.date),
         y: 0,
@@ -1141,7 +1396,12 @@ function buildChartOptions(defs, { hideXAxis = false, stacked = false } = {}) {
             const formatted = isTrend
               ? smartRoundForTooltip(v)
               : (typeof v === 'number' ? v.toLocaleString() : String(v));
-            return `${label}: ${formatted}`;
+            // Datasets carry their `unit` straight through from the
+            // series def — appended as a dimension hint so the tooltip
+            // reads "Glucose: 142 mg/dL" rather than the bare number.
+            const unit = item.dataset?.unit;
+            const suffix = unit ? ` ${unit}` : '';
+            return `${label}: ${formatted}${suffix}`;
           },
         },
       },
@@ -1249,6 +1509,23 @@ function buildChartOptions(defs, { hideXAxis = false, stacked = false } = {}) {
   }
   if (usedAxes.has('yScore')) {
     opts.scales.yScore = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0, max: 100 };
+  }
+
+  if (usedAxes.has('yMinutes')) {
+    opts.scales.yMinutes = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0 };
+  }
+  // Endogenous signals: one hidden axis per signal so very different
+  // magnitudes (glucose ~80–200 mg/dL vs GLP-1 ~5–50 pmol/L) don't squash
+  // each other on a shared scale.
+  for (const ax of usedAxes) {
+    if (typeof ax === 'string' && ax.startsWith('yEndo_')) {
+      opts.scales[ax] = {
+        position: 'right',
+        display: false,
+        grid: { drawOnChartArea: false },
+        min: 0,
+      };
+    }
   }
 
   return opts;
@@ -1410,7 +1687,11 @@ function bmiClass(bmi) {
     <FastingBanner surface="dashboard" />
 
     <!-- Hydration summary -->
-    <div v-if="waterCardVisible" class="water-summary-card" :class="{ hit: waterGoalHit }">
+    <div
+      v-if="waterCardVisible"
+      class="water-summary-card"
+      :class="{ hit: waterGoalHit }"
+    >
       <div class="water-summary-head">
         <span class="water-summary-label">Hydration today</span>
         <span class="water-summary-status">
@@ -1419,10 +1700,15 @@ function bmiClass(bmi) {
       </div>
       <div class="water-summary-value">
         {{ waterTodayDisplay }}
-        <span class="water-summary-target">/ {{ waterTargetDisplay }} {{ waterUnitLabel }}</span>
+        <span class="water-summary-target"
+          >/ {{ waterTargetDisplay }} {{ waterUnitLabel }}</span
+        >
       </div>
       <div class="water-summary-bar">
-        <div class="water-summary-bar-fill" :style="{ width: `${waterPct}%` }"></div>
+        <div
+          class="water-summary-bar-fill"
+          :style="{ width: `${waterPct}%` }"
+        ></div>
       </div>
     </div>
     <!-- Weight stats grid -->
@@ -1448,6 +1734,8 @@ function bmiClass(bmi) {
           :class="goalDirectionClass(weightStore.stats.totalChange)"
         >
           {{ weightStore.stats.totalChange > 0 ? '+' : ''
+
+
 
 
 
@@ -1491,6 +1779,8 @@ function bmiClass(bmi) {
           :class="goalDirectionClass(weightStore.stats.trendLbsPerWeek)"
         >
           {{ weightStore.stats.trendLbsPerWeek > 0 ? '+' : ''
+
+
 
 
 
@@ -1594,6 +1884,18 @@ function bmiClass(bmi) {
           {{ def.label }}
           <span class="chip-x">×</span>
         </button>
+        <span
+          v-if="activeEndoSignals.length"
+          class="chip endo-status"
+          :title="endoSim.error.value || ''"
+        >
+          <span v-if="endoSim.busy.value">simulating…</span>
+          <span v-else-if="endoSim.error.value">sim error</span>
+          <span v-else-if="endoSim.result.value.mealCount != null">
+            sim: {{ endoSim.result.value.mealCount }} meals ·
+            {{ Math.round(endoSim.computeTimeMs.value || 0) }}ms
+          </span>
+        </span>
         <VDropdown placement="bottom-start" :distance="6">
           <button class="chip chip-add">+ Add</button>
           <template #popper>
@@ -2034,6 +2336,13 @@ function bmiClass(bmi) {
   font-weight: var(--font-weight-medium);
 }
 .chip-add:hover { color: var(--text); border-color: var(--text-secondary); }
+.endo-status {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-style: italic;
+  cursor: default;
+  background: transparent;
+}
 
 /* Popover */
 .pop-cap-note {

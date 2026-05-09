@@ -530,6 +530,105 @@ const shadowStyles = computed(() => {
     padding: 4px 8px;
   }
 
+  /* ── Bloodwork proposal cards (AI-suggested lab values) ──────────────── */
+  .bloodwork-proposal {
+    border: 1px solid ${p.border};
+    background: ${p.surface};
+    margin: 10px 0 4px;
+    font-family: ${p.fontBody};
+  }
+  .bloodwork-proposal .prop-header {
+    padding: 6px 10px;
+    background: ${p.surfaceAlt};
+    border-bottom: 1px solid ${p.border};
+    font-family: ${p.fontDisplay};
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: ${p.textSecondary};
+    font-weight: 700;
+  }
+  .bloodwork-proposal .bw-notes {
+    padding: 6px 10px;
+    border-bottom: 1px solid ${p.border};
+    font-size: 12px;
+    color: ${p.textSecondary};
+    font-style: italic;
+  }
+  .bloodwork-proposal table.prop-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin: 0;
+    border: none;
+  }
+  .bloodwork-proposal table.prop-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid ${p.border};
+    vertical-align: middle;
+  }
+  .bloodwork-proposal table.prop-table tbody tr:last-child td { border-bottom: none; }
+  .bloodwork-proposal .bw-label { color: ${p.text}; }
+  .bloodwork-proposal .bw-diff {
+    font-family: ${p.fontMono};
+    font-variant-numeric: tabular-nums;
+    color: ${p.text};
+    white-space: nowrap;
+    text-align: right;
+  }
+  .bloodwork-proposal .bw-old { color: ${p.textTertiary}; }
+  .bloodwork-proposal .bw-arrow { color: ${p.textTertiary}; margin: 0 6px; }
+  .bloodwork-proposal .bw-new { color: ${p.text}; font-weight: 600; }
+  .bloodwork-proposal .bw-unit {
+    color: ${p.textTertiary};
+    font-size: 11px;
+    text-align: right;
+    width: 1%;
+    white-space: nowrap;
+  }
+  .bloodwork-proposal .proposal-actions {
+    display: flex;
+    gap: 6px;
+    padding: 6px 8px;
+    border-top: 1px solid ${p.border};
+  }
+  .bloodwork-proposal .proposal-actions button {
+    flex: 1;
+    padding: 6px 8px;
+    background: ${p.surface};
+    border: 1px solid ${p.border};
+    color: ${p.text};
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .bloodwork-proposal .proposal-actions button[data-action="confirm"] {
+    background: ${p.primary};
+    color: ${p.primaryFg};
+    border-color: ${p.primary};
+  }
+  .bloodwork-proposal .proposal-actions button[data-action="confirm"]:hover { background: ${p.primaryHover}; }
+  .bloodwork-proposal .proposal-actions button[data-action="cancel"]:hover { color: ${p.danger}; border-color: ${p.danger}; }
+  .bloodwork-proposal .proposal-actions button:disabled { opacity: 0.5; cursor: wait; }
+  .bloodwork-proposal .proposal-done {
+    padding: 6px 10px;
+    color: ${p.success};
+    font-size: 12px;
+    border-top: 1px solid ${p.border};
+  }
+  .bloodwork-proposal .proposal-cancelled {
+    padding: 6px 10px;
+    color: ${p.textTertiary};
+    font-size: 12px;
+    font-style: italic;
+    border-top: 1px solid ${p.border};
+  }
+  .bloodwork-proposal .proposal-error {
+    color: ${p.danger};
+    font-size: 12.5px;
+    padding: 4px 8px;
+  }
+
   /* ── Kill deep-chat default chrome ──────────────────────────────────── */
   :host { border: none !important; }
   #chat-view, #messages, #input, .input-container {
@@ -836,9 +935,66 @@ const renderProposalCard = (p) => {
   </div>`;
 };
 
+// Bloodwork proposal cards. Same Confirm/Cancel mechanics as meal cards
+// but a different table (label / old → new / unit). When `oldValue` is
+// null the row reads "→ NEW" — first-time entry rather than an update.
+const renderBloodworkProposalCard = (p) => {
+  const changes = Array.isArray(p.changes) ? p.changes : [];
+  const rows = changes
+    .map((c) => {
+      const oldStr = c.oldValue == null ? '—' : String(c.oldValue);
+      const newStr = String(c.value);
+      return `<tr class="bw-row">
+        <td>
+          <div class="bw-label">${escapeHtml(c.label || c.key || '')}</div>
+        </td>
+        <td class="bw-diff">
+          <span class="bw-old">${escapeHtml(oldStr)}</span>
+          <span class="bw-arrow">→</span>
+          <span class="bw-new">${escapeHtml(newStr)}</span>
+        </td>
+        <td class="bw-unit">${escapeHtml(c.unit || '')}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const notes = p.notes
+    ? `<div class="bw-notes">${escapeHtml(p.notes)}</div>`
+    : '';
+
+  if (p.status === 'confirmed') {
+    return `<div class="bloodwork-proposal" data-proposal-id="${escapeHtml(p.proposalId)}" data-proposal-kind="bloodwork" data-proposal-status="confirmed">
+      <div class="prop-header">Saved bloodwork (${changes.length} value${changes.length === 1 ? '' : 's'})</div>
+      ${notes}
+      <table class="prop-table"><tbody>${rows}</tbody></table>
+      <div class="proposal-done">✓ Updated your bloodwork</div>
+    </div>`;
+  }
+  if (p.status === 'cancelled') {
+    return `<div class="bloodwork-proposal" data-proposal-id="${escapeHtml(p.proposalId)}" data-proposal-kind="bloodwork" data-proposal-status="cancelled">
+      <div class="prop-header">Bloodwork update</div>
+      ${notes}
+      <table class="prop-table"><tbody>${rows}</tbody></table>
+      <div class="proposal-cancelled">Cancelled — nothing changed</div>
+    </div>`;
+  }
+  return `<div class="bloodwork-proposal" data-proposal-id="${escapeHtml(p.proposalId)}" data-proposal-kind="bloodwork" data-proposal-status="pending">
+    <div class="prop-header">Proposed bloodwork update (${changes.length} value${changes.length === 1 ? '' : 's'})</div>
+    ${notes}
+    <table class="prop-table"><tbody>${rows}</tbody></table>
+    <div class="proposal-actions">
+      <button type="button" data-action="confirm">Save to bloodwork</button>
+      <button type="button" data-action="cancel">Cancel</button>
+    </div>
+  </div>`;
+};
+
+const renderProposalAny = (p) =>
+  p.kind === 'bloodwork' ? renderBloodworkProposalCard(p) : renderProposalCard(p);
+
 const renderBubble = (steps, finalHtml, proposals = []) => {
   const trail = renderThoughtTrail(steps);
-  const proposalHtml = proposals.map(renderProposalCard).join('');
+  const proposalHtml = proposals.map(renderProposalAny).join('');
   if (finalHtml) {
     return `${trail}<div class="agent-final">${finalHtml}</div>${proposalHtml}`;
   }
@@ -856,15 +1012,18 @@ const wireTrail = (el) => {
 };
 
 // Click delegation for proposal Confirm/Cancel + stepper buttons. Lives on
-// the .meal-proposal node so we don't have to refire listeners every time
-// deep-chat re-renders an unrelated bubble.
+// the proposal-card node so we don't have to refire listeners every time
+// deep-chat re-renders an unrelated bubble. Same handler covers both
+// .meal-proposal and .bloodwork-proposal — they share the data-action
+// + data-proposal-id contract.
+const PROPOSAL_SELECTOR = '.meal-proposal, .bloodwork-proposal';
 const wireProposal = (node) => {
   if (node.__proposalWired) return;
   node.__proposalWired = true;
   node.addEventListener('click', (ev) => {
     const btn = ev.target.closest('[data-action]');
     if (!btn) return;
-    const proposalEl = btn.closest('.meal-proposal');
+    const proposalEl = btn.closest(PROPOSAL_SELECTOR);
     if (!proposalEl) return;
     const action = btn.getAttribute('data-action');
     if (!action) return;
@@ -893,7 +1052,7 @@ const wireProposal = (node) => {
     const row = input.closest('.prop-row');
     if (!row) return;
     recomputeProposalRow(row);
-    recomputeProposalTotals(input.closest('.meal-proposal'));
+    recomputeProposalTotals(input.closest(PROPOSAL_SELECTOR));
   });
 };
 
@@ -992,17 +1151,17 @@ const relabelDropupItem = (item) => {
 const setupTrailObserver = (shadow) => {
   if (trailObserver) return;
   shadow.querySelectorAll('details.agent-trail').forEach(wireTrail);
-  shadow.querySelectorAll('.meal-proposal').forEach(wireProposal);
+  shadow.querySelectorAll(PROPOSAL_SELECTOR).forEach(wireProposal);
   shadow.querySelectorAll('.dropup-menu-item').forEach(relabelDropupItem);
   trailObserver = new MutationObserver((mutations) => {
     for (const m of mutations) {
       m.addedNodes.forEach((node) => {
         if (!(node instanceof HTMLElement)) return;
         if (node.matches?.('details.agent-trail')) wireTrail(node);
-        if (node.matches?.('.meal-proposal')) wireProposal(node);
+        if (node.matches?.(PROPOSAL_SELECTOR)) wireProposal(node);
         if (node.matches?.('.dropup-menu-item')) relabelDropupItem(node);
         node.querySelectorAll?.('details.agent-trail').forEach(wireTrail);
-        node.querySelectorAll?.('.meal-proposal').forEach(wireProposal);
+        node.querySelectorAll?.(PROPOSAL_SELECTOR).forEach(wireProposal);
         node.querySelectorAll?.('.dropup-menu-item').forEach(relabelDropupItem);
       });
     }
@@ -1020,11 +1179,17 @@ async function handleProposalAction(proposalId, action, proposalEl) {
   proposalEl.__busy = true;
   const buttons = proposalEl.querySelectorAll('button[data-action]');
   buttons.forEach((b) => { b.disabled = true; });
+  // Card kind picks the API endpoint + the renderer to use after the
+  // server responds. Anything without `data-proposal-kind` is a meal
+  // proposal (the pre-bloodwork default).
+  const kind = proposalEl.getAttribute('data-proposal-kind') || 'meal';
   try {
     const endpoint = action === 'confirm' ? 'confirm' : 'cancel';
-    const reqBody =
-      action === 'confirm' ? { items: readProposalItems(proposalEl) } : {};
-    const res = await nativeFetch(`/api/chat/proposals/${proposalId}/${endpoint}`, {
+    const apiBase = kind === 'bloodwork' ? '/api/chat/bloodwork-proposals' : '/api/chat/proposals';
+    const reqBody = action === 'confirm'
+      ? (kind === 'bloodwork' ? {} : { items: readProposalItems(proposalEl) })
+      : {};
+    const res = await nativeFetch(`${apiBase}/${proposalId}/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
@@ -1040,23 +1205,37 @@ async function handleProposalAction(proposalId, action, proposalEl) {
     }
     const data = await res.json();
     const cached = proposalCache.get(proposalId) || {};
-    const updated = {
-      proposalId,
-      date: data.date || cached.date,
-      mealType: data.mealType || cached.mealType,
-      items: data.items || cached.items || [],
-      totals: data.totals || cached.totals || null,
-      status: action === 'confirm' ? 'confirmed' : 'cancelled',
-    };
+    let updated;
+    let fresh;
+    if (kind === 'bloodwork') {
+      updated = {
+        kind: 'bloodwork',
+        proposalId,
+        notes: data.notes ?? cached.notes ?? '',
+        changes: data.changes || cached.changes || [],
+        status: action === 'confirm' ? 'confirmed' : 'cancelled',
+      };
+      fresh = renderBloodworkProposalCard(updated);
+    } else {
+      updated = {
+        proposalId,
+        date: data.date || cached.date,
+        mealType: data.mealType || cached.mealType,
+        items: data.items || cached.items || [],
+        totals: data.totals || cached.totals || null,
+        status: action === 'confirm' ? 'confirmed' : 'cancelled',
+      };
+      fresh = renderProposalCard(updated);
+    }
     // Swap the card in both the live DOM (instant feedback) and the
     // underlying deep-chat message HTML (so thread reload preserves it).
-    const fresh = renderProposalCard(updated);
     const tpl = document.createElement('template');
     tpl.innerHTML = fresh.trim();
     const newNode = tpl.content.firstElementChild;
     if (newNode) proposalEl.replaceWith(newNode);
     persistProposalInMessage(proposalId, fresh);
-    if (action === 'confirm') refreshActiveDay();
+    if (action === 'confirm' && kind === 'meal') refreshActiveDay();
+    if (action === 'confirm' && kind === 'bloodwork') refreshSettings();
   } catch (err) {
     proposalEl.querySelectorAll('.proposal-actions').forEach((el) => {
       el.innerHTML = `<span class="proposal-error">${escapeHtml(err?.message || 'Network error')}</span>`;
@@ -1064,6 +1243,14 @@ async function handleProposalAction(proposalId, action, proposalEl) {
   } finally {
     proposalEl.__busy = false;
   }
+}
+
+async function refreshSettings() {
+  try {
+    const mod = await import('../stores/settings.js');
+    const store = mod.useSettingsStore();
+    if (store?.fetchSettings) await store.fetchSettings();
+  } catch { /* non-fatal */ }
 }
 
 function persistProposalInMessage(proposalId, newCardHtml) {
@@ -1285,14 +1472,22 @@ const streamChat = (body, signals) => {
           } else if (evt.type === 'error') {
             await signals.onResponse({ error: evt.message });
           } else if (evt.type === 'tool_proposal') {
-            const proposal = {
-              proposalId: evt.proposalId,
-              date: evt.date,
-              mealType: evt.mealType,
-              items: evt.items || [],
-              totals: evt.totals || null,
-              status: 'pending',
-            };
+            const proposal = evt.kind === 'bloodwork'
+              ? {
+                  kind: 'bloodwork',
+                  proposalId: evt.proposalId,
+                  notes: evt.notes || '',
+                  changes: evt.changes || [],
+                  status: 'pending',
+                }
+              : {
+                  proposalId: evt.proposalId,
+                  date: evt.date,
+                  mealType: evt.mealType,
+                  items: evt.items || [],
+                  totals: evt.totals || null,
+                  status: 'pending',
+                };
             proposals.push(proposal);
             proposalCache.set(evt.proposalId, proposal);
             await flush();

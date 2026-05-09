@@ -1,17 +1,27 @@
 import mongoose from 'mongoose';
 
 // A "compound" is any peptide / drug / substance the user doses on a schedule.
-// The catalog mixes system-seeded entries (isSystem=true, locked name) with
-// user-defined ones. Disabled rows (enabled=false) hide from log forms and
-// chart pickers but keep their historical DoseLog entries intact.
+//
+// As of the canonical-compound migration, this table holds **only** user-
+// defined custom compounds. Anything in the curated GLP-1 catalog
+// (Tirzepatide, Semaglutide, Liraglutide, Dulaglutide, Retatrutide, oral
+// Semaglutide) is referenced by `coreInterventionKey` directly from
+// DoseLog and configured per-user via UserSettings.compoundPreferences.
+//
+// `isSystem` is kept as a deprecated field for backwards compatibility
+// during migration; the migration script flips/deletes all isSystem=true
+// rows and new code must not write isSystem=true.
 const compoundSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     name: { type: String, required: true, trim: true },
-    // Trade/brand names the same active substance is sold under (e.g.
-    // Tirzepatide → ["Mounjaro", "Zepbound"]). Surfaced in pickers so users
-    // can recognize what their prescription is. Optional; empty for custom.
+    // Trade/brand names — kept for free-form custom compounds where users
+    // record alternate names ("Generic Z" + "Brand Y"). Curated peptide
+    // brand names live in core's PEPTIDE_CATALOG.
     brandNames: { type: [String], default: [] },
+    // DEPRECATED. After migration, only `false` ever appears here. Kept
+    // briefly for read-side compatibility; new writes set it to false
+    // (or leave it default).
     isSystem: { type: Boolean, default: false },
     enabled: { type: Boolean, default: true },
     halfLifeDays: { type: Number, required: true, min: 0 },

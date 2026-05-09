@@ -19,6 +19,8 @@ import { useWeightStore } from '../stores/weight.js';
 import { useWaterStore, mlToUnit } from '../stores/water.js';
 import { useCompoundsStore } from '../stores/compounds.js';
 import { useDosesStore } from '../stores/doses.js';
+import { useExercisesStore } from '../stores/exercises.js';
+import { useExerciseLogStore } from '../stores/exerciselog.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { usePhotosStore } from '../stores/photos.js';
 import DateSelector from '../components/DateSelector.vue';
@@ -61,12 +63,19 @@ const weightStore = useWeightStore();
 const waterStore = useWaterStore();
 const compoundsStore = useCompoundsStore();
 const dosesStore = useDosesStore();
+const exercisesStore = useExercisesStore();
+const exerciseLogStore = useExerciseLogStore();
 const settingsStore = useSettingsStore();
 const photosStore = usePhotosStore();
 
 const date = ref(route.query.date || localYmd());
 const editingId = ref(null);
 const editServings = ref(1);
+// Time the food was eaten (HH:MM, local). Always populated when an
+// entry's row is in edit mode; persisted as a full ISO timestamp on
+// save so the simulation pipeline can place the meal at its real
+// minute-of-day.
+const editTime = ref('');
 
 // Inline submenu expansion within the "..." menu (VDropdown handles open/close).
 const openSubmenu = ref(null); // null | 'addToMeal'
@@ -163,6 +172,10 @@ async function loadAllForDate(d) {
     metricsStore.fetchLogsForDate(d),
     notesStore.fetchForDate(d),
     waterStore.fetchDay(d),
+    // Exercise log fetches whether the feature is enabled or not — the
+    // card just hides when disabled. Cheap query, simpler than gating
+    // every loadAllForDate call site.
+    exerciseLogStore.fetchDay(d),
   ]);
   noteDraft.value = notesStore.text;
 }
@@ -178,6 +191,7 @@ onMounted(async () => {
     dosesStore.fetchEntries(),
     photosStore.fetchAll(),
     photoTypesStore.fetchPhotoTypes(),
+    exercisesStore.fetchAll(),
     settingsStore.loaded ? Promise.resolve() : settingsStore.fetchSettings(),
   ]);
 });
@@ -312,15 +326,22 @@ function toggleCollapsed(mealType, mealId) {
 function startEdit(entry) {
   editingId.value = entry._id;
   editServings.value = entry.servingCount;
+  editTime.value = isoToLocalHHMM(entry.date) || nowLocalHHMM();
 }
 
 async function saveEdit(id) {
   const count = Number(editServings.value);
   if (count === 0) {
     await foodlogStore.deleteEntry(id);
-  } else {
-    await foodlogStore.updateEntry(id, { servingCount: count });
+    editingId.value = null;
+    return;
   }
+  // Combine the page's date with the modal's HH:MM into a local-time
+  // ISO string. Editing time is optional — if unchanged from the
+  // initial value the round-trip is a no-op on the server.
+  const time = editTime.value || '12:00';
+  const localISO = new Date(`${date.value}T${time}:00`).toISOString();
+  await foodlogStore.updateEntry(id, { servingCount: count, date: localISO });
   editingId.value = null;
 }
 
@@ -482,6 +503,211 @@ async function handleDeleteSymptom(symptom) {
 // ---- Water tracker ------------------------------------------------------
 
 const waterSettings = computed(() => settingsStore.settings?.water || {});
+
+// Cycle banner — visible only when the user has menstrual tracking on,
+// chose to show it on the log page, and has a starting date so we can
+// derive cycle day. The phase label uses a simple cycleDay/cycleLength
+// + lutealPhase split: <ovulation = follicular, ±1 of ovulation =
+// ovulation, >ovulation = luteal.
+const cycleBanner = computed(() => {
+  const m = settingsStore.settings?.menstruation;
+  if (!m?.enabled || !m.showOnLog || !m.lastPeriodStart) return null;
+  const start = new Date(m.lastPeriodStart);
+  if (Number.isNaN(start.getTime())) return null;
+  const cl = Math.max(15, Math.min(60, Number(m.cycleLength) || 28));
+  const lp = Math.max(7, Math.min(20, Number(m.lutealPhaseLength) || 14));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const ms = 86400000;
+  const days = Math.floor((today - start) / ms);
+  if (days < 0) return null;
+  const cycleDay = (days % cl) + 1;
+  const ovulationDay = cl - lp;
+  let phase;
+  if (cycleDay <= 5) phase = 'menstrual';
+  else if (cycleDay < ovulationDay - 1) phase = 'follicular';
+  else if (cycleDay <= ovulationDay + 1) phase = 'ovulation';
+  else phase = 'luteal';
+  return { cycleDay, cycleLength: cl, phase };
+});
+// Mode-aware in/out/net/target strip displayed under the daily nutrition
+// summary. Returns null when there's no target to compare against (so
+// the strip doesn't render a half-formed line). Modes:
+//   baseline → target unchanged, burn shown for awareness
+//   earn     → target = daily + today's burn
+//   hidden   → only consumed vs target
+const energyStrip = computed(() => {
+  const t = settingsStore.settings?.targets;
+  if (!t?.calories) return null;
+  const consumed = Math.round(foodlogStore.summary?.perServing?.calories || 0);
+  const burned = exerciseEntriesToday.value.reduce(
+    (sum, e) => sum + (e.caloriesBurned || 0),
+    0,
+  );
+  const mode = settingsStore.settings?.exercise?.energyMode || 'baseline';
+  const baseTarget = Math.round(t.calories);
+  const target = mode === 'earn' ? baseTarget + Math.round(burned) : baseTarget;
+  const net = consumed - Math.round(burned);
+  const fmt = (n) => Math.round(n).toLocaleString();
+  return {
+    mode,
+    consumed,
+    burned: Math.round(burned),
+    net,
+    target,
+    baseTarget,
+    consumedFmt: fmt(consumed),
+    burnedFmt: fmt(burned),
+    netFmt: fmt(net),
+    targetFmt: fmt(target),
+    baseTargetFmt: fmt(baseTarget),
+  };
+});
+
+// Exercise feature state. Card hidden unless tracking is enabled AND
+// the user opted into the log surface.
+const exerciseSettings = computed(() => settingsStore.settings?.exercise || {});
+const exerciseEnabled = computed(() =>
+  Boolean(exerciseSettings.value.enabled) && exerciseSettings.value.showOnLog !== false,
+);
+const exerciseEntriesToday = computed(() => exerciseLogStore.entriesFor(date.value));
+const exerciseTotalBurn = computed(() =>
+  exerciseEntriesToday.value.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0),
+);
+
+// Modal state for adding / editing entries. `editing` holds the entry
+// being edited (null = new). `mode` is the input style.
+const exerciseModalOpen = ref(false);
+const exerciseEditing = ref(null);
+const exerciseMode = ref('quick'); // 'quick' | 'activity' | 'detailed'
+const exerciseForm = reactive({
+  exerciseId: null,
+  label: '',
+  engineClass: 'exercise_cardio',
+  startTime: '',  // HH:MM, local. Empty = "now" on save for new entries.
+  durationMin: 30,
+  intensity: 1.0,
+  caloriesBurned: null,
+  distanceKm: null,
+  sets: null,
+  reps: null,
+  weightKg: null,
+  notes: '',
+});
+
+// Extract local-time HH:MM from a stored ISO timestamp. Used when
+// editing an entry so the picker shows the time the user actually
+// started the workout.
+function isoToLocalHHMM(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function nowLocalHHMM() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function openExerciseModal(entry = null) {
+  exerciseEditing.value = entry;
+  if (entry) {
+    // Infer mode from populated fields. Detailed wins if any set/rep/
+    // weight/distance is set; activity if exerciseId; quick otherwise.
+    const hasDetail = entry.sets || entry.reps || entry.weightKg || entry.distanceKm;
+    exerciseMode.value = hasDetail ? 'detailed' : entry.exerciseId ? 'activity' : 'quick';
+    Object.assign(exerciseForm, {
+      exerciseId: entry.exerciseId || null,
+      label: entry.label || '',
+      engineClass: entry.engineClass,
+      startTime: isoToLocalHHMM(entry.date),
+      durationMin: entry.durationMin,
+      intensity: entry.intensity,
+      caloriesBurned: entry.caloriesBurned,
+      distanceKm: entry.distanceKm,
+      sets: entry.sets,
+      reps: entry.reps,
+      weightKg: entry.weightKg,
+      notes: entry.notes || '',
+    });
+  } else {
+    exerciseMode.value = 'quick';
+    Object.assign(exerciseForm, {
+      exerciseId: null,
+      label: '',
+      engineClass: 'exercise_cardio',
+      startTime: nowLocalHHMM(),
+      durationMin: 30,
+      intensity: 1.0,
+      caloriesBurned: null,
+      distanceKm: null,
+      sets: null,
+      reps: null,
+      weightKg: null,
+      notes: '',
+    });
+  }
+  exerciseModalOpen.value = true;
+}
+
+function pickExerciseFromCatalog(ex) {
+  exerciseForm.exerciseId = ex._id;
+  exerciseForm.label = ex.name;
+  exerciseForm.engineClass = ex.engineClass;
+  exerciseForm.durationMin = ex.defaultDurationMin || 30;
+  exerciseForm.intensity = ex.defaultIntensity || 1.0;
+  // Reset caloriesBurned so server recomputes from the new MET.
+  exerciseForm.caloriesBurned = null;
+}
+
+function pickQuickClass(cls) {
+  exerciseForm.engineClass = cls;
+  exerciseForm.exerciseId = null;
+  // Auto-label so the row reads sensibly without forcing a text entry.
+  exerciseForm.label = ({
+    exercise_cardio: 'Cardio',
+    exercise_resistance: 'Resistance',
+    exercise_hiit: 'HIIT',
+    exercise_recovery: 'Recovery',
+  })[cls] || 'Exercise';
+}
+
+async function saveExerciseEntry() {
+  if (!exerciseForm.label?.trim()) return;
+  // Combine the log page's date (YYYY-MM-DD) with the modal's HH:MM.
+  // `new Date('2026-01-15T08:30')` parses as local time — exactly what
+  // the user means when they pick "08:30" for a Jan 15 workout.
+  const time = exerciseForm.startTime || '12:00';
+  const localISO = new Date(`${date.value}T${time}:00`).toISOString();
+  const payload = {
+    exerciseId: exerciseForm.exerciseId,
+    label: exerciseForm.label.trim(),
+    engineClass: exerciseForm.engineClass,
+    durationMin: Number(exerciseForm.durationMin),
+    intensity: Number(exerciseForm.intensity),
+    caloriesBurned: exerciseForm.caloriesBurned,
+    distanceKm: exerciseForm.distanceKm,
+    sets: exerciseForm.sets,
+    reps: exerciseForm.reps,
+    weightKg: exerciseForm.weightKg,
+    notes: exerciseForm.notes,
+    date: localISO,
+  };
+  if (exerciseEditing.value) {
+    await exerciseLogStore.update(exerciseEditing.value._id, payload);
+  } else {
+    await exerciseLogStore.create(payload);
+  }
+  exerciseModalOpen.value = false;
+}
+
+async function deleteExerciseEntry(entry) {
+  if (!confirm(`Delete "${entry.label}"?`)) return;
+  await exerciseLogStore.remove(entry._id);
+}
+
 const waterEnabled = computed(() => Boolean(waterSettings.value.enabled));
 const waterUnit = computed(() => waterSettings.value.unit || 'fl_oz');
 const waterServingMl = computed(() => Number(waterSettings.value.servingMl) || 250);
@@ -540,14 +766,22 @@ const todaysWeight = computed(() =>
 // Compounds + per-compound dose state for the rendered cards.
 const enabledCompounds = computed(() => compoundsStore.enabled);
 
-function todaysDoseFor(compoundId) {
-  return dosesStore.todaysDoseFor(compoundId, date.value);
+// Stable identity key for both canonical (`core:<key>`) and custom
+// (compound _id) rows. Used for keyed Pinia state maps + `:key`
+// loops since canonical rows have no `_id`.
+function compoundKey(c) {
+  if (!c) return null;
+  return c.source === 'core' ? `core:${c.coreInterventionKey}` : c._id;
+}
+
+function todaysDoseFor(compound) {
+  return dosesStore.todaysDoseFor(compound, date.value);
 }
 
 // "Next dose" label for a single compound, anchored on its own intervalDays
 // and its own latest dose (regardless of selected page date).
 function nextDoseLabelFor(compound) {
-  const latest = dosesStore.latestDoseFor(compound._id);
+  const latest = dosesStore.latestDoseFor(compound);
   if (!latest) return null;
 
   const lastDateStr = String(latest.date).slice(0, 10);
@@ -579,18 +813,24 @@ async function handleAddWeight() {
 }
 
 async function handleAddDose(compound) {
-  const raw = newDoseByCompound[compound._id];
+  const k = compoundKey(compound);
+  const raw = newDoseByCompound[k];
   if (raw === '' || raw == null) return;
-  savingDoseByCompound[compound._id] = true;
+  savingDoseByCompound[k] = true;
   try {
+    // Canonical compounds dose by intervention key; custom by _id.
+    // The store hides the polymorphism — pass exactly one of the refs.
+    const ref = compound.source === 'core'
+      ? { coreInterventionKey: compound.coreInterventionKey }
+      : { compoundId: compound._id };
     await dosesStore.addDose({
-      compoundId: compound._id,
+      ...ref,
       value: Number(raw),
       date: date.value,
     });
-    newDoseByCompound[compound._id] = '';
+    newDoseByCompound[k] = '';
   } finally {
-    savingDoseByCompound[compound._id] = false;
+    savingDoseByCompound[k] = false;
   }
 }
 
@@ -636,6 +876,10 @@ function onNoteBlur() {
 <template>
   <div class="log-page" data-testid="log-page">
     <FastingBanner surface="log" />
+    <div v-if="cycleBanner" class="cycle-banner">
+      <span class="cycle-banner-day">Day {{ cycleBanner.cycleDay }} / {{ cycleBanner.cycleLength }}</span>
+      <span class="cycle-banner-phase">{{ cycleBanner.phase }}</span>
+    </div>
     <DateSelector v-model="date" />
 
     <!-- =========================================================== -->
@@ -669,6 +913,235 @@ function onNoteBlur() {
     </div>
 
     <!-- =========================================================== -->
+    <!-- EXERCISE (conditional on settings.exercise.enabled+showOnLog) -->
+    <!-- =========================================================== -->
+    <div v-if="exerciseEnabled" id="exercise" class="meal-card compact exercise-card">
+      <div class="exercise-head">
+        <h3 class="exercise-title">Exercise</h3>
+        <span class="exercise-total">{{ exerciseTotalBurn }} kcal burned</span>
+      </div>
+      <div v-if="exerciseEntriesToday.length" class="exercise-list">
+        <button
+          v-for="entry in exerciseEntriesToday"
+          :key="entry._id"
+          type="button"
+          class="exercise-row"
+          @click="openExerciseModal(entry)"
+        >
+          <span class="ex-row-time">{{ isoToLocalHHMM(entry.date) }}</span>
+          <span class="ex-row-label">{{ entry.label }}</span>
+          <span class="ex-row-detail">
+            {{ entry.durationMin }}min · {{ Number(entry.intensity).toFixed(1) }}×
+          </span>
+          <span class="ex-row-burn">{{ entry.caloriesBurned }} kcal</span>
+          <button
+            type="button"
+            class="ex-row-del"
+            aria-label="Delete"
+            @click.stop="deleteExerciseEntry(entry)"
+          >×</button>
+        </button>
+      </div>
+      <button type="button" class="exercise-add" @click="openExerciseModal()">
+        + Add exercise
+      </button>
+    </div>
+
+    <!-- Exercise modal — quick / activity / detailed input modes -->
+    <div
+      v-if="exerciseModalOpen"
+      class="modal-backdrop"
+      @click.self="exerciseModalOpen = false"
+    >
+      <div class="modal exercise-modal">
+        <h3>{{ exerciseEditing ? 'Edit exercise' : 'Log exercise' }}</h3>
+
+        <div class="mode-tabs">
+          <button
+            type="button"
+            class="mode-tab"
+            :class="{ active: exerciseMode === 'quick' }"
+            @click="exerciseMode = 'quick'"
+          >Quick</button>
+          <button
+            type="button"
+            class="mode-tab"
+            :class="{ active: exerciseMode === 'activity' }"
+            @click="exerciseMode = 'activity'"
+          >Activity</button>
+          <button
+            type="button"
+            class="mode-tab"
+            :class="{ active: exerciseMode === 'detailed' }"
+            @click="exerciseMode = 'detailed'"
+          >Detailed</button>
+        </div>
+
+        <!-- Quick mode: 3 buttons → engine class, duration + intensity -->
+        <template v-if="exerciseMode === 'quick'">
+          <div class="quick-class-row">
+            <button
+              type="button"
+              class="class-btn"
+              :class="{ active: exerciseForm.engineClass === 'exercise_cardio' }"
+              @click="pickQuickClass('exercise_cardio')"
+            >🏃 Cardio</button>
+            <button
+              type="button"
+              class="class-btn"
+              :class="{ active: exerciseForm.engineClass === 'exercise_resistance' }"
+              @click="pickQuickClass('exercise_resistance')"
+            >🏋️ Resistance</button>
+            <button
+              type="button"
+              class="class-btn"
+              :class="{ active: exerciseForm.engineClass === 'exercise_hiit' }"
+              @click="pickQuickClass('exercise_hiit')"
+            >🔥 HIIT</button>
+            <button
+              type="button"
+              class="class-btn"
+              :class="{ active: exerciseForm.engineClass === 'exercise_recovery' }"
+              @click="pickQuickClass('exercise_recovery')"
+            >🧘 Recovery</button>
+          </div>
+        </template>
+
+        <!-- Activity mode: pick from catalog -->
+        <template v-if="exerciseMode === 'activity'">
+          <label class="form-row">
+            <span>Activity</span>
+            <select
+              :value="exerciseForm.exerciseId || ''"
+              @change="(e) => {
+                const ex = exercisesStore.getById(e.target.value);
+                if (ex) pickExerciseFromCatalog(ex);
+              }"
+            >
+              <option value="">— pick activity —</option>
+              <option
+                v-for="ex in exercisesStore.enabled"
+                :key="ex._id"
+                :value="ex._id"
+              >
+                {{ ex.icon || '·' }} {{ ex.name }}
+              </option>
+            </select>
+          </label>
+        </template>
+
+        <!-- Detailed mode: full form -->
+        <template v-if="exerciseMode === 'detailed'">
+          <label class="form-row">
+            <span>Activity (optional)</span>
+            <select
+              :value="exerciseForm.exerciseId || ''"
+              @change="(e) => {
+                const ex = exercisesStore.getById(e.target.value);
+                if (ex) pickExerciseFromCatalog(ex);
+                else { exerciseForm.exerciseId = null; }
+              }"
+            >
+              <option value="">— free-form —</option>
+              <option
+                v-for="ex in exercisesStore.enabled"
+                :key="ex._id"
+                :value="ex._id"
+              >
+                {{ ex.icon || '·' }} {{ ex.name }}
+              </option>
+            </select>
+          </label>
+          <label class="form-row">
+            <span>Label</span>
+            <input v-model="exerciseForm.label" type="text" placeholder="e.g. Morning run" />
+          </label>
+          <div class="form-grid-2">
+            <label class="form-row">
+              <span>Class</span>
+              <select v-model="exerciseForm.engineClass">
+                <option value="exercise_cardio">Cardio</option>
+                <option value="exercise_resistance">Resistance</option>
+                <option value="exercise_hiit">HIIT</option>
+                <option value="exercise_recovery">Recovery</option>
+              </select>
+            </label>
+            <label class="form-row">
+              <span>Distance (km)</span>
+              <input v-model.number="exerciseForm.distanceKm" type="number" min="0" step="0.1" />
+            </label>
+          </div>
+          <div class="form-grid-3">
+            <label class="form-row">
+              <span>Sets</span>
+              <input v-model.number="exerciseForm.sets" type="number" min="0" step="1" />
+            </label>
+            <label class="form-row">
+              <span>Reps</span>
+              <input v-model.number="exerciseForm.reps" type="number" min="0" step="1" />
+            </label>
+            <label class="form-row">
+              <span>Weight (kg)</span>
+              <input v-model.number="exerciseForm.weightKg" type="number" min="0" step="0.5" />
+            </label>
+          </div>
+          <label class="form-row">
+            <span>Notes</span>
+            <input v-model="exerciseForm.notes" type="text" placeholder="" />
+          </label>
+        </template>
+
+        <!-- Always present: started-at, duration, intensity, override burn -->
+        <div class="form-grid-3">
+          <label class="form-row">
+            <span>Started at</span>
+            <input v-model="exerciseForm.startTime" type="time" />
+          </label>
+          <label class="form-row">
+            <span>Duration (min)</span>
+            <input
+              v-model.number="exerciseForm.durationMin"
+              type="number"
+              min="1"
+              step="5"
+            />
+          </label>
+          <label class="form-row">
+            <span>Intensity (0.5–1.5)</span>
+            <input
+              v-model.number="exerciseForm.intensity"
+              type="number"
+              min="0.5"
+              max="1.5"
+              step="0.1"
+            />
+          </label>
+        </div>
+
+        <label class="form-row">
+          <span>
+            Calories burned
+            <span class="form-hint">(blank → auto from MET × weight × time)</span>
+          </span>
+          <input
+            v-model.number="exerciseForm.caloriesBurned"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="auto"
+          />
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="exerciseModalOpen = false">Cancel</button>
+          <button type="button" class="btn-primary" @click="saveExerciseEntry">
+            {{ exerciseEditing ? 'Save' : 'Log it' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
     <!-- TOP ROW: Nutrition (half) + stacked Weight/Dose (half)       -->
     <!-- =========================================================== -->
     <div
@@ -678,6 +1151,36 @@ function onNoteBlur() {
     >
       <div class="meal-header"><h3>Nutrition</h3></div>
       <DailySummary :summary="foodlogStore.summary" />
+
+      <!-- Mode-aware energy strip. Shows in/out/net/target per the
+           user's exercise.energyMode. Hidden mode collapses to a
+           plain consumed/target line. See docs/exercise-energy-modes.md. -->
+      <div v-if="energyStrip" class="energy-strip" :class="`mode-${energyStrip.mode}`">
+        <template v-if="energyStrip.mode === 'hidden'">
+          <span class="es-num">{{ energyStrip.consumedFmt }}</span>
+          <span class="es-sep">·</span>
+          <span class="es-tgt">target {{ energyStrip.targetFmt }}</span>
+        </template>
+        <template v-else>
+          <span class="es-num">{{ energyStrip.consumedFmt }}</span>
+          <span class="es-lbl">in</span>
+          <span class="es-sep">·</span>
+          <span class="es-num">{{ energyStrip.burnedFmt }}</span>
+          <span class="es-lbl">out</span>
+          <span class="es-sep">→</span>
+          <span class="es-net">{{ energyStrip.netFmt }}</span>
+          <span class="es-lbl">net</span>
+          <span class="es-spacer" />
+          <span class="es-tgt">
+            target {{ energyStrip.targetFmt }}<span
+              v-if="energyStrip.mode === 'earn' && energyStrip.burned > 0"
+              class="es-tgt-detail"
+            >
+              ({{ energyStrip.baseTargetFmt }} + {{ energyStrip.burnedFmt }})
+            </span>
+          </span>
+        </template>
+      </div>
     </div>
 
     <!-- =========================================================== -->
@@ -801,45 +1304,45 @@ function onNoteBlur() {
     >
       <div
         v-for="compound in enabledCompounds"
-        :key="compound._id"
+        :key="compoundKey(compound)"
         class="compound-row"
         v-tooltip="`Log ${compound.name} dose`"
       >
         <div class="metric-label">{{ compound.name }}</div>
         <form
-          v-if="!todaysDoseFor(compound._id)"
+          v-if="!todaysDoseFor(compound)"
           class="quick-form"
           @submit.prevent="handleAddDose(compound)"
         >
           <input
             type="number"
-            v-model.number="newDoseByCompound[compound._id]"
+            v-model.number="newDoseByCompound[compoundKey(compound)]"
             step="0.25"
             :placeholder="compound.doseUnit"
             required
-            @focus="doseInputFocused[compound._id] = true"
-            @blur="doseInputFocused[compound._id] = false"
+            @focus="doseInputFocused[compoundKey(compound)] = true"
+            @blur="doseInputFocused[compoundKey(compound)] = false"
           />
           <button
             class="btn-primary"
             :class="{
               muted:
-                !doseInputFocused[compound._id] &&
-                !newDoseByCompound[compound._id],
+                !doseInputFocused[compoundKey(compound)] &&
+                !newDoseByCompound[compoundKey(compound)],
             }"
             type="submit"
-            :disabled="savingDoseByCompound[compound._id]"
+            :disabled="savingDoseByCompound[compoundKey(compound)]"
           >
-            {{ savingDoseByCompound[compound._id] ? 'Saving...' : 'Log' }}
+            {{ savingDoseByCompound[compoundKey(compound)] ? 'Saving...' : 'Log' }}
           </button>
         </form>
         <div v-else class="logged-row">
           <span class="logged-value">
-            {{ todaysDoseFor(compound._id).value }} {{ compound.doseUnit }}
+            {{ todaysDoseFor(compound).value }} {{ compound.doseUnit }}
           </span>
           <button
             class="delete-btn"
-            @click="handleDeleteDose(todaysDoseFor(compound._id))"
+            @click="handleDeleteDose(todaysDoseFor(compound))"
           >
             x
           </button>
@@ -945,22 +1448,30 @@ function onNoteBlur() {
                   </td>
                   <td class="col-srv">
                     <template v-if="editingId === row.entry._id">
-                      <input
-                        type="number"
-                        v-model.number="editServings"
-                        min="0"
-                        step="0.25"
-                        class="edit-input"
-                        @click.stop
-                        @keyup.enter="saveEdit(row.entry._id)"
-                        @keyup.escape="cancelEdit"
-                      />
-                      <button
-                        class="save-btn"
-                        @click.stop="saveEdit(row.entry._id)"
-                      >
-                        ✓
-                      </button>
+                      <div class="edit-stack" @click.stop>
+                        <input
+                          type="number"
+                          v-model.number="editServings"
+                          min="0"
+                          step="0.25"
+                          class="edit-input"
+                          @keyup.enter="saveEdit(row.entry._id)"
+                          @keyup.escape="cancelEdit"
+                        />
+                        <input
+                          type="time"
+                          v-model="editTime"
+                          class="edit-time"
+                          @keyup.enter="saveEdit(row.entry._id)"
+                          @keyup.escape="cancelEdit"
+                        />
+                        <button
+                          class="save-btn"
+                          @click.stop="saveEdit(row.entry._id)"
+                        >
+                          ✓
+                        </button>
+                      </div>
                     </template>
                     <span
                       v-else
@@ -1161,22 +1672,30 @@ function onNoteBlur() {
                       </td>
                       <td class="col-srv">
                         <template v-if="editingId === child._id">
-                          <input
-                            type="number"
-                            v-model.number="editServings"
-                            min="0"
-                            step="0.25"
-                            class="edit-input"
-                            @click.stop
-                            @keyup.enter="saveEdit(child._id)"
-                            @keyup.escape="cancelEdit"
-                          />
-                          <button
-                            class="save-btn"
-                            @click.stop="saveEdit(child._id)"
-                          >
-                            ✓
-                          </button>
+                          <div class="edit-stack" @click.stop>
+                            <input
+                              type="number"
+                              v-model.number="editServings"
+                              min="0"
+                              step="0.25"
+                              class="edit-input"
+                              @keyup.enter="saveEdit(child._id)"
+                              @keyup.escape="cancelEdit"
+                            />
+                            <input
+                              type="time"
+                              v-model="editTime"
+                              class="edit-time"
+                              @keyup.enter="saveEdit(child._id)"
+                              @keyup.escape="cancelEdit"
+                            />
+                            <button
+                              class="save-btn"
+                              @click.stop="saveEdit(child._id)"
+                            >
+                              ✓
+                            </button>
+                          </div>
                         </template>
                         <span
                           v-else
@@ -1424,7 +1943,278 @@ function onNoteBlur() {
    gets a touch more breathing room since the macro bars need vertical space. */
 /* Water tracker — single row of tappable drop icons. Each click of an unfilled
    drop logs one serving (servingMl); tapping the last filled drop deletes it. */
+/* Mode-aware energy strip — sits under the DailySummary card to
+   surface in/out/net/target with one honest line. Mode determines
+   whether burn shows and whether target is offset. */
+.energy-strip {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.energy-strip .es-num,
+.energy-strip .es-net {
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+}
+.energy-strip .es-net { color: var(--text); }
+.energy-strip .es-lbl {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-family: var(--font-display);
+  font-size: 10px;
+}
+.energy-strip .es-sep { color: var(--text-tertiary); }
+.energy-strip .es-spacer { flex: 1; }
+.energy-strip .es-tgt { color: var(--text-secondary); }
+.energy-strip .es-tgt-detail {
+  margin-left: 4px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.cycle-banner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-xs);
+}
+.cycle-banner-day {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+.cycle-banner-phase {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
 .water-card { padding: var(--space-3) var(--space-5); }
+
+/* Exercise card — same shell as water-card; rows are tappable to edit. */
+.exercise-card { padding: var(--space-3) var(--space-5); }
+.exercise-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+.exercise-title {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.exercise-total {
+  font-size: var(--font-size-s);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+.exercise-list {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-2);
+}
+.exercise-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+.exercise-row:first-of-type { border-top: none; }
+.exercise-row:hover { background: var(--bg); }
+.ex-row-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  min-width: 42px;
+}
+.ex-row-label { font-size: var(--font-size-s); }
+.ex-row-detail {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.ex-row-burn {
+  font-size: var(--font-size-s);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.ex-row-del {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--font-size-l);
+  line-height: 1;
+}
+.ex-row-del:hover { color: var(--danger); }
+.exercise-add {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+}
+.exercise-add:hover { color: var(--text); border-color: var(--text-tertiary); }
+
+/* Exercise modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+}
+.exercise-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--space-5);
+  width: 92%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.exercise-modal h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-m);
+  font-weight: var(--font-weight-medium);
+}
+.mode-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 2px;
+  margin-bottom: var(--space-3);
+}
+.mode-tab {
+  flex: 1;
+  padding: 6px 0;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  font-family: inherit;
+}
+.mode-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+}
+
+.quick-class-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: var(--space-3);
+}
+.class-btn {
+  padding: 10px 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: var(--font-size-s);
+  font-family: inherit;
+  color: var(--text-secondary);
+}
+.class-btn:hover { color: var(--text); }
+.class-btn.active {
+  background: var(--primary-soft, var(--primary));
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-3);
+}
+.form-row > span {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+}
+.form-row .form-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: var(--font-weight-regular);
+  color: var(--text-tertiary);
+  margin-left: 4px;
+}
+.form-row input,
+.form-row select {
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-s);
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-2);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.btn-cancel,
+.btn-primary {
+  padding: 8px 16px;
+  font-size: var(--font-size-s);
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+.btn-cancel { background: var(--surface); color: var(--text-secondary); }
+.btn-primary { background: var(--primary); color: var(--primary-fg, #fff); border-color: var(--primary); }
 .water-head {
   display: flex;
   align-items: baseline;
@@ -1719,6 +2509,19 @@ function onNoteBlur() {
   width: 48px;
   padding: 0.15rem var(--space-1);
   font-size: var(--font-size-s);
+}
+.edit-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.edit-time {
+  width: 78px;
+  padding: 0.15rem var(--space-1);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 .save-btn {
   font-size: var(--font-size-xs);
