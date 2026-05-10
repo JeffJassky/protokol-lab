@@ -31,6 +31,8 @@ const ProfilePage = () => import('../pages/ProfilePage.vue');
 const NotificationsPage = () => import('../pages/settings/NotificationsPage.vue');
 const SettingsCompoundsPage = () => import('../pages/settings/CompoundsPage.vue');
 const FastingSettingsPage = () => import('../pages/settings/FastingPage.vue');
+const JournalSettingsPage = () => import('../pages/settings/JournalPage.vue');
+const InsightsSettingsPage = () => import('../pages/settings/InsightsPage.vue');
 const WaterSettingsPage = () => import('../pages/settings/WaterPage.vue');
 const AppearancePage = () => import('../pages/settings/AppearancePage.vue');
 const MetricsSettingsPage = () => import('../pages/settings/MetricsPage.vue');
@@ -135,6 +137,8 @@ const routes = [
   { path: '/profile/settings/notifications', name: 'profile-settings-notifications', component: NotificationsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/compounds', name: 'profile-settings-compounds', component: SettingsCompoundsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/fasting', name: 'profile-settings-fasting', component: FastingSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/journal', name: 'profile-settings-journal', component: JournalSettingsPage, meta: { requiresAuth: true } },
+  { path: '/profile/settings/insights', name: 'profile-settings-insights', component: InsightsSettingsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/water', name: 'profile-settings-water', component: WaterSettingsPage, meta: { requiresAuth: true } },
   { path: '/profile/settings/appearance', name: 'profile-settings-appearance', component: AppearancePage, meta: { requiresAuth: true } },
   { path: '/profile/settings/metrics', name: 'profile-settings-metrics', component: MetricsSettingsPage, meta: { requiresAuth: true } },

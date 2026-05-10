@@ -1,5 +1,5 @@
 // DEPRECATED: WaistLog has been replaced by the unified Metric/MetricLog
-// system (see shared/metricPresets.js → key 'waist'). This file is retained
+// system (see shared/logging/metricPresets.js → key 'waist'). This file is retained
 // only so the migration script (`scripts/migrate-waist-to-metrics.js`) can
 // still read legacy rows. Do not import from app code or routes — none
 // remain. Once every environment has been migrated, delete this file along

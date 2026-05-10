@@ -3,7 +3,7 @@ import Metric from '../models/Metric.js';
 import MetricLog from '../models/MetricLog.js';
 import { childLogger, errContext } from '../lib/logger.js';
 import { parseLogDate } from '../lib/date.js';
-import { METRIC_PRESETS, CUSTOM_METRIC_DIMENSIONS } from '../../../shared/metricPresets.js';
+import { METRIC_PRESETS, CUSTOM_METRIC_DIMENSIONS } from '../../../shared/logging/metricPresets.js';
 import { DIMENSIONS } from '../../../shared/units.js';
 
 const log = childLogger('metrics');

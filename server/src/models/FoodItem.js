@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { NUTRIENT_KEYS } from '../../../shared/nutrients.js';
+import { NUTRIENT_KEYS } from '../../../shared/logging/nutrients.js';
 
 // perServing nutrient subdoc — every field optional Number. We only set
 // keys that the source provided so daily totals can distinguish "0 calcium"

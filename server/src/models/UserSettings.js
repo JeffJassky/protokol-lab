@@ -105,6 +105,20 @@ const userSettingsSchema = new mongoose.Schema({
     servingMl: { type: Number, default: 250 },
     showOnDashboard: { type: Boolean, default: false },
   },
+  // Daily journal note. On by default for legacy users; togglable via the
+  // Journal settings page so users who don't journal can hide the textarea
+  // on the Log page.
+  journal: {
+    enabled: { type: Boolean, default: true },
+  },
+  // Dashboard "Insights" card. Off-switch + a confidence floor: each
+  // finding ships with `confidence ∈ [0,1]`, and the card hides any
+  // below `minConfidence`. 0.4 = "low" (show most signals), 0.65 = "high"
+  // (only strong signals). Default 0.4 keeps day-1 surfaces non-empty.
+  insights: {
+    enabled: { type: Boolean, default: true },
+    minConfidence: { type: Number, default: 0.4, min: 0, max: 1 },
+  },
   // Universal tracking-completeness behavior. Governs how the rolling-
   // window math (currently the 7-day budget; future supplement /
   // exercise-streak views) treats days with missing or partial data.
@@ -150,12 +164,12 @@ const userSettingsSchema = new mongoose.Schema({
   // params: { ... } } }` matching the engine's ConditionStateSnapshot.
   // The simulation worker calls buildConditionAdjustments(state) and
   // forwards the resulting receptor/baseline/coupling overrides via
-  // engine options. Only keys in shared/conditionsCatalog.CONDITION_KEYS
+  // engine options. Only keys in shared/bio/conditionsCatalog.CONDITION_KEYS
   // survive sanitation.
   conditions: { type: mongoose.Schema.Types.Mixed, default: {} },
   // Genetic profile. Same nested shape as Subject.genetics so we can
   // pass it through to the engine untouched. Curated subset of fields
-  // surfaced via shared/geneticsPanels.GENETICS_PANELS — sanitation
+  // surfaced via shared/bio/geneticsPanels.GENETICS_PANELS — sanitation
   // drops anything outside that catalog and any value that isn't one
   // of the declared option strings.
   genetics: { type: mongoose.Schema.Types.Mixed, default: {} },
@@ -186,6 +200,24 @@ const userSettingsSchema = new mongoose.Schema({
       pmsWindow:         { enabled: { type: Boolean, default: false }, daysBefore: { type: Number, default: 5 } },
       latePeriod:        { enabled: { type: Boolean, default: false }, daysAfter:  { type: Number, default: 2 } },
     },
+  },
+  // Cached PK/PD sim end-state. Lets `/api/sim/*` resume forward from
+  // here instead of re-simulating from t=0 every request. Schema-versioned:
+  // bump CHECKPOINT_SCHEMA_VERSION in src/sim/checkpoint.js when the
+  // SimulationState shape changes in @kyneticbio/core (new compartment,
+  // new receptor pool, etc.) — mismatch at read = treated as missing,
+  // forces a clean recompute.
+  //
+  // Invalidation rules (see src/sim/invalidationHooks.js):
+  //   - Log write at date D: nuke if D <= checkpoint.date
+  //   - Subject mutation (bloodwork/genetics/weight/etc): full nuke
+  //   - Custom food/compound edit: full nuke (retroactive impact)
+  latestSimCheckpoint: {
+    date: { type: Date, default: null },          // checkpoint valid through this UTC midnight
+    endState: { type: mongoose.Schema.Types.Mixed, default: null },
+    computedAt: { type: Date, default: null },
+    schemaVersion: { type: Number, default: 0 },
+    inputsThroughDate: { type: Date, default: null },
   },
   updatedAt: { type: Date, default: Date.now },
 });

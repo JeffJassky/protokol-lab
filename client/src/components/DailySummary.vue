@@ -1,10 +1,24 @@
 <script setup>
 import { computed } from 'vue';
 import MacroBar from './MacroBar.vue';
-import { computeNutritionScore } from '../utils/nutritionScore.js';
+import { computeNutritionScore } from '../../../shared/logging/nutritionScore.js';
 
 const props = defineProps({
   summary: { type: Object, required: true },
+  // When the user is in "earn" energy mode, today's burn extends the
+  // calorie target. Parent computes the adjusted number so this
+  // component (and its MacroBars + suggestion copy) stays in sync with
+  // the rolling-budget math.
+  effectiveCalTarget: { type: Number, default: null },
+});
+
+// Resolve the calorie target the suggestion + MacroBar render against.
+// Falls back to the server-supplied `summary.targets.calories` when the
+// parent doesn't pass an effective override (e.g. dashboard contexts
+// where energy mode doesn't shift the number).
+const calTarget = computed(() => {
+  if (props.effectiveCalTarget != null) return props.effectiveCalTarget;
+  return props.summary?.targets?.calories || 0;
 });
 
 // Aggregated nutrition for the day. The summary endpoint returns a perServing
@@ -27,8 +41,9 @@ const scaleMax = computed(() => {
   const s = props.summary;
   if (!s || !s.targets) return 1;
   const t = totals.value;
+  const calT = calTarget.value;
   const ratios = [
-    s.targets.calories ? t.calories / s.targets.calories : 0,
+    calT ? t.calories / calT : 0,
     s.targets.proteinGrams ? t.protein / s.targets.proteinGrams : 0,
     s.targets.fatGrams ? t.fat / s.targets.fatGrams : 0,
     s.targets.carbsGrams ? t.carbs / s.targets.carbsGrams : 0,
@@ -38,7 +53,10 @@ const scaleMax = computed(() => {
 
 const scoreDetail = computed(() => {
   if (!props.summary?.targets) return null;
-  const value = computeNutritionScore(totals.value, props.summary.targets);
+  // Score the day against the EFFECTIVE calorie target so a workout
+  // doesn't artificially tank the score in earn mode.
+  const adjustedTargets = { ...props.summary.targets, calories: calTarget.value };
+  const value = computeNutritionScore(totals.value, adjustedTargets);
   return value != null ? { value } : null;
 });
 
@@ -67,7 +85,7 @@ const suggestion = computed(() => {
   const t = s.targets;
   const cur = totals.value;
 
-  const calDelta = cur.calories - (t.calories || 0); // + = over
+  const calDelta = cur.calories - (calTarget.value || 0); // + = over
   const proDelta = cur.protein - (t.proteinGrams || 0); // - = under
   const fatDelta = cur.fat - (t.fatGrams || 0); // + = over
 
@@ -157,7 +175,7 @@ const suggestion = computed(() => {
         <div v-if="suggestion.detail" class="suggestion-detail">{{ suggestion.detail }}</div>
       </div>
     </div>
-    <MacroBar :index="0" label="Calories" :current="totals.calories" :target="summary.targets?.calories || 0" color="var(--color-cal)" unit=" kcal" :scale-max="scaleMax" />
+    <MacroBar :index="0" label="Calories" :current="totals.calories" :target="calTarget" color="var(--color-cal)" unit=" kcal" :scale-max="scaleMax" />
     <MacroBar :index="1" label="Protein" :current="totals.protein" :target="summary.targets?.proteinGrams || 0" color="var(--color-protein)" unit="g" :scale-max="scaleMax" />
     <MacroBar :index="2" label="Fat" :current="totals.fat" :target="summary.targets?.fatGrams || 0" color="var(--color-fat)" unit="g" :scale-max="scaleMax" />
     <MacroBar :index="3" label="Carbs" :current="totals.carbs" :target="summary.targets?.carbsGrams || 0" color="var(--color-carbs)" unit="g" :scale-max="scaleMax" />

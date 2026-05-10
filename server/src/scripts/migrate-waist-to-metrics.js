@@ -22,7 +22,7 @@ import WaistLog from '../models/WaistLog.js';
 import Metric from '../models/Metric.js';
 import MetricLog from '../models/MetricLog.js';
 import { toCanonical } from '../../../shared/units.js';
-import { findPreset } from '../../../shared/metricPresets.js';
+import { findPreset } from '../../../shared/logging/metricPresets.js';
 
 const DRY = process.argv.includes('--dry-run');
 

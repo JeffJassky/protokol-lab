@@ -5,7 +5,8 @@ import RecentFood from '../models/RecentFood.js';
 import Meal from '../models/Meal.js';
 import { childLogger, errContext } from '../lib/logger.js';
 import { normalizeOffProduct, searchUsda, getUsdaByBarcode } from '../services/nutrition.js';
-import { NUTRIENT_KEYS, addNutrients, scaleNutrients, roundNutrients } from '../../../shared/nutrients.js';
+import { NUTRIENT_KEYS, addNutrients, scaleNutrients, roundNutrients } from '../../../shared/logging/nutrients.js';
+import { invalidateAsync } from '../sim/invalidationHooks.js';
 
 // Source priority for /search results. USDA is preferred — Branded items have
 // reliable serving sizes (FDA-mandated label data) and Foundation/SR/FNDDS
@@ -317,6 +318,9 @@ router.put('/:id', async (req, res) => {
     (req.log || log).warn({ itemId: req.params.id }, 'food item update: not found');
     return res.status(404).json({ error: 'Not found' });
   }
+  // Editing perServing macros retroactively changes every FoodLog row
+  // that references this item. Cache for any past day is wrong.
+  if (update.perServing) invalidateAsync(req.userId, 'food-item-perserving-update');
   (req.log || log).info({ itemId: req.params.id, fields: Object.keys(update) }, 'food item updated');
   res.json({ item: projectItem(item) });
 });

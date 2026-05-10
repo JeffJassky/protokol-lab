@@ -1,6 +1,6 @@
 <script setup>
 import { computed, watch } from 'vue';
-import { ACTIVITY_LEVELS, bmrMifflin, tdee } from '../../../../shared/bodyMath.js';
+import { ACTIVITY_LEVELS, bmrMifflin, tdee } from '../../../../shared/bio/bodyMath.js';
 
 const props = defineProps({
   draft: { type: Object, required: true },

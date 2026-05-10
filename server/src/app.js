@@ -32,6 +32,7 @@ import adminSupportRoutes from './routes/adminSupport.js';
 import demoRoutes from './routes/demo.js';
 import trackRoutes from './routes/track.js';
 import analysisRoutes from './routes/analysis.js';
+import simRoutes from './routes/sim.js';
 import testHelperRoutes from './routes/testHelpers.js';
 import * as Sentry from '@sentry/node';
 import { requireAuth, requireAuthUser, requireRealProfile } from './middleware/requireAuth.js';
@@ -176,6 +177,7 @@ export function createApp({ serveClient = true } = {}) {
   app.use('/api/compounds', requireAuth, compoundsRoutes);
   app.use('/api/exercises', requireAuth, exercisesRoutes);
   app.use('/api/exerciselog', requireAuth, exerciselogRoutes);
+  app.use('/api/sim', requireAuth, simRoutes);
   app.use('/api/day-status', requireAuth, dayStatusRoutes);
   app.use('/api/fasting', requireAuth, fastingRoutes);
   // Chat is disabled in demo entirely — anon sessions have no quota account

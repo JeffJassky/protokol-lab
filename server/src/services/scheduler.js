@@ -9,7 +9,7 @@ import FoodLog from '../models/FoodLog.js';
 import SymptomLog from '../models/SymptomLog.js';
 import DoseLog from '../models/DoseLog.js';
 import FastingEvent from '../models/FastingEvent.js';
-import { computeFastingNotifications } from '../../../shared/fasting.js';
+import { computeFastingNotifications } from '../../../shared/logging/fasting.js';
 import { sendToUser } from './push.js';
 import { deleteSandbox, refillPool } from './demo.js';
 import { childLogger, errContext } from '../lib/logger.js';
@@ -288,7 +288,7 @@ async function runTick() {
 
     // Fasting notifications. Two events fire (per user toggle): fastStart
     // at the planned/actual start instant, fastEnd at the planned end. Logic
-    // is in shared/fasting.js (testable, runs identically client + server).
+    // is in shared/logging/fasting.js (testable, runs identically client + server).
     // We pass the user-tz hhmm + weekday so recurring rules anchor on local
     // wall-clock independent of server tz / DST drift.
     const f = settings.fasting;

@@ -1,13 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useSettingsStore } from '../../stores/settings.js';
-import { useFoodLogStore } from '../../stores/foodlog.js';
-import { useExerciseLogStore } from '../../stores/exerciselog.js';
-import { localYmd } from '../../utils/date.js';
 
 const store = useSettingsStore();
-const foodLog = useFoodLogStore();
-const exerciseLog = useExerciseLogStore();
 
 const enabled = ref(false);
 const showOnLog = ref(true);
@@ -18,54 +13,18 @@ const hydrated = ref(false);
 const ENERGY_MODES = [
   {
     key: 'baseline',
-    label: 'Activity-aware TDEE',
+    label: 'Burned calories do not get added to daily budget',
     badge: 'Default',
     desc: 'Your TDEE multiplier already covers typical workouts. Logged exercise shows burn for awareness; calorie target stays put.',
     bestWhen: 'Activity level on your profile reflects your real lifestyle.',
   },
   {
     key: 'earn',
-    label: 'Sedentary + eat-back',
+    label: 'Burned calories get added to daily budget',
     desc: 'Set TDEE to sedentary on your profile; each workout adds calories to today\'s target. Exercise "earns" food.',
     bestWhen: 'You want logging to feel direct — no compounding multipliers.',
   },
-  {
-    key: 'hidden',
-    label: 'Hide burn',
-    desc: 'Don\'t surface burn anywhere. Useful if you don\'t trust MET estimates or use a wearable for energy expenditure.',
-    bestWhen: 'You log exercise for the simulation only, not for calorie math.',
-  },
 ];
-
-// Live preview math — uses the user's actual data for today so the
-// abstract policy choice becomes concrete numbers. Falls back to a
-// placeholder example when the user has nothing logged yet.
-const preview = computed(() => {
-  const today = localYmd();
-  const todayMacros = (foodLog.dailyNutrition || []).find((d) => d.date === today);
-  const consumed = todayMacros?.calories || 1500; // illustrative fallback
-  const target = store.settings?.targets?.calories || store.settings?.tdee || 1800;
-  const burnedToday = (exerciseLog.dailyBurn || []).find((d) => d.date === today);
-  const burned = burnedToday?.caloriesBurned || 280; // illustrative fallback
-  const isFallback = !todayMacros || !burnedToday;
-  return {
-    consumed: Math.round(consumed),
-    burned: Math.round(burned),
-    target: Math.round(target),
-    isFallback,
-  };
-});
-
-function previewLine(modeKey) {
-  const p = preview.value;
-  if (modeKey === 'baseline') {
-    return `${p.consumed} in · ${p.burned} out → ${p.consumed - p.burned} net   target ${p.target}`;
-  }
-  if (modeKey === 'earn') {
-    return `${p.consumed} in · ${p.burned} out → ${p.consumed - p.burned} net   target ${p.target + p.burned}`;
-  }
-  return `${p.consumed}   target ${p.target}`;
-}
 
 onMounted(async () => {
   if (!store.loaded) await store.fetchSettings();
@@ -73,13 +32,10 @@ onMounted(async () => {
   enabled.value = Boolean(e.enabled);
   showOnLog.value = e.showOnLog !== false;
   showOnDashboard.value = e.showOnDashboard !== false;
-  energyMode.value = ['baseline', 'earn', 'hidden'].includes(e.energyMode) ? e.energyMode : 'baseline';
-  // Pull today's data so the preview feels real instead of canned.
-  const today = localYmd();
-  await Promise.all([
-    foodLog.fetchDailyNutrition(today, today),
-    exerciseLog.fetchRangeBurn(today, today),
-  ]);
+  // Legacy 'hidden' values persist on existing accounts but are no
+  // longer user-selectable — fall back to baseline so the radio group
+  // shows a valid selection.
+  energyMode.value = ['baseline', 'earn'].includes(e.energyMode) ? e.energyMode : 'baseline';
   hydrated.value = true;
 });
 
@@ -167,24 +123,6 @@ watch([enabled, showOnLog, showOnDashboard, energyMode], scheduleSave);
             </div>
           </div>
         </label>
-
-        <div class="preview">
-          <div class="preview-head">
-            Today preview
-            <span v-if="preview.isFallback" class="preview-hint">
-              (illustrative — log a meal + workout to see your real numbers)
-            </span>
-          </div>
-          <div
-            v-for="mode in ENERGY_MODES"
-            :key="mode.key"
-            class="preview-row"
-            :class="{ active: energyMode === mode.key }"
-          >
-            <span class="preview-label">{{ mode.label }}</span>
-            <span class="preview-numbers">{{ previewLine(mode.key) }}</span>
-          </div>
-        </div>
       </div>
 
       <router-link to="/profile/settings/exercises" class="card settings-link">
@@ -298,46 +236,6 @@ watch([enabled, showOnLog, showOnDashboard, energyMode], scheduleSave);
 .mode-best {
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
-}
-
-.preview {
-  margin-top: var(--space-4);
-  padding: var(--space-3);
-  background: var(--bg);
-  border: 1px solid var(--border);
-}
-.preview-head {
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wider);
-  color: var(--text-tertiary);
-  font-weight: var(--font-weight-bold);
-  margin-bottom: var(--space-2);
-}
-.preview-hint {
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: var(--font-weight-regular);
-  font-style: italic;
-  margin-left: var(--space-1);
-}
-.preview-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: var(--space-1) 0;
-  font-size: var(--font-size-s);
-  color: var(--text-tertiary);
-  gap: var(--space-3);
-}
-.preview-row.active {
-  color: var(--text);
-  font-weight: var(--font-weight-medium);
-}
-.preview-numbers {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
 .settings-link {

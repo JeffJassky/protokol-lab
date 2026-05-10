@@ -23,12 +23,12 @@ export function protocolDurationMinutes(value) {
   return p.fastHours * 60;
 }
 
-// Five fasting "stages" with elapsed-minute thresholds. Stage labels are kept
-// short and clinical; the banner shows them as a chip.
-const STAGE_THRESHOLDS = [
-  { minMinutes: 0,    label: 'Fed' },
-  { minMinutes: 4 * 60,  label: 'Catabolic' },
-  { minMinutes: 12 * 60, label: 'Fat-burning' },
+// Fasting "stages" with elapsed-minute thresholds. Boundaries follow the
+// common consumer-fasting framing (glucose → glycogen depletion → ketosis →
+// deep ketosis); thresholds are loose, not clinically precise.
+export const STAGE_THRESHOLDS = [
+  { minMinutes: 0,       label: 'Burning carbs' },
+  { minMinutes: 12 * 60, label: 'Switching to fat' },
   { minMinutes: 18 * 60, label: 'Ketosis' },
   { minMinutes: 48 * 60, label: 'Deep ketosis' },
 ];

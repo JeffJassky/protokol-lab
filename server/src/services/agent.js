@@ -13,12 +13,25 @@ import UserSettings from "../models/UserSettings.js";
 import Meal from "../models/Meal.js";
 import MealProposal from "../models/MealProposal.js";
 import BloodworkProposal from "../models/BloodworkProposal.js";
+import ExerciseLog from "../models/ExerciseLog.js";
+import Exercise from "../models/Exercise.js";
+import WaterLog from "../models/WaterLog.js";
+import DayStatus from "../models/DayStatus.js";
+import FastingEvent from "../models/FastingEvent.js";
 import {
   BLOODWORK_PANELS,
   BLOODWORK_FIELD_INDEX,
   sanitizeBloodworkValue,
   flattenBloodworkNested,
-} from "../../../shared/bloodworkPanels.js";
+} from "../../../shared/bio/bloodworkPanels.js";
+import { CONDITION_KEYS } from "../../../shared/bio/conditionsCatalog.js";
+import { GENETICS_PANELS } from "../../../shared/bio/geneticsPanels.js";
+import {
+  cycleDayFor,
+  phaseFor,
+  predictNextEvents,
+} from "../../../shared/bio/menstruation.js";
+import { computeFastingStatus } from "../../../shared/logging/fasting.js";
 import User from "../models/User.js";
 import { childLogger, errContext } from "../lib/logger.js";
 import { parseLogDate } from "../lib/date.js";
@@ -182,6 +195,75 @@ const functionDeclarations = [
     parameters: {
       type: Type.OBJECT,
       properties: {},
+    },
+  },
+  {
+    name: "get_exercise_log",
+    description:
+      "Get exercise log entries for a date range. Returns label, engine class (cardio/resistance/hiit/recovery), duration (min), intensity (0.5-1.5), calories burned, and timestamp for each workout. Use to reason about training load, energy expenditure, or recovery patterns.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        startDate: { type: Type.STRING, description: "Start date (YYYY-MM-DD)" },
+        endDate: { type: Type.STRING, description: "End date (YYYY-MM-DD)" },
+      },
+      required: ["startDate", "endDate"],
+    },
+  },
+  {
+    name: "get_water_log",
+    description:
+      "Get hydration log entries for a date range. Returns timestamp + volume (ml) for each drink. Use to assess hydration habits or correlate with other signals.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        startDate: { type: Type.STRING, description: "Start date (YYYY-MM-DD)" },
+        endDate: { type: Type.STRING, description: "End date (YYYY-MM-DD)" },
+      },
+      required: ["startDate", "endDate"],
+    },
+  },
+  {
+    name: "get_active_conditions",
+    description:
+      "List the user's enabled conditions (ADHD, POTS, MCAS, PCOS, depression, anxiety, etc.) with their per-condition severity / param settings. These conditions modulate the simulation engine — use them when explaining why hormone or signal curves differ from baseline.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "get_bloodwork",
+    description:
+      "Get the user's latest bloodwork values across all panels (metabolic, lipids, hematology, hormones, etc.). Returns flat key→value pairs (e.g. 'metabolic.glucose_mg_dL': 95). Only fields the user has set are included.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "get_genetics",
+    description:
+      "Get the user's genetics values across all panels (pharmacogenomics, methylation, lipid, fitness markers, etc.). Returns flat key→value pairs. Only fields the user has set are included.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "get_menstrual_state",
+    description:
+      "Current menstrual cycle state for users with cycle tracking enabled. Returns cycleDay, phase (menstrual/follicular/ovulation/luteal), days until next period, days until next ovulation. Returns null if tracking is off.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "get_fasting_state",
+    description:
+      "Current fasting status for users with fasting enabled. Returns whether the user is currently in a fast, hours into the fast, target hours, and stage ('Burning carbs' 0-12h, 'Switching to fat' 12-18h, 'Ketosis' 18-48h, 'Deep ketosis' 48h+). Returns null if fasting is off.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "get_day_status",
+    description:
+      "Get explicit tracked / untracked day-status entries in a date range. The user uses these to flag days they were sick / traveling / forgot / fasting so the rolling-7 budget skips them. Returns date + status + reason.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        startDate: { type: Type.STRING, description: "Start date (YYYY-MM-DD)" },
+        endDate: { type: Type.STRING, description: "End date (YYYY-MM-DD)" },
+      },
+      required: ["startDate", "endDate"],
     },
   },
   {
@@ -716,7 +798,124 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
         activityLevel: settings.activityLevel,
         goalRateLbsPerWeek: settings.goalRateLbsPerWeek,
         targets: settings.targets,
+        // Energy mode governs whether logged exercise extends the day's
+        // calorie target ("earn") or stays informational ("baseline").
+        // Critical for any answer about how many calories are left.
+        exerciseEnergyMode: settings.exercise?.energyMode || 'baseline',
+        exerciseEnabled: !!settings.exercise?.enabled,
+        fastingEnabled: !!settings.fasting?.enabled,
+        menstruationEnabled: !!settings.menstruation?.enabled,
+        unitSystem: settings.unitSystem || 'imperial',
       };
+    }
+
+    case "get_exercise_log": {
+      const entries = await ExerciseLog.find({
+        userId,
+        date: dateRange(args.startDate, args.endDate),
+      }).sort({ date: 1 }).lean();
+      return entries.map((e) => ({
+        timestamp: e.date.toISOString(),
+        date: e.date.toISOString().split("T")[0],
+        label: e.label,
+        engineClass: e.engineClass,
+        durationMin: e.durationMin,
+        intensity: e.intensity,
+        caloriesBurned: e.caloriesBurned,
+      }));
+    }
+
+    case "get_water_log": {
+      const entries = await WaterLog.find({
+        userId,
+        date: dateRange(args.startDate, args.endDate),
+      }).sort({ date: 1 }).lean();
+      return entries.map((e) => ({
+        timestamp: e.date.toISOString(),
+        date: e.date.toISOString().split("T")[0],
+        volumeMl: e.volumeMl,
+      }));
+    }
+
+    case "get_active_conditions": {
+      const settings = await UserSettings.findOne({ userId })
+        .select("conditions").lean();
+      const all = settings?.conditions || {};
+      const enabled = {};
+      for (const [key, val] of Object.entries(all)) {
+        if (val?.enabled) enabled[key] = val;
+      }
+      return enabled;
+    }
+
+    case "get_bloodwork": {
+      const settings = await UserSettings.findOne({ userId })
+        .select("bloodwork").lean();
+      return flattenBloodworkNested(settings?.bloodwork || {});
+    }
+
+    case "get_genetics": {
+      const settings = await UserSettings.findOne({ userId })
+        .select("genetics").lean();
+      const flat = {};
+      const nested = settings?.genetics || {};
+      for (const [panelId, fields] of Object.entries(nested)) {
+        if (!fields || typeof fields !== 'object') continue;
+        for (const [k, v] of Object.entries(fields)) {
+          if (v != null && v !== '') flat[`${panelId}.${k}`] = v;
+        }
+      }
+      return flat;
+    }
+
+    case "get_menstrual_state": {
+      const settings = await UserSettings.findOne({ userId })
+        .select("menstruation").lean();
+      const m = settings?.menstruation;
+      if (!m?.enabled || !m.lastPeriodStart) return null;
+      const now = new Date();
+      const cycleDay = cycleDayFor(m, now);
+      if (cycleDay == null) return null;
+      const phase = phaseFor({
+        cycleDay,
+        cycleLength: m.cycleLength,
+        lutealPhaseLength: m.lutealPhaseLength,
+        periodLength: m.periodLength,
+      });
+      const pred = predictNextEvents(m, now);
+      return {
+        cycleDay,
+        cycleLength: m.cycleLength || 28,
+        lutealPhaseLength: m.lutealPhaseLength || 14,
+        phase,
+        daysUntilNextPeriod: pred?.daysUntilNextPeriod ?? null,
+        daysUntilNextOvulation: pred?.daysUntilNextOvulation ?? null,
+      };
+    }
+
+    case "get_fasting_state": {
+      const settings = await UserSettings.findOne({ userId })
+        .select("fasting").lean();
+      const f = settings?.fasting;
+      if (!f?.enabled) return null;
+      const events = await FastingEvent.find({ userId })
+        .sort({ at: -1 }).limit(8).lean();
+      const status = computeFastingStatus(f, events, new Date());
+      return status;
+    }
+
+    case "get_day_status": {
+      const start = parseLogDate(args.startDate);
+      const end = parseLogDate(args.endDate);
+      const rows = await DayStatus.find({
+        userId,
+        date: { $gte: args.startDate, $lte: args.endDate },
+      }).sort({ date: 1 }).lean();
+      return rows.map((r) => ({
+        date: r.date,
+        status: r.status,
+        reason: r.reason || null,
+      }));
     }
 
     case "get_saved_meals": {
@@ -1059,26 +1258,80 @@ async function buildDataSnapshot(userId, timeZone = 'UTC') {
   weekAgo.setUTCDate(weekAgo.getUTCDate() - 7);
   const startDate = `${weekAgo.getUTCFullYear()}-${String(weekAgo.getUTCMonth() + 1).padStart(2, "0")}-${String(weekAgo.getUTCDate()).padStart(2, "0")}`;
 
-  const [settings, nutrition, weight, metrics, doses, symptoms, compounds] =
-    await Promise.all([
-      executeTool("get_user_settings", {}, userId),
-      executeTool("get_daily_nutrition", { startDate, endDate: today }, userId),
-      executeTool("get_weight_log", { startDate, endDate: today }, userId),
-      executeTool("get_metric_log", { startDate, endDate: today }, userId),
-      executeTool("get_dose_log", { startDate, endDate: today }, userId),
-      executeTool("get_symptom_log", { startDate, endDate: today }, userId),
-      executeTool("get_compounds", {}, userId),
-    ]);
+  const [
+    settings, nutrition, weight, metrics, doses, symptoms, compounds,
+    exercise, conditions, bloodwork, genetics, cycle, fasting, dayStatus,
+  ] = await Promise.all([
+    executeTool("get_user_settings", {}, userId),
+    executeTool("get_daily_nutrition", { startDate, endDate: today }, userId),
+    executeTool("get_weight_log", { startDate, endDate: today }, userId),
+    executeTool("get_metric_log", { startDate, endDate: today }, userId),
+    executeTool("get_dose_log", { startDate, endDate: today }, userId),
+    executeTool("get_symptom_log", { startDate, endDate: today }, userId),
+    executeTool("get_compounds", {}, userId),
+    executeTool("get_exercise_log", { startDate, endDate: today }, userId),
+    executeTool("get_active_conditions", {}, userId),
+    executeTool("get_bloodwork", {}, userId),
+    executeTool("get_genetics", {}, userId),
+    executeTool("get_menstrual_state", {}, userId),
+    executeTool("get_fasting_state", {}, userId),
+    executeTool("get_day_status", { startDate, endDate: today }, userId),
+  ]);
 
   const sections = [];
 
   if (settings && !settings.error) {
+    const energyModeCopy = settings.exerciseEnergyMode === 'earn'
+      ? 'earn (logged exercise extends today\'s calorie target)'
+      : 'baseline (logged exercise is informational; target stays put)';
+    const featureFlags = [
+      settings.exerciseEnabled && 'exercise',
+      settings.fastingEnabled && 'fasting',
+      settings.menstruationEnabled && 'menstruation',
+    ].filter(Boolean).join(', ') || 'none';
     sections.push(`PROFILE & TARGETS:
 Sex: ${settings.sex}, Age: ${settings.age ?? 'unknown'}, Height: ${settings.heightInches}in, Current weight: ${settings.currentWeightLbs}lbs, Goal: ${settings.goalWeightLbs}lbs
-Activity level: ${settings.activityLevel ?? 'unknown'}
+Activity level: ${settings.activityLevel ?? 'unknown'}, unit system: ${settings.unitSystem}
 BMR (resting): ${settings.bmr ?? 'unknown'} kcal/day, TDEE (daily burn): ${settings.tdee ?? 'unknown'} kcal/day
 Goal rate: ${settings.goalRateLbsPerWeek ?? 'unknown'} lb/week
-Daily targets: ${settings.targets.calories} cal, ${settings.targets.proteinGrams}g protein, ${settings.targets.fatGrams}g fat, ${settings.targets.carbsGrams}g carbs`);
+Daily targets: ${settings.targets.calories} cal, ${settings.targets.proteinGrams}g protein, ${settings.targets.fatGrams}g fat, ${settings.targets.carbsGrams}g carbs
+Exercise energy mode: ${energyModeCopy}
+Tracking features enabled: ${featureFlags}`);
+  }
+
+  if (conditions && Object.keys(conditions).length) {
+    const rows = Object.entries(conditions).map(([key, val]) => {
+      const params = val.params ? ` ${JSON.stringify(val.params)}` : '';
+      return `${key}${params}`;
+    }).join('; ');
+    sections.push(`ACTIVE CONDITIONS (modulate the simulation engine): ${rows}`);
+  }
+
+  if (bloodwork && Object.keys(bloodwork).length) {
+    const rows = Object.entries(bloodwork)
+      .map(([k, v]) => `${k}=${v}`).join(', ');
+    sections.push(`BLOODWORK (user-set values, all others fall back to population defaults): ${rows}`);
+  }
+
+  if (genetics && Object.keys(genetics).length) {
+    const rows = Object.entries(genetics)
+      .map(([k, v]) => `${k}=${v}`).join(', ');
+    sections.push(`GENETICS: ${rows}`);
+  }
+
+  if (cycle) {
+    const phaseCopy = `Day ${cycle.cycleDay}/${cycle.cycleLength} · ${cycle.phase}`;
+    const nextPeriod = cycle.daysUntilNextPeriod != null ? `next period in ${cycle.daysUntilNextPeriod}d` : 'next period unknown';
+    const nextOv = cycle.daysUntilNextOvulation != null ? `next ovulation in ${cycle.daysUntilNextOvulation}d` : '';
+    sections.push(`MENSTRUAL CYCLE: ${phaseCopy}; ${nextPeriod}${nextOv ? ', ' + nextOv : ''}`);
+  }
+
+  if (fasting) {
+    const inFast = fasting.inProgress
+      ? `currently fasting (${Math.round((fasting.elapsedMinutes || 0) / 60 * 10) / 10}h elapsed, stage: ${fasting.stage || 'unknown'})`
+      : 'not currently fasting';
+    const protocol = fasting.protocol ? `, protocol: ${fasting.protocol}` : '';
+    sections.push(`FASTING: ${inFast}${protocol}`);
   }
 
   if (Array.isArray(compounds) && compounds.length) {
@@ -1129,6 +1382,27 @@ Daily targets: ${settings.targets.calories} cal, ${settings.targets.proteinGrams
       .map((d) => `${d.date}: ${d.compound} ${d.value}${d.unit}`)
       .join(", ");
     sections.push(`DOSE LOG (last 7 days): ${rows}`);
+  }
+
+  if (Array.isArray(exercise) && exercise.length) {
+    // Group by day so a day with three workouts collapses to one line.
+    const byDay = new Map();
+    for (const e of exercise) {
+      if (!byDay.has(e.date)) byDay.set(e.date, []);
+      byDay.get(e.date).push(`${e.label} (${e.engineClass.replace('exercise_', '')}, ${e.durationMin}m, ${e.caloriesBurned}kcal)`);
+    }
+    const rows = [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, items]) => `${date}: ${items.join(", ")}`)
+      .join("\n");
+    sections.push(`EXERCISE LOG (last 7 days):\n${rows}`);
+  }
+
+  if (Array.isArray(dayStatus) && dayStatus.length) {
+    const rows = dayStatus
+      .map((d) => `${d.date}: ${d.status}${d.reason ? ` (${d.reason})` : ''}`)
+      .join("; ");
+    sections.push(`DAY STATUS (explicit tracked/untracked flags, last 7 days): ${rows}`);
   }
 
   if (Array.isArray(symptoms) && symptoms.length) {
@@ -1272,10 +1546,11 @@ ${snapshot}
 
 TOOLS — WHEN TO USE:
 You already have the last 7 days of user data above. Tool usage:
-- Read-only data tools (get_food_log, get_daily_nutrition, get_weight_log, get_metric_log, get_dose_log, get_symptom_log, get_user_settings, get_saved_meals, get_compounds):
+- Read-only data tools (get_food_log, get_daily_nutrition, get_weight_log, get_metric_log, get_dose_log, get_symptom_log, get_user_settings, get_saved_meals, get_compounds, get_exercise_log, get_water_log, get_active_conditions, get_bloodwork, get_genetics, get_menstrual_state, get_fasting_state, get_day_status):
   - Use when the user asks about a date range OUTSIDE the last 7 days
   - Use when the user asks for detailed food-by-food breakdown (snapshot only has daily totals)
   - Use when you need data not covered by the snapshot
+  - Profile facts (active conditions, current cycle phase, fasting state, energy mode, current bloodwork/genetics) are already in the snapshot — only re-fetch via tools if the user explicitly asks for the latest after a recent change.
 - Food-logging proposal tool (propose_food_entries) — THE DEFAULT FOR ALL FOOD LOGGING:
   - Use this for ANY request to log, add, track, or record food — whether the user described the food in text ("log a chicken sandwich"), uploaded a photo, or both. The client renders an inline confirmation card with Confirm / Edit / Cancel buttons and a per-item serving multiplier so the user can review and adjust BEFORE anything is written.
   - Always prefer propose_food_entries over log_food_entry. Even when the user says "log this", they still want to confirm portions and macros — silently writing to the diary is an anti-pattern.
@@ -1673,6 +1948,22 @@ function describeToolCall(name, args) {
       return "Loading your profile and targets";
     case "get_saved_meals":
       return "Loading your saved meals";
+    case "get_exercise_log":
+      return `Checking exercise log${range}`;
+    case "get_water_log":
+      return `Checking hydration log${range}`;
+    case "get_active_conditions":
+      return "Loading active conditions";
+    case "get_bloodwork":
+      return "Reading your bloodwork";
+    case "get_genetics":
+      return "Reading your genetics";
+    case "get_menstrual_state":
+      return "Checking cycle state";
+    case "get_fasting_state":
+      return "Checking fasting state";
+    case "get_day_status":
+      return `Checking tracked-day flags${range}`;
     case "search_food_items":
       return `Searching food catalog for "${args?.query || ""}"`;
     case "create_food_item":

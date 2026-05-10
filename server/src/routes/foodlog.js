@@ -5,7 +5,8 @@ import UserSettings from '../models/UserSettings.js';
 import { touchRecent } from '../services/recentFood.js';
 import { childLogger } from '../lib/logger.js';
 import { parseLogDate } from '../lib/date.js';
-import { NUTRIENT_KEYS, addNutrients, scaleNutrients, roundNutrients } from '../../../shared/nutrients.js';
+import { NUTRIENT_KEYS, addNutrients, scaleNutrients, roundNutrients } from '../../../shared/logging/nutrients.js';
+import { maybeInvalidateAsync } from '../sim/invalidationHooks.js';
 
 const log = childLogger('foodlog');
 const router = Router();
@@ -285,6 +286,7 @@ router.post('/', async (req, res) => {
     },
     'foodlog: entry created',
   );
+  maybeInvalidateAsync(req.userId, entry.date, 'foodlog-create');
   res.status(201).json({ entry: populated });
 });
 
@@ -320,6 +322,10 @@ router.post('/copy', async (req, res) => {
     }
   }
   const created = await FoodLog.insertMany(docs);
+  // Earliest target date across all copies — that's the most-historical
+  // write, the one that determines whether the cache is stale.
+  const earliest = docs.reduce((min, d) => (d.date < min ? d.date : min), docs[0].date);
+  maybeInvalidateAsync(req.userId, earliest, 'foodlog-copy');
   rlog.info(
     { sourceCount: sources.length, dateCount: dates.length, created: created.length },
     'foodlog: copied',
@@ -360,6 +366,12 @@ router.post('/move', async (req, res) => {
   }
   const created = await FoodLog.insertMany(docs);
   await FoodLog.deleteMany({ _id: { $in: sources.map((s) => s._id) }, userId: req.userId });
+  // Move = both old (source) and new (target) dates may matter. Use the
+  // earliest across both sets so anything at-or-before the checkpoint
+  // triggers a nuke.
+  const allDates = [...sources.map((s) => s.date), ...docs.map((d) => d.date)];
+  const earliest = allDates.reduce((min, d) => (d < min ? d : min), allDates[0]);
+  maybeInvalidateAsync(req.userId, earliest, 'foodlog-move');
   rlog.info(
     { sourceCount: sources.length, dateCount: dates.length, created: created.length, removed: sources.length },
     'foodlog: moved',
@@ -389,6 +401,11 @@ router.put('/:id', async (req, res) => {
     (req.log || log).warn({ entryId: req.params.id }, 'foodlog update: not found');
     return res.status(404).json({ error: 'Not found' });
   }
+  // Use the entry's current (post-update) date. Doesn't catch the edge
+  // case where date moved BACKWARD across the cp boundary, but that's
+  // rare and the worst outcome is one stale cache read until the next
+  // mutation triggers a fresh recompute.
+  maybeInvalidateAsync(req.userId, entry.date, 'foodlog-update');
   (req.log || log).info({ entryId: req.params.id, fields: Object.keys(update) }, 'foodlog: entry updated');
   res.json({ entry });
 });
@@ -399,6 +416,7 @@ router.delete('/:id', async (req, res) => {
     (req.log || log).warn({ entryId: req.params.id }, 'foodlog delete: not found');
     return res.status(404).json({ error: 'Not found' });
   }
+  maybeInvalidateAsync(req.userId, entry.date, 'foodlog-delete');
   (req.log || log).info({ entryId: req.params.id }, 'foodlog: entry deleted');
   res.status(204).send();
 });

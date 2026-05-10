@@ -124,7 +124,7 @@ useRouteSeo();
             <ul class="price-feats">
               <li>AI chat that reads your full log</li>
               <li>Rolling 7-day macro targets</li>
-              <li>Correlation charts, any two metrics</li>
+              <li>Correlation charts, any two measurements</li>
               <li>Deeper dose charts and stats</li>
               <li>Up to 3 custom compounds</li>
               <li>Saved meals, cloud sync, data export</li>
@@ -215,7 +215,7 @@ useRouteSeo();
             </tr>
             <tr>
               <td>Correlation charts</td>
-              <td class="cell-y">2 metrics</td>
+              <td class="cell-y">2 measurements</td>
               <td class="cell-y">Unlimited</td>
               <td class="cell-y">Unlimited</td>
             </tr>

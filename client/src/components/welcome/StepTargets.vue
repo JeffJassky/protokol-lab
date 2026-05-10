@@ -4,7 +4,7 @@ import {
   tdee,
   calorieTargetForRate,
   defaultMacros,
-} from '../../../../shared/bodyMath.js';
+} from '../../../../shared/bio/bodyMath.js';
 import MacroAllocator from '../MacroAllocator.vue';
 
 const props = defineProps({

@@ -4,6 +4,7 @@ import Compound from '../models/Compound.js';
 import { childLogger } from '../lib/logger.js';
 import { parseLogDate } from '../lib/date.js';
 import { PEPTIDE_CATALOG_INDEX } from '@kyneticbio/core';
+import { maybeInvalidateAsync } from '../sim/invalidationHooks.js';
 
 const log = childLogger('doses');
 const router = Router();
@@ -197,6 +198,7 @@ router.post('/', async (req, res) => {
     },
     'doses: logged',
   );
+  maybeInvalidateAsync(req.userId, entry.date, 'dose-create');
   res.status(201).json({ entry });
 });
 
@@ -206,6 +208,7 @@ router.delete('/:id', async (req, res) => {
     (req.log || log).warn({ entryId: req.params.id }, 'doses delete: not found');
     return res.status(404).json({ error: 'Not found' });
   }
+  maybeInvalidateAsync(req.userId, entry.date, 'dose-delete');
   (req.log || log).info(
     {
       entryId: req.params.id,

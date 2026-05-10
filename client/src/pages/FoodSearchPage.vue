@@ -15,7 +15,7 @@ import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { useProfileFieldsGate } from '../composables/useProfileFieldsGate.js';
-import { localYmd } from '../utils/date.js';
+import { localYmd, isoForLogDate } from '../utils/date.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -192,8 +192,11 @@ async function confirmAdd() {
       return;
     }
 
+    // Send full ISO so the server doesn't stamp its own server-local
+    // hour onto the row. For today, "now". For backfills, noon-local on
+    // the target day. See isoForLogDate.
     const body = {
-      date: date.value,
+      date: isoForLogDate(date.value),
       mealType: meal.value,
       servingCount: Number(servingCount.value),
     };

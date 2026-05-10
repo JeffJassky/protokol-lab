@@ -7,7 +7,7 @@ import {
   GOAL_RATES,
   bmrMifflin,
   tdee as computeTdee,
-} from '../../../shared/bodyMath.js';
+} from '../../../shared/bio/bodyMath.js';
 
 const store = useSettingsStore();
 
@@ -369,34 +369,7 @@ watch(
       <p v-if="error" class="error">{{ error }}</p>
     </form>
 
-    <router-link to="/profile/settings/metrics" class="card settings-link">
-      <span class="settings-link-text">
-        <span class="settings-link-label">Metrics</span>
-        <span class="settings-link-sub">Body measurements + unit system</span>
-      </span>
-      <span class="settings-link-chevron">›</span>
-    </router-link>
-    <router-link to="/profile/settings/photos" class="card settings-link">
-      <span class="settings-link-text">
-        <span class="settings-link-label">Photos</span>
-        <span class="settings-link-sub">Progress photo categories + visibility</span>
-      </span>
-      <span class="settings-link-chevron">›</span>
-    </router-link>
-    <router-link to="/profile/settings/compounds" class="card settings-link">
-      <span class="settings-link-text">
-        <span class="settings-link-label">Compounds</span>
-        <span class="settings-link-sub">Your regimen + dose schedules</span>
-      </span>
-      <span class="settings-link-chevron">›</span>
-    </router-link>
-    <router-link to="/profile/settings/menstruation" class="card settings-link">
-      <span class="settings-link-text">
-        <span class="settings-link-label">Menstrual cycle</span>
-        <span class="settings-link-sub">Cycle tracking, predictions + reminders</span>
-      </span>
-      <span class="settings-link-chevron">›</span>
-    </router-link>
+    <h3 class="section-header">Biology</h3>
     <router-link to="/profile/settings/bloodwork" class="card settings-link">
       <span class="settings-link-text">
         <span class="settings-link-label">Bloodwork</span>
@@ -418,17 +391,33 @@ watch(
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
+    <router-link to="/profile/settings/menstruation" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Menstrual cycle</span>
+        <span class="settings-link-sub">Cycle tracking, predictions + reminders</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+
+    <h3 class="section-header">Tracking</h3>
+    <router-link to="/profile/settings/metrics" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Measurements</span>
+        <span class="settings-link-sub">Body measurements + unit system</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/compounds" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Compounds</span>
+        <span class="settings-link-sub">Your regimen + dose schedules</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
     <router-link to="/profile/settings/exercise" class="card settings-link">
       <span class="settings-link-text">
         <span class="settings-link-label">Exercise</span>
         <span class="settings-link-sub">Tracking, energy mode, activity catalog</span>
-      </span>
-      <span class="settings-link-chevron">›</span>
-    </router-link>
-    <router-link to="/profile/settings/tracking" class="card settings-link">
-      <span class="settings-link-text">
-        <span class="settings-link-label">Tracking</span>
-        <span class="settings-link-sub">How missing days affect rolling-window math</span>
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
@@ -439,6 +428,13 @@ watch(
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
+    <router-link to="/profile/settings/journal" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Journal</span>
+        <span class="settings-link-sub">Daily notes textarea on the Log page</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
     <router-link to="/profile/settings/water" class="card settings-link">
       <span class="settings-link-text">
         <span class="settings-link-label">Hydration</span>
@@ -446,6 +442,22 @@ watch(
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
+    <router-link to="/profile/settings/photos" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Photos</span>
+        <span class="settings-link-sub">Progress photo categories + visibility</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/tracking" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Tracked days</span>
+        <span class="settings-link-sub">How missing days affect rolling-window math</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+
+    <h3 class="section-header">App</h3>
     <router-link
       to="/profile/settings/notifications"
       class="card settings-link"
@@ -453,6 +465,13 @@ watch(
       <span class="settings-link-text">
         <span class="settings-link-label">Notifications</span>
         <span class="settings-link-sub">Push reminders + daily tracking</span>
+      </span>
+      <span class="settings-link-chevron">›</span>
+    </router-link>
+    <router-link to="/profile/settings/insights" class="card settings-link">
+      <span class="settings-link-text">
+        <span class="settings-link-label">Insights</span>
+        <span class="settings-link-sub">Auto-detected patterns + confidence floor</span>
       </span>
       <span class="settings-link-chevron">›</span>
     </router-link>
@@ -490,6 +509,17 @@ watch(
   color: var(--text-tertiary);
   margin-bottom: var(--space-4);
 }
+.section-header {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-secondary);
+  margin: var(--space-6) 0 var(--space-2);
+  padding: 0 var(--space-1);
+}
+.section-header:first-of-type { margin-top: var(--space-4); }
 
 /* Each link is a .card so it picks up the global mobile full-bleed +
    2px-vertical-margin treatment that adjacent cards use. */

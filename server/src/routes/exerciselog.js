@@ -3,22 +3,15 @@ import ExerciseLog from '../models/ExerciseLog.js';
 import Exercise from '../models/Exercise.js';
 import UserSettings from '../models/UserSettings.js';
 import { childLogger, errContext } from '../lib/logger.js';
+import { maybeInvalidateAsync } from '../sim/invalidationHooks.js';
+import {
+  ENGINE_CLASSES,
+  computeKcal,
+  defaultMetForClass,
+} from '../../../shared/logging/exerciseEnergy.js';
 
 const log = childLogger('exerciselog');
 const router = Router();
-
-const ENGINE_CLASSES = ['exercise_cardio', 'exercise_resistance', 'exercise_hiit', 'exercise_recovery'];
-const LB_PER_KG = 2.2046226218;
-
-// Derive caloriesBurned from MET × kg × hours × intensity. Intensity
-// scales the burn proportionally — 1.5× is roughly 50% more work.
-function computeKcal(metValue, weightLbs, durationMin, intensity = 1.0) {
-  const kg = Number(weightLbs) > 0 ? Number(weightLbs) / LB_PER_KG : 70;
-  const hours = Math.max(0, Number(durationMin) || 0) / 60;
-  const met = Math.max(1, Number(metValue) || 1);
-  const i = Math.max(0.5, Math.min(1.5, Number(intensity) || 1.0));
-  return Math.round(met * kg * hours * i);
-}
 
 function dateRange(from, to) {
   return {
@@ -49,7 +42,7 @@ router.get('/range-events', async (req, res) => {
   const entries = await ExerciseLog.find({
     userId: req.userId,
     date: dateRange(from, to),
-  }).sort({ date: 1 }).select('date durationMin intensity engineClass label');
+  }).sort({ date: 1 }).select('date durationMin intensity engineClass label caloriesBurned');
   const events = entries.map((e) => ({
     logId: String(e._id),
     timestamp: e.date.toISOString(),
@@ -57,6 +50,7 @@ router.get('/range-events', async (req, res) => {
     durationMin: e.durationMin,
     intensity: e.intensity,
     label: e.label,
+    caloriesBurned: e.caloriesBurned || 0,
   }));
   res.json({ events });
 });
@@ -116,13 +110,25 @@ router.post('/', async (req, res) => {
   // If the client didn't pre-compute caloriesBurned, derive from MET.
   // For "Quick" mode entries (no exerciseId) the client should send a
   // caloriesBurned override or accept the engine-class fallback MET.
-  let kcal = Number.isFinite(Number(caloriesBurned)) ? Math.max(0, Math.round(Number(caloriesBurned))) : null;
+  // NB: a bare `Number.isFinite(Number(caloriesBurned))` check is wrong
+  // because Number(null) === 0 (and isFinite(0) is true) — that path
+  // would lock kcal to 0 and skip the auto-derivation. Reject
+  // null/undefined explicitly before coercing.
+  const kcalRaw = caloriesBurned;
+  let kcal = (kcalRaw != null && Number.isFinite(Number(kcalRaw)))
+    ? Math.max(0, Math.round(Number(kcalRaw)))
+    : null;
   if (kcal == null) {
     const settings = await UserSettings.findOne({ userId: req.userId }).select('currentWeightLbs').lean();
     const weightLbs = settings?.currentWeightLbs || 165;
-    const met = resolvedMet ?? engineClassDefaultMet(resolvedClass);
-    kcal = computeKcal(met, weightLbs, dur, intensity);
+    const metValue = resolvedMet ?? defaultMetForClass(resolvedClass);
+    kcal = computeKcal({ metValue, weightLbs, durationMin: dur, intensity });
   }
+
+  // Same null-vs-Number(null)===0 gotcha for the optional detail fields.
+  // Treat null/undefined as "not provided" so the schema default (null)
+  // sticks instead of writing 0s.
+  const optNum = (v) => (v != null && Number.isFinite(Number(v))) ? Number(v) : null;
 
   try {
     const entry = await ExerciseLog.create({
@@ -134,13 +140,14 @@ router.post('/', async (req, res) => {
       durationMin: Math.round(dur),
       intensity: Math.max(0.5, Math.min(1.5, Number(intensity) || 1.0)),
       caloriesBurned: kcal,
-      distanceKm: Number.isFinite(Number(distanceKm)) ? Number(distanceKm) : null,
-      sets: Number.isFinite(Number(sets)) ? Number(sets) : null,
-      reps: Number.isFinite(Number(reps)) ? Number(reps) : null,
-      weightKg: Number.isFinite(Number(weightKg)) ? Number(weightKg) : null,
+      distanceKm: optNum(distanceKm),
+      sets: optNum(sets),
+      reps: optNum(reps),
+      weightKg: optNum(weightKg),
       notes: typeof notes === 'string' ? notes.slice(0, 500) : '',
     });
     rlog.info({ label: resolvedLabel, durationMin: dur }, 'exerciselog: create');
+    maybeInvalidateAsync(req.userId, entry.date, 'exercise-create');
     res.status(201).json({ entry });
   } catch (err) {
     rlog.error({ ...errContext(err) }, 'exerciselog: create failed');
@@ -177,31 +184,25 @@ router.put('/:id', async (req, res) => {
       : null;
     const settings = await UserSettings.findOne({ userId: req.userId }).select('currentWeightLbs').lean();
     const weightLbs = settings?.currentWeightLbs || 165;
-    const met = exercise?.metValue ?? engineClassDefaultMet(entry.engineClass);
-    entry.caloriesBurned = computeKcal(met, weightLbs, entry.durationMin, entry.intensity);
+    const metValue = exercise?.metValue ?? defaultMetForClass(entry.engineClass);
+    entry.caloriesBurned = computeKcal({
+      metValue,
+      weightLbs,
+      durationMin: entry.durationMin,
+      intensity: entry.intensity,
+    });
   }
 
   await entry.save();
+  maybeInvalidateAsync(req.userId, entry.date, 'exercise-update');
   res.json({ entry });
 });
 
 router.delete('/:id', async (req, res) => {
-  const result = await ExerciseLog.deleteOne({ _id: req.params.id, userId: req.userId });
-  if (!result.deletedCount) return res.status(404).json({ error: 'not found' });
+  const entry = await ExerciseLog.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+  if (!entry) return res.status(404).json({ error: 'not found' });
+  maybeInvalidateAsync(req.userId, entry.date, 'exercise-delete');
   res.json({ ok: true });
 });
-
-// Conservative MET fallbacks when the user picks "Quick" mode (no
-// catalog entry). Deliberately mid-of-class so the burn estimate isn't
-// wildly off either direction.
-function engineClassDefaultMet(engineClass) {
-  switch (engineClass) {
-    case 'exercise_cardio': return 6.0;
-    case 'exercise_resistance': return 5.0;
-    case 'exercise_hiit': return 8.0;
-    case 'exercise_recovery': return 2.5;
-    default: return 5.0;
-  }
-}
 
 export default router;

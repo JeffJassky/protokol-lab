@@ -18,7 +18,7 @@ import {
   formatDuration,
   protocolDurationMinutes,
   stageForElapsedMinutes,
-} from '../../shared/fasting.js';
+} from '../../shared/logging/fasting.js';
 
 const FASTING_ENABLED = {
   enabled: true,
@@ -54,7 +54,7 @@ describe('computeFastingStatus', () => {
     expect(status.state).toBe('active');
     expect(status.elapsedMinutes).toBe(120);
     expect(status.remainingMinutes).toBe(14 * 60); // plannedEnd - now
-    expect(status.stage).toBe('Fed'); // 2h < 4h
+    expect(status.stage).toBe('Burning carbs'); // 2h < 12h
   });
 
   it('reports past_goal when active and goal time has passed', () => {
@@ -467,9 +467,9 @@ describe('computeFastingNotifications', () => {
 
 describe('stageForElapsedMinutes', () => {
   it('walks through the fasting stages', () => {
-    expect(stageForElapsedMinutes(0)).toBe('Fed');
-    expect(stageForElapsedMinutes(5 * 60)).toBe('Catabolic');
-    expect(stageForElapsedMinutes(13 * 60)).toBe('Fat-burning');
+    expect(stageForElapsedMinutes(0)).toBe('Burning carbs');
+    expect(stageForElapsedMinutes(8 * 60)).toBe('Burning carbs');
+    expect(stageForElapsedMinutes(13 * 60)).toBe('Switching to fat');
     expect(stageForElapsedMinutes(20 * 60)).toBe('Ketosis');
     expect(stageForElapsedMinutes(60 * 60)).toBe('Deep ketosis');
   });

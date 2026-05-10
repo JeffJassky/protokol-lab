@@ -2,7 +2,7 @@ import { Router } from 'express';
 import PhotoType from '../models/PhotoType.js';
 import Photo from '../models/Photo.js';
 import { childLogger, errContext } from '../lib/logger.js';
-import { PHOTO_TYPE_PRESETS } from '../../../shared/photoTypePresets.js';
+import { PHOTO_TYPE_PRESETS } from '../../../shared/logging/photoTypePresets.js';
 
 const log = childLogger('photo-types');
 const router = Router();

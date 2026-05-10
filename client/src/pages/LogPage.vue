@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, computed, reactive } from 'vue';
+import { ref, watch, onMounted, computed, reactive, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useFoodLogStore } from '../stores/foodlog.js';
 import { useMealsStore } from '../stores/meals.js';
@@ -31,7 +31,14 @@ import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import PhotoCaptureCard from '../components/PhotoCaptureCard.vue';
 import UpgradeBadge from '../components/UpgradeBadge.vue';
 import FastingBanner from '../components/FastingBanner.vue';
+import SignalChart from '../components/SignalChart.vue';
+import { useChartSeries } from '../composables/useChartSeries.js';
 import { localYmd } from '../utils/date.js';
+import {
+  computeKcal as sharedComputeKcal,
+  defaultMetForClass,
+  effectiveDailyCalTarget,
+} from '../../../shared/logging/exerciseEnergy.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -71,6 +78,72 @@ const photosStore = usePhotosStore();
 const date = ref(route.query.date || localYmd());
 const editingId = ref(null);
 const editServings = ref(1);
+
+// SignalChart for the log page: fixed 24h window centered on the
+// selected `date`, empty default (user opts in to series via the
+// "+ Add" popover). Reuses the dashboard's series catalog through
+// useChartSeries so the same compound / nutrition / signal picks
+// are available here.
+const chartSeries = useChartSeries();
+
+const chartFixedRange = computed(() => {
+  // Anchor to the user's selected day in local time. The chart will
+  // resolve x-axis labels relative to this window and clamp data to
+  // it, so even multi-day series collapse to their in-range subset.
+  const [y, m, d] = String(date.value).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const from = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const to = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return { from, to };
+});
+
+// Chart data sources: dailyNutrition (food) + dailyBurn (exercise)
+// stores expose multi-day arrays the chart resolver reads. Dashboard
+// fetches them for its selected range; LogPage scopes the same fetch
+// to the selected calendar day so the chart populates here too.
+watch(
+  () => date.value,
+  (d) => {
+    if (!d) return;
+    foodlogStore.fetchDailyNutrition(d, d).catch(() => {});
+    exerciseLogStore.fetchRangeBurn(d, d).catch(() => {});
+  },
+  { immediate: true },
+);
+
+// Endogenous-signal sim kick: when active series include endo signals
+// AND the selected day changes, refetch a 24h window so the chart has
+// data to render. Pages that don't surface endo signals can skip this.
+const activeEndoSignals = computed(() => {
+  // Pull the persisted active series from localStorage to know if any
+  // endo signals are active. SignalChart manages this internally; we
+  // peek at the same key for the side-effect of triggering sim runs.
+  try {
+    const raw = localStorage.getItem('log-chart:active');
+    const ids = raw ? JSON.parse(raw) : [];
+    return ids
+      .filter((id) => typeof id === 'string' && id.startsWith('endo:'))
+      .map((id) => id.slice('endo:'.length));
+  } catch { return []; }
+});
+
+watch(
+  [activeEndoSignals, chartFixedRange],
+  ([signals, range]) => {
+    if (!signals.length || !range) return;
+    // Pass the Date instances directly so the sim window honors the
+    // user's local timezone end-to-end (the composable converts to ms
+    // before hitting the server). Sending YYYY-MM-DD strings would
+    // shift the boundaries by the user's UTC offset.
+    chartSeries.kickEndoSim({
+      from: range.from,
+      to: range.to,
+      signals,
+    });
+  },
+  { immediate: true },
+);
+
 // Time the food was eaten (HH:MM, local). Always populated when an
 // entry's row is in edit mode; persisted as a full ISO timestamp on
 // save so the simulation pipeline can place the meal at its real
@@ -194,7 +267,173 @@ onMounted(async () => {
     exercisesStore.fetchAll(),
     settingsStore.loaded ? Promise.resolve() : settingsStore.fetchSettings(),
   ]);
+  // Quick-log deep-link handoff. QuickLogMenu pushes /log?action=… or
+  // /log?focus=… to surface a modal or scroll target on land. Run after
+  // stores hydrate so we can resolve compoundKey / metricId references.
+  handleQuickLogDeepLink();
 });
+
+// Quick-log deep-link handlers --------------------------------------------
+//
+// The bottom-nav Log button opens a popover (QuickLogMenu) whose items
+// push us back here with a query flag. We open the matching modal or
+// scroll/focus the section, then strip the flag so a refresh doesn't
+// re-trigger the action.
+const doseModalOpen = ref(false);
+const doseModalCompound = ref(null);
+const doseModalValue = ref('');
+const doseModalSaving = ref(false);
+const doseModalInput = ref(null);
+
+// Today vs. selected-date label for the quick-log modals. QuickLogMenu
+// always navigates with today's date, so practically these modals
+// always write to today — but if the user switches the page date with
+// the modal already open, surface that instead of lying.
+const quickLogDateLabel = computed(() => {
+  const today = localYmd();
+  if (date.value === today) return 'today';
+  const [y, m, d] = String(date.value).split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+});
+
+const metricModalOpen = ref(false);
+const metricModalMetric = ref(null);
+const metricModalValue = ref('');
+const metricModalSaving = ref(false);
+const metricModalInput = ref(null);
+
+function findCompoundByKey(key) {
+  if (!key) return null;
+  return enabledCompounds.value.find((c) => compoundKey(c) === key) || null;
+}
+
+function openDoseModal(compound) {
+  if (!compound) return;
+  doseModalCompound.value = compound;
+  doseModalValue.value = '';
+  doseModalOpen.value = true;
+  nextTick(() => doseModalInput.value?.focus());
+}
+
+async function saveDoseModal() {
+  const c = doseModalCompound.value;
+  const raw = doseModalValue.value;
+  if (!c || raw === '' || raw == null || Number.isNaN(Number(raw))) return;
+  doseModalSaving.value = true;
+  try {
+    const compoundRef =
+      c.source === 'core'
+        ? { coreInterventionKey: c.coreInterventionKey }
+        : { compoundId: c._id };
+    await dosesStore.addDose({
+      ...compoundRef,
+      value: Number(raw),
+      date: date.value,
+    });
+    doseModalOpen.value = false;
+    doseModalCompound.value = null;
+    doseModalValue.value = '';
+  } finally {
+    doseModalSaving.value = false;
+  }
+}
+
+function openMetricModal(metric) {
+  if (!metric) return;
+  metricModalMetric.value = metric;
+  metricModalValue.value = '';
+  metricModalOpen.value = true;
+  nextTick(() => metricModalInput.value?.focus());
+}
+
+async function saveMetricModal() {
+  const m = metricModalMetric.value;
+  const raw = metricModalValue.value;
+  if (!m || raw === '' || raw == null || Number.isNaN(Number(raw))) return;
+  metricModalSaving.value = true;
+  try {
+    const unit = metricDisplayUnit(m);
+    const canonical = toCanonical(Number(raw), unit);
+    await metricsStore.setValue(m._id, canonical);
+    metricModalOpen.value = false;
+    metricModalMetric.value = null;
+    metricModalValue.value = '';
+  } finally {
+    metricModalSaving.value = false;
+  }
+}
+
+function clearDeepLinkQuery() {
+  // Strip action/focus/etc but preserve the active date so the page
+  // doesn't reset to today on a back-dated session.
+  router.replace({ path: '/log', query: { date: date.value } });
+}
+
+async function handleQuickLogDeepLink() {
+  const q = route.query;
+  if (q.action === 'add-exercise') {
+    openExerciseModal();
+    clearDeepLinkQuery();
+    return;
+  }
+  if (q.action === 'add-dose') {
+    const c = findCompoundByKey(q.compoundKey);
+    if (c) openDoseModal(c);
+    clearDeepLinkQuery();
+    return;
+  }
+  if (q.action === 'add-metric') {
+    const m = enabledMetrics.value.find((x) => x._id === q.metricId);
+    if (m) openMetricModal(m);
+    clearDeepLinkQuery();
+    return;
+  }
+  // Hash-based jumps: the router's scrollBehavior already resolves
+  // route.hash → section element scroll on both window (mobile) and
+  // main.content (desktop). We just focus the most useful input inside
+  // the section so a follow-up keypress lands on a logging control.
+  await handleHashFocus();
+}
+
+async function handleHashFocus() {
+  const hash = route.hash;
+  if (!hash) return;
+  await nextTick();
+  const el = document.querySelector(hash);
+  if (!el) return;
+  if (hash === '#symptoms') {
+    const dot = el.querySelector('.dot');
+    dot?.focus({ preventScroll: true });
+  } else if (hash === '#notes') {
+    const ta = el.querySelector('textarea');
+    ta?.focus({ preventScroll: true });
+  } else if (hash === '#water') {
+    const drop = el.querySelector('button:not([disabled])');
+    drop?.focus({ preventScroll: true });
+  }
+  // #photos → scroll only; capture card has its own primary action.
+}
+
+// Re-trigger the deep-link handler whenever query/hash changes after
+// mount — QuickLogMenu can fire while we're already on /log (tap Log →
+// popover → pick item), and that path doesn't re-run onMounted.
+watch(
+  () => [route.query.action, route.query.compoundKey, route.query.metricId],
+  () => {
+    if (route.query.action) handleQuickLogDeepLink();
+  },
+);
+watch(
+  () => route.hash,
+  () => {
+    if (route.hash) handleHashFocus();
+  },
+);
 
 watch(date, async (val) => {
   router.replace({ query: { date: val } });
@@ -504,32 +743,60 @@ async function handleDeleteSymptom(symptom) {
 
 const waterSettings = computed(() => settingsStore.settings?.water || {});
 
-// Cycle banner — visible only when the user has menstrual tracking on,
-// chose to show it on the log page, and has a starting date so we can
-// derive cycle day. The phase label uses a simple cycleDay/cycleLength
-// + lutealPhase split: <ovulation = follicular, ±1 of ovulation =
-// ovulation, >ovulation = luteal.
+// Cycle banner — visible whenever menstrual tracking is on and the user
+// chose to show it on the log page. When `lastPeriodStart` is missing
+// we still render the shell so the user can tap "Period started" to
+// backfill (or mark today). Phase math lives in shared/bio/menstruation
+// so the agent reads the same values when reasoning about hormones.
+import {
+  cycleDayFor,
+  phaseFor,
+  isPeriodStartPlausible,
+} from '../../../shared/bio/menstruation.js';
 const cycleBanner = computed(() => {
   const m = settingsStore.settings?.menstruation;
-  if (!m?.enabled || !m.showOnLog || !m.lastPeriodStart) return null;
-  const start = new Date(m.lastPeriodStart);
-  if (Number.isNaN(start.getTime())) return null;
-  const cl = Math.max(15, Math.min(60, Number(m.cycleLength) || 28));
-  const lp = Math.max(7, Math.min(20, Number(m.lutealPhaseLength) || 14));
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const ms = 86400000;
-  const days = Math.floor((today - start) / ms);
-  if (days < 0) return null;
-  const cycleDay = (days % cl) + 1;
-  const ovulationDay = cl - lp;
-  let phase;
-  if (cycleDay <= 5) phase = 'menstrual';
-  else if (cycleDay < ovulationDay - 1) phase = 'follicular';
-  else if (cycleDay <= ovulationDay + 1) phase = 'ovulation';
-  else phase = 'luteal';
-  return { cycleDay, cycleLength: cl, phase };
+  if (!m?.enabled || m.showOnLog === false) return null;
+  // Cycle math is anchored to the *viewed* log day, not "today" — flipping
+  // through past days needs to show that day's cycleDay/phase. UTC-noon
+  // sidesteps tz boundary off-by-ones in dayDiff.
+  const asOf = new Date(`${date.value}T12:00:00.000Z`);
+  const cycleDay = m.lastPeriodStart ? cycleDayFor(m, asOf) : null;
+  const phase = cycleDay != null
+    ? phaseFor({
+        cycleDay,
+        cycleLength: m.cycleLength,
+        lutealPhaseLength: m.lutealPhaseLength,
+        periodLength: m.periodLength,
+      })
+    : null;
+  const startYmd = m.lastPeriodStart
+    ? new Date(m.lastPeriodStart).toISOString().slice(0, 10)
+    : null;
+  return {
+    cycleDay,
+    cycleLength: Math.max(15, Math.min(60, Number(m.cycleLength) || 28)),
+    phase,
+    hasStart: Boolean(m.lastPeriodStart),
+    isStartDay: startYmd === date.value,
+    plausible: isPeriodStartPlausible(m, asOf),
+  };
 });
+
+// Mark the currently-viewed log date as the start of a new period.
+// Confirms when an existing start would be overwritten — the cycle math
+// downstream (and any Dashboard hormone series) keys off this date, so an
+// accidental reset would shift the user's whole hormonal phase reading.
+async function markPeriodStartedToday() {
+  const m = settingsStore.settings?.menstruation || {};
+  if (m.lastPeriodStart) {
+    const ok = confirm('Replace your existing period start date?');
+    if (!ok) return;
+  }
+  const iso = new Date(`${date.value}T12:00:00.000Z`).toISOString();
+  await settingsStore.patchSettings({
+    menstruation: { ...m, lastPeriodStart: iso },
+  });
+}
 // Mode-aware in/out/net/target strip displayed under the daily nutrition
 // summary. Returns null when there's no target to compare against (so
 // the strip doesn't render a half-formed line). Modes:
@@ -539,6 +806,8 @@ const cycleBanner = computed(() => {
 const energyStrip = computed(() => {
   const t = settingsStore.settings?.targets;
   if (!t?.calories) return null;
+  const ex = settingsStore.settings?.exercise;
+  if (!ex?.enabled || ex.showOnLog === false) return null;
   const consumed = Math.round(foodlogStore.summary?.perServing?.calories || 0);
   const burned = exerciseEntriesToday.value.reduce(
     (sum, e) => sum + (e.caloriesBurned || 0),
@@ -595,9 +864,69 @@ const exerciseForm = reactive({
   notes: '',
 });
 
-// Extract local-time HH:MM from a stored ISO timestamp. Used when
-// editing an entry so the picker shows the time the user actually
-// started the workout.
+// Activity typeahead state. exerciseSearchQuery drives the debounced
+// filter; filteredActivityResults runs against the in-memory catalog.
+// Recents come from the store via exercisesStore.recents.
+const exerciseSearchQuery = ref('');
+const filteredActivityResults = computed(() =>
+  exercisesStore.search(exerciseSearchQuery.value),
+);
+const pickedActivityRow = computed(() =>
+  exerciseForm.exerciseId ? exercisesStore.getById(exerciseForm.exerciseId) : null,
+);
+function clearPickedActivity() {
+  exerciseForm.exerciseId = null;
+  exerciseForm.label = '';
+}
+function exerciseClassLabel(cls) {
+  return ({
+    exercise_cardio: 'Cardio',
+    exercise_resistance: 'Resistance',
+    exercise_hiit: 'HIIT',
+    exercise_recovery: 'Recovery',
+  })[cls] || '';
+}
+
+// Today's calorie target after applying the energy-mode policy.
+// Delegates to the shared reducer so the agent + server reasoning
+// stay in lockstep with the UI's effective number.
+const effectiveCalTargetToday = computed(() => {
+  const baseTarget = Number(foodlogStore.summary?.targets?.calories) || 0;
+  const burn = exerciseEntriesToday.value.reduce(
+    (sum, e) => sum + (Number(e.caloriesBurned) || 0),
+    0,
+  );
+  return effectiveDailyCalTarget({
+    baseTarget,
+    burnedKcal: burn,
+    energyMode: settingsStore.settings?.exercise?.energyMode || 'baseline',
+  });
+});
+
+// Live MET-based kcal preview. Same shared computeKcal the server
+// runs on save, so what the user sees in the modal is what gets
+// stored once they hit Log it.
+const previewKcal = computed(() => {
+  const dur = Number(exerciseForm.durationMin);
+  if (!Number.isFinite(dur) || dur < 1) return null;
+  const exercise = exerciseForm.exerciseId
+    ? exercisesStore.getById(exerciseForm.exerciseId)
+    : null;
+  const metValue = Number(exercise?.metValue) || defaultMetForClass(exerciseForm.engineClass);
+  const weightLbs = Number(settingsStore.settings?.currentWeightLbs) > 0
+    ? Number(settingsStore.settings.currentWeightLbs)
+    : 165;
+  return sharedComputeKcal({
+    metValue,
+    weightLbs,
+    durationMin: dur,
+    intensity: exerciseForm.intensity,
+  });
+});
+
+// Extract local-time HH:MM from a stored ISO timestamp. Used by the
+// modal's <input type="time"> which always wants 24h. Display rows
+// use formatLocalTime12h for the user-facing read-out.
 function isoToLocalHHMM(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -611,13 +940,58 @@ function nowLocalHHMM() {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+// Display-only 12-hour clock with am/pm suffix, no leading zero on
+// the hour. "7:41 PM" rather than "19:41".
+function formatLocalTime12h(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+// Friendly duration formatter. Anything over 2 hours collapses to
+// "Xh" or "Xh Ym"; under that we keep minutes — surfacing a 90-minute
+// hike as "1h 30m" obscures gym-set granularity.
+function formatDuration(min) {
+  const n = Math.max(0, Math.round(Number(min) || 0));
+  if (n < 120) return `${n} min`;
+  const hours = Math.floor(n / 60);
+  const rem = n % 60;
+  return rem === 0 ? `${hours}h` : `${hours}h ${rem}m`;
+}
+
+// Resolve the catalog row for an ExerciseLog entry to surface its
+// icon — falls back to a class-based emoji for free-form / legacy
+// rows whose exerciseId is null.
+function iconForEntry(entry) {
+  if (entry.exerciseId) {
+    const ex = exercisesStore.getById(entry.exerciseId);
+    if (ex?.icon) return ex.icon;
+  }
+  return ({
+    exercise_cardio: '🏃',
+    exercise_resistance: '🏋️',
+    exercise_hiit: '🔥',
+    exercise_recovery: '🧘',
+  })[entry.engineClass] || '·';
+}
+
 function openExerciseModal(entry = null) {
   exerciseEditing.value = entry;
+  exerciseSearchQuery.value = '';
+  // Refresh the recents list each time the modal opens so newly logged
+  // entries surface near the top on subsequent opens.
+  exercisesStore.fetchRecents().catch(() => {});
   if (entry) {
-    // Infer mode from populated fields. Detailed wins if any set/rep/
-    // weight/distance is set; activity if exerciseId; quick otherwise.
+    // Infer mode from populated fields. Custom (detailed) wins if any
+    // set/rep/weight/distance is set; otherwise default to activity
+    // (handles both catalog-picked rows and legacy quick-mode entries).
     const hasDetail = entry.sets || entry.reps || entry.weightKg || entry.distanceKm;
-    exerciseMode.value = hasDetail ? 'detailed' : entry.exerciseId ? 'activity' : 'quick';
+    exerciseMode.value = hasDetail ? 'detailed' : 'activity';
     Object.assign(exerciseForm, {
       exerciseId: entry.exerciseId || null,
       label: entry.label || '',
@@ -633,7 +1007,7 @@ function openExerciseModal(entry = null) {
       notes: entry.notes || '',
     });
   } else {
-    exerciseMode.value = 'quick';
+    exerciseMode.value = 'activity';
     Object.assign(exerciseForm, {
       exerciseId: null,
       label: '',
@@ -662,36 +1036,46 @@ function pickExerciseFromCatalog(ex) {
   exerciseForm.caloriesBurned = null;
 }
 
-function pickQuickClass(cls) {
-  exerciseForm.engineClass = cls;
-  exerciseForm.exerciseId = null;
-  // Auto-label so the row reads sensibly without forcing a text entry.
-  exerciseForm.label = ({
-    exercise_cardio: 'Cardio',
-    exercise_resistance: 'Resistance',
-    exercise_hiit: 'HIIT',
-    exercise_recovery: 'Recovery',
-  })[cls] || 'Exercise';
-}
-
 async function saveExerciseEntry() {
-  if (!exerciseForm.label?.trim()) return;
+  // Defensive fallback — derive a label from the engine class so an
+  // empty label never silently no-ops the save (Quick mode has no
+  // label input, and the user may not have re-tapped a class button).
+  if (!exerciseForm.label?.trim()) {
+    exerciseForm.label = ({
+      exercise_cardio: 'Cardio',
+      exercise_resistance: 'Resistance',
+      exercise_hiit: 'HIIT',
+      exercise_recovery: 'Recovery',
+    })[exerciseForm.engineClass] || 'Exercise';
+  }
   // Combine the log page's date (YYYY-MM-DD) with the modal's HH:MM.
   // `new Date('2026-01-15T08:30')` parses as local time — exactly what
   // the user means when they pick "08:30" for a Jan 15 workout.
   const time = exerciseForm.startTime || '12:00';
   const localISO = new Date(`${date.value}T${time}:00`).toISOString();
+
+  // Normalize optional numeric fields. Vue's `v-model.number` returns
+  // the raw empty string when an input is cleared (parseFloat("") is
+  // NaN, which the directive declines to coerce). Sending "" to the
+  // server would set the schema field to 0, not trigger the auto
+  // recompute path. Coerce empty/NaN/null → null explicitly.
+  const optNum = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
   const payload = {
     exerciseId: exerciseForm.exerciseId,
     label: exerciseForm.label.trim(),
     engineClass: exerciseForm.engineClass,
     durationMin: Number(exerciseForm.durationMin),
     intensity: Number(exerciseForm.intensity),
-    caloriesBurned: exerciseForm.caloriesBurned,
-    distanceKm: exerciseForm.distanceKm,
-    sets: exerciseForm.sets,
-    reps: exerciseForm.reps,
-    weightKg: exerciseForm.weightKg,
+    caloriesBurned: optNum(exerciseForm.caloriesBurned),
+    distanceKm: optNum(exerciseForm.distanceKm),
+    sets: optNum(exerciseForm.sets),
+    reps: optNum(exerciseForm.reps),
+    weightKg: optNum(exerciseForm.weightKg),
     notes: exerciseForm.notes,
     date: localISO,
   };
@@ -709,6 +1093,9 @@ async function deleteExerciseEntry(entry) {
 }
 
 const waterEnabled = computed(() => Boolean(waterSettings.value.enabled));
+const journalEnabled = computed(
+  () => settingsStore.settings?.journal?.enabled !== false,
+);
 const waterUnit = computed(() => waterSettings.value.unit || 'fl_oz');
 const waterServingMl = computed(() => Number(waterSettings.value.servingMl) || 250);
 const waterTargetMl = computed(() => Number(waterSettings.value.dailyTargetMl) || 2000);
@@ -877,8 +1264,23 @@ function onNoteBlur() {
   <div class="log-page" data-testid="log-page">
     <FastingBanner surface="log" />
     <div v-if="cycleBanner" class="cycle-banner">
-      <span class="cycle-banner-day">Day {{ cycleBanner.cycleDay }} / {{ cycleBanner.cycleLength }}</span>
-      <span class="cycle-banner-phase">{{ cycleBanner.phase }}</span>
+      <span v-if="cycleBanner.hasStart" class="cycle-banner-day">
+        Day {{ cycleBanner.cycleDay }} / {{ cycleBanner.cycleLength }}
+      </span>
+      <span v-else class="cycle-banner-day cycle-banner-empty">
+        No period start logged
+      </span>
+      <span v-if="cycleBanner.phase" class="cycle-banner-phase">
+        {{ cycleBanner.phase }}
+      </span>
+      <button
+        v-if="cycleBanner.plausible"
+        type="button"
+        class="cycle-banner-btn"
+        @click="markPeriodStartedToday"
+      >
+        Period started {{ date === localYmd() ? 'today' : 'this day' }}
+      </button>
     </div>
     <DateSelector v-model="date" />
 
@@ -889,7 +1291,8 @@ function onNoteBlur() {
       <div class="water-head">
         <h3 class="water-title">Water</h3>
         <span class="water-total" :class="{ hit: waterGoalHit }">
-          {{ waterTotalDisplay }} / {{ waterTargetDisplay }} {{ waterUnitLabel }}
+          {{ waterTotalDisplay }} / {{ waterTargetDisplay }}
+          {{ waterUnitLabel }}
         </span>
       </div>
       <div class="water-drops">
@@ -913,235 +1316,6 @@ function onNoteBlur() {
     </div>
 
     <!-- =========================================================== -->
-    <!-- EXERCISE (conditional on settings.exercise.enabled+showOnLog) -->
-    <!-- =========================================================== -->
-    <div v-if="exerciseEnabled" id="exercise" class="meal-card compact exercise-card">
-      <div class="exercise-head">
-        <h3 class="exercise-title">Exercise</h3>
-        <span class="exercise-total">{{ exerciseTotalBurn }} kcal burned</span>
-      </div>
-      <div v-if="exerciseEntriesToday.length" class="exercise-list">
-        <button
-          v-for="entry in exerciseEntriesToday"
-          :key="entry._id"
-          type="button"
-          class="exercise-row"
-          @click="openExerciseModal(entry)"
-        >
-          <span class="ex-row-time">{{ isoToLocalHHMM(entry.date) }}</span>
-          <span class="ex-row-label">{{ entry.label }}</span>
-          <span class="ex-row-detail">
-            {{ entry.durationMin }}min · {{ Number(entry.intensity).toFixed(1) }}×
-          </span>
-          <span class="ex-row-burn">{{ entry.caloriesBurned }} kcal</span>
-          <button
-            type="button"
-            class="ex-row-del"
-            aria-label="Delete"
-            @click.stop="deleteExerciseEntry(entry)"
-          >×</button>
-        </button>
-      </div>
-      <button type="button" class="exercise-add" @click="openExerciseModal()">
-        + Add exercise
-      </button>
-    </div>
-
-    <!-- Exercise modal — quick / activity / detailed input modes -->
-    <div
-      v-if="exerciseModalOpen"
-      class="modal-backdrop"
-      @click.self="exerciseModalOpen = false"
-    >
-      <div class="modal exercise-modal">
-        <h3>{{ exerciseEditing ? 'Edit exercise' : 'Log exercise' }}</h3>
-
-        <div class="mode-tabs">
-          <button
-            type="button"
-            class="mode-tab"
-            :class="{ active: exerciseMode === 'quick' }"
-            @click="exerciseMode = 'quick'"
-          >Quick</button>
-          <button
-            type="button"
-            class="mode-tab"
-            :class="{ active: exerciseMode === 'activity' }"
-            @click="exerciseMode = 'activity'"
-          >Activity</button>
-          <button
-            type="button"
-            class="mode-tab"
-            :class="{ active: exerciseMode === 'detailed' }"
-            @click="exerciseMode = 'detailed'"
-          >Detailed</button>
-        </div>
-
-        <!-- Quick mode: 3 buttons → engine class, duration + intensity -->
-        <template v-if="exerciseMode === 'quick'">
-          <div class="quick-class-row">
-            <button
-              type="button"
-              class="class-btn"
-              :class="{ active: exerciseForm.engineClass === 'exercise_cardio' }"
-              @click="pickQuickClass('exercise_cardio')"
-            >🏃 Cardio</button>
-            <button
-              type="button"
-              class="class-btn"
-              :class="{ active: exerciseForm.engineClass === 'exercise_resistance' }"
-              @click="pickQuickClass('exercise_resistance')"
-            >🏋️ Resistance</button>
-            <button
-              type="button"
-              class="class-btn"
-              :class="{ active: exerciseForm.engineClass === 'exercise_hiit' }"
-              @click="pickQuickClass('exercise_hiit')"
-            >🔥 HIIT</button>
-            <button
-              type="button"
-              class="class-btn"
-              :class="{ active: exerciseForm.engineClass === 'exercise_recovery' }"
-              @click="pickQuickClass('exercise_recovery')"
-            >🧘 Recovery</button>
-          </div>
-        </template>
-
-        <!-- Activity mode: pick from catalog -->
-        <template v-if="exerciseMode === 'activity'">
-          <label class="form-row">
-            <span>Activity</span>
-            <select
-              :value="exerciseForm.exerciseId || ''"
-              @change="(e) => {
-                const ex = exercisesStore.getById(e.target.value);
-                if (ex) pickExerciseFromCatalog(ex);
-              }"
-            >
-              <option value="">— pick activity —</option>
-              <option
-                v-for="ex in exercisesStore.enabled"
-                :key="ex._id"
-                :value="ex._id"
-              >
-                {{ ex.icon || '·' }} {{ ex.name }}
-              </option>
-            </select>
-          </label>
-        </template>
-
-        <!-- Detailed mode: full form -->
-        <template v-if="exerciseMode === 'detailed'">
-          <label class="form-row">
-            <span>Activity (optional)</span>
-            <select
-              :value="exerciseForm.exerciseId || ''"
-              @change="(e) => {
-                const ex = exercisesStore.getById(e.target.value);
-                if (ex) pickExerciseFromCatalog(ex);
-                else { exerciseForm.exerciseId = null; }
-              }"
-            >
-              <option value="">— free-form —</option>
-              <option
-                v-for="ex in exercisesStore.enabled"
-                :key="ex._id"
-                :value="ex._id"
-              >
-                {{ ex.icon || '·' }} {{ ex.name }}
-              </option>
-            </select>
-          </label>
-          <label class="form-row">
-            <span>Label</span>
-            <input v-model="exerciseForm.label" type="text" placeholder="e.g. Morning run" />
-          </label>
-          <div class="form-grid-2">
-            <label class="form-row">
-              <span>Class</span>
-              <select v-model="exerciseForm.engineClass">
-                <option value="exercise_cardio">Cardio</option>
-                <option value="exercise_resistance">Resistance</option>
-                <option value="exercise_hiit">HIIT</option>
-                <option value="exercise_recovery">Recovery</option>
-              </select>
-            </label>
-            <label class="form-row">
-              <span>Distance (km)</span>
-              <input v-model.number="exerciseForm.distanceKm" type="number" min="0" step="0.1" />
-            </label>
-          </div>
-          <div class="form-grid-3">
-            <label class="form-row">
-              <span>Sets</span>
-              <input v-model.number="exerciseForm.sets" type="number" min="0" step="1" />
-            </label>
-            <label class="form-row">
-              <span>Reps</span>
-              <input v-model.number="exerciseForm.reps" type="number" min="0" step="1" />
-            </label>
-            <label class="form-row">
-              <span>Weight (kg)</span>
-              <input v-model.number="exerciseForm.weightKg" type="number" min="0" step="0.5" />
-            </label>
-          </div>
-          <label class="form-row">
-            <span>Notes</span>
-            <input v-model="exerciseForm.notes" type="text" placeholder="" />
-          </label>
-        </template>
-
-        <!-- Always present: started-at, duration, intensity, override burn -->
-        <div class="form-grid-3">
-          <label class="form-row">
-            <span>Started at</span>
-            <input v-model="exerciseForm.startTime" type="time" />
-          </label>
-          <label class="form-row">
-            <span>Duration (min)</span>
-            <input
-              v-model.number="exerciseForm.durationMin"
-              type="number"
-              min="1"
-              step="5"
-            />
-          </label>
-          <label class="form-row">
-            <span>Intensity (0.5–1.5)</span>
-            <input
-              v-model.number="exerciseForm.intensity"
-              type="number"
-              min="0.5"
-              max="1.5"
-              step="0.1"
-            />
-          </label>
-        </div>
-
-        <label class="form-row">
-          <span>
-            Calories burned
-            <span class="form-hint">(blank → auto from MET × weight × time)</span>
-          </span>
-          <input
-            v-model.number="exerciseForm.caloriesBurned"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="auto"
-          />
-        </label>
-
-        <div class="modal-actions">
-          <button type="button" class="btn-cancel" @click="exerciseModalOpen = false">Cancel</button>
-          <button type="button" class="btn-primary" @click="saveExerciseEntry">
-            {{ exerciseEditing ? 'Save' : 'Log it' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- =========================================================== -->
     <!-- TOP ROW: Nutrition (half) + stacked Weight/Dose (half)       -->
     <!-- =========================================================== -->
     <div
@@ -1150,12 +1324,23 @@ function onNoteBlur() {
       class="meal-card nutrition-card"
     >
       <div class="meal-header"><h3>Nutrition</h3></div>
-      <DailySummary :summary="foodlogStore.summary" />
+      <!-- effectiveCalTarget: in `earn` energy mode, today's burn
+           extends today's calorie target. Passing the adjusted number
+           down keeps the MacroBar + suggestion copy in sync with the
+           weekly budget math (which already bumps via useWeeklyBudget). -->
+      <DailySummary
+        :summary="foodlogStore.summary"
+        :effective-cal-target="effectiveCalTargetToday"
+      />
 
       <!-- Mode-aware energy strip. Shows in/out/net/target per the
            user's exercise.energyMode. Hidden mode collapses to a
            plain consumed/target line. See docs/exercise-energy-modes.md. -->
-      <div v-if="energyStrip" class="energy-strip" :class="`mode-${energyStrip.mode}`">
+      <div
+        v-if="energyStrip"
+        class="energy-strip"
+        :class="`mode-${energyStrip.mode}`"
+      >
         <template v-if="energyStrip.mode === 'hidden'">
           <span class="es-num">{{ energyStrip.consumedFmt }}</span>
           <span class="es-sep">·</span>
@@ -1172,7 +1357,12 @@ function onNoteBlur() {
           <span class="es-lbl">net</span>
           <span class="es-spacer" />
           <span class="es-tgt">
-            target {{ energyStrip.targetFmt }}<span
+            target
+            {{ energyStrip.targetFmt
+
+
+
+            }}<span
               v-if="energyStrip.mode === 'earn' && energyStrip.burned > 0"
               class="es-tgt-detail"
             >
@@ -1246,11 +1436,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- METRICS (user-configured biometrics)                          -->
     <!-- =========================================================== -->
-    <div
-      v-if="enabledMetrics.length"
-      id="metrics"
-      class="meal-card compact"
-    >
+    <div v-if="enabledMetrics.length" id="metrics" class="meal-card compact">
       <div class="body-metrics">
         <div
           v-for="metric in enabledMetrics"
@@ -1291,7 +1477,9 @@ function onNoteBlur() {
               {{ metricDisplayValue(metric) }}
               {{ unitLabel(metricDisplayUnit(metric)) }}
             </span>
-            <button class="delete-btn" @click="handleDeleteMetric(metric)">x</button>
+            <button class="delete-btn" @click="handleDeleteMetric(metric)">
+              x
+            </button>
           </div>
         </div>
       </div>
@@ -1359,7 +1547,7 @@ function onNoteBlur() {
     </div>
 
     <!-- =========================================================== -->
-    <!-- FOOD LOG                                                     -->
+    <!--  LOG                                                     -->
     <!-- =========================================================== -->
     <div id="food" class="meal-card food-card">
       <div class="meal-header">
@@ -1434,6 +1622,10 @@ function onNoteBlur() {
                       class="entry-name"
                       :class="{ planned: row.entry.consumed === false }"
                       >{{ row.entry.foodItemId?.name
+
+
+
+
 
 
 
@@ -1574,19 +1766,23 @@ function onNoteBlur() {
                   >
                     <td class="col-check"></td>
                     <td class="col-name">
-                      <span
-                        class="caret"
-                        >{{ isCollapsed(meal.key, row.mealId) ? '▸' : '▾' }}</span
-                      >
-                      <span
-                        v-if="row.mealEmoji"
-                        class="entry-emoji"
-                        >{{ row.mealEmoji }}</span
-                      >
-                      <span class="group-name">{{ row.mealName }}</span>
-                      <span class="group-count"
-                        >{{ row.entries.length }}
-                        item{{ row.entries.length === 1 ? '' : 's' }}</span
+                      <span class="row-prefix">
+                        <span
+                          class="caret"
+                          >{{ isCollapsed(meal.key, row.mealId) ? '▸' : '▾' }}</span
+                        >
+                        <span
+                          v-if="row.mealEmoji"
+                          class="entry-emoji"
+                          >{{ row.mealEmoji }}</span
+                        >
+                      </span>
+                      <span class="group-name"
+                        >{{ row.mealName }}
+                        <span class="group-count"
+                          >{{ row.entries.length }}
+                          item{{ row.entries.length === 1 ? '' : 's' }}</span
+                        ></span
                       >
                     </td>
                     <td class="col-srv"></td>
@@ -1649,26 +1845,21 @@ function onNoteBlur() {
                       </td>
                       <td class="col-name">
                         <span
-                          class="entry-name indent"
-                          :class="{ planned: child.consumed === false }"
+                          v-if="child.foodItemId?.emoji"
+                          class="entry-emoji"
+                          >{{ child.foodItemId.emoji }}</span
                         >
-                          <span
-                            v-if="child.foodItemId?.emoji"
-                            class="entry-emoji"
-                            >{{ child.foodItemId.emoji }}</span
-                          >
-                          {{ child.foodItemId?.name
-
-
-
-
+                        <span
+                          class="entry-name"
+                          :class="{ planned: child.consumed === false }"
+                          >{{ child.foodItemId?.name
                           }}<span
                             v-if="child.consumed === false"
                             class="planned-tag"
                           >
                             (planned)</span
-                          >
-                        </span>
+                          ></span
+                        >
                       </td>
                       <td class="col-srv">
                         <template v-if="editingId === child._id">
@@ -1763,6 +1954,319 @@ function onNoteBlur() {
         >
           Copy day →
         </button>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <!-- EXERCISE (conditional on settings.exercise.enabled+showOnLog) -->
+    <!-- =========================================================== -->
+    <div
+      v-if="exerciseEnabled"
+      id="exercise"
+      class="meal-card compact exercise-card"
+    >
+      <div class="exercise-head">
+        <h3 class="exercise-title">Exercise</h3>
+        <span class="exercise-total"
+          >{{ Number(exerciseTotalBurn).toLocaleString() }} kcal burned</span
+        >
+      </div>
+      <div v-if="exerciseEntriesToday.length" class="exercise-list">
+        <button
+          v-for="entry in exerciseEntriesToday"
+          :key="entry._id"
+          type="button"
+          class="exercise-row"
+          @click="openExerciseModal(entry)"
+        >
+          <span class="ex-row-time">{{ formatLocalTime12h(entry.date) }}</span>
+          <span class="ex-row-icon">{{ iconForEntry(entry) }}</span>
+          <span class="ex-row-label">{{ entry.label }}</span>
+          <span
+            class="ex-row-class"
+            >{{ exerciseClassLabel(entry.engineClass) }}</span
+          >
+          <span class="ex-row-detail">
+            {{ formatDuration(entry.durationMin) }} ·
+            {{ Number(entry.intensity).toFixed(1) }}×
+          </span>
+          <span class="ex-row-burn"
+            >{{ Number(entry.caloriesBurned || 0).toLocaleString() }} kcal</span
+          >
+          <button
+            type="button"
+            class="ex-row-del"
+            aria-label="Delete"
+            @click.stop="deleteExerciseEntry(entry)"
+          >
+            ×
+          </button>
+        </button>
+      </div>
+      <button type="button" class="exercise-add" @click="openExerciseModal()">
+        + Add exercise
+      </button>
+    </div>
+
+    <!-- Exercise modal — quick / activity / detailed input modes -->
+    <div
+      v-if="exerciseModalOpen"
+      class="modal-backdrop"
+      @click.self="exerciseModalOpen = false"
+    >
+      <div class="modal exercise-modal">
+        <h3>{{ exerciseEditing ? 'Edit exercise' : 'Log exercise' }}</h3>
+
+        <div class="mode-tabs">
+          <button
+            type="button"
+            class="mode-tab"
+            :class="{ active: exerciseMode === 'activity' }"
+            @click="exerciseMode = 'activity'"
+          >
+            Activity
+          </button>
+          <button
+            type="button"
+            class="mode-tab"
+            :class="{ active: exerciseMode === 'detailed' }"
+            @click="exerciseMode = 'detailed'"
+          >
+            Custom
+          </button>
+        </div>
+
+        <!-- Activity mode: typeahead over the full catalog. Recents
+             show by default; typing filters case-insensitively with
+             prefix matches ranked above substring matches. -->
+        <template v-if="exerciseMode === 'activity'">
+          <label class="form-row activity-search-row">
+            <span>Activity</span>
+            <input
+              v-model="exerciseSearchQuery"
+              type="text"
+              placeholder="Search activities…"
+              autocomplete="off"
+            />
+          </label>
+          <div v-if="exerciseForm.exerciseId" class="picked-activity">
+            <span
+              class="picked-icon"
+              >{{ pickedActivityRow?.icon || '·' }}</span
+            >
+            <span
+              class="picked-name"
+              >{{ pickedActivityRow?.name || exerciseForm.label }}</span
+            >
+            <span class="picked-meta">
+              MET {{ pickedActivityRow?.metValue || '—' }}
+            </span>
+            <button
+              type="button"
+              class="picked-clear"
+              title="Clear selection"
+              @click="clearPickedActivity"
+            >
+              ×
+            </button>
+          </div>
+          <div
+            v-else-if="!exerciseSearchQuery && exercisesStore.recents.length"
+            class="activity-section"
+          >
+            <div class="activity-section-head">Recent</div>
+            <button
+              v-for="ex in exercisesStore.recents"
+              :key="ex._id"
+              type="button"
+              class="activity-row"
+              @click="pickExerciseFromCatalog(ex)"
+            >
+              <span class="activity-icon">{{ ex.icon || '·' }}</span>
+              <span class="activity-name">{{ ex.name }}</span>
+              <span
+                class="activity-meta"
+                >{{ exerciseClassLabel(ex.engineClass) }}</span
+              >
+            </button>
+          </div>
+          <div v-if="!exerciseForm.exerciseId" class="activity-section">
+            <div class="activity-section-head">
+              {{ exerciseSearchQuery ? 'Matches' : 'All activities' }}
+              <span
+                v-if="filteredActivityResults.length"
+                class="activity-count"
+              >
+                {{ filteredActivityResults.length }}
+              </span>
+            </div>
+            <button
+              v-for="ex in filteredActivityResults"
+              :key="ex._id"
+              type="button"
+              class="activity-row"
+              @click="pickExerciseFromCatalog(ex)"
+            >
+              <span class="activity-icon">{{ ex.icon || '·' }}</span>
+              <span class="activity-name">{{ ex.name }}</span>
+              <span
+                class="activity-meta"
+                >{{ exerciseClassLabel(ex.engineClass) }}</span
+              >
+            </button>
+            <p v-if="!filteredActivityResults.length" class="activity-empty">
+              No matches. Switch to "Custom" to log a free-form workout.
+            </p>
+          </div>
+        </template>
+
+        <!-- Detailed mode: full form -->
+        <template v-if="exerciseMode === 'detailed'">
+          <label class="form-row">
+            <span>Activity (optional)</span>
+            <select
+              :value="exerciseForm.exerciseId || ''"
+              @change="(e) => {
+                const ex = exercisesStore.getById(e.target.value);
+                if (ex) pickExerciseFromCatalog(ex);
+                else { exerciseForm.exerciseId = null; }
+              }"
+            >
+              <option value="">— free-form —</option>
+              <option
+                v-for="ex in exercisesStore.enabled"
+                :key="ex._id"
+                :value="ex._id"
+              >
+                {{ ex.icon || '·' }} {{ ex.name }}
+              </option>
+            </select>
+          </label>
+          <label class="form-row">
+            <span>Label</span>
+            <input
+              v-model="exerciseForm.label"
+              type="text"
+              placeholder="e.g. Morning run"
+            />
+          </label>
+          <div class="form-grid-2">
+            <label class="form-row">
+              <span>Class</span>
+              <select v-model="exerciseForm.engineClass">
+                <option value="exercise_cardio">Cardio</option>
+                <option value="exercise_resistance">Resistance</option>
+                <option value="exercise_hiit">HIIT</option>
+                <option value="exercise_recovery">Recovery</option>
+              </select>
+            </label>
+            <label class="form-row">
+              <span>Distance (km)</span>
+              <input
+                v-model.number="exerciseForm.distanceKm"
+                type="number"
+                min="0"
+                step="0.1"
+              />
+            </label>
+          </div>
+          <div class="form-grid-3">
+            <label class="form-row">
+              <span>Sets</span>
+              <input
+                v-model.number="exerciseForm.sets"
+                type="number"
+                min="0"
+                step="1"
+              />
+            </label>
+            <label class="form-row">
+              <span>Reps</span>
+              <input
+                v-model.number="exerciseForm.reps"
+                type="number"
+                min="0"
+                step="1"
+              />
+            </label>
+            <label class="form-row">
+              <span>Weight (kg)</span>
+              <input
+                v-model.number="exerciseForm.weightKg"
+                type="number"
+                min="0"
+                step="0.5"
+              />
+            </label>
+          </div>
+          <label class="form-row">
+            <span>Notes</span>
+            <input v-model="exerciseForm.notes" type="text" placeholder="" />
+          </label>
+        </template>
+
+        <!-- Always present: started-at, duration, intensity, override burn -->
+        <div class="form-grid-3">
+          <label class="form-row">
+            <span>Started at</span>
+            <input v-model="exerciseForm.startTime" type="time" />
+          </label>
+          <label class="form-row">
+            <span>Duration (min)</span>
+            <input
+              v-model.number="exerciseForm.durationMin"
+              type="number"
+              min="1"
+              step="5"
+            />
+          </label>
+          <label class="form-row">
+            <span>Intensity (0.5–1.5)</span>
+            <input
+              v-model.number="exerciseForm.intensity"
+              type="number"
+              min="0.5"
+              max="1.5"
+              step="0.1"
+            />
+          </label>
+        </div>
+
+        <label class="form-row">
+          <span>
+            Calories burned
+            <span
+              v-if="exerciseForm.caloriesBurned == null && previewKcal != null"
+              class="form-hint"
+            >
+              ≈ {{ previewKcal.toLocaleString() }} kcal · MET × weight × time ×
+              intensity
+            </span>
+            <span v-else class="form-hint"
+              >(blank → auto from MET × weight × time)</span
+            >
+          </span>
+          <input
+            v-model.number="exerciseForm.caloriesBurned"
+            type="number"
+            min="0"
+            step="1"
+            :placeholder="previewKcal != null ? String(previewKcal) : 'auto'"
+          />
+        </label>
+
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-cancel"
+            @click="exerciseModalOpen = false"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn-primary" @click="saveExerciseEntry">
+            {{ exerciseEditing ? 'Save' : 'Log it' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1874,7 +2378,7 @@ function onNoteBlur() {
     <!-- =========================================================== -->
     <!-- DAY NOTE                                                     -->
     <!-- =========================================================== -->
-    <div id="notes" class="meal-card">
+    <div v-if="journalEnabled" id="notes" class="meal-card">
       <div class="meal-header">
         <h3>Journal Notes</h3>
         <span v-if="notesStore.saving" class="card-sub">saving...</span>
@@ -1899,6 +2403,22 @@ function onNoteBlur() {
       <PhotoCaptureCard :date="date" />
     </div>
 
+    <!-- =========================================================== -->
+    <!-- CHART (24h, multi-series) — anchored at the bottom so the    -->
+    <!-- log's event-entry surfaces stay above the fold.              -->
+    <!-- =========================================================== -->
+    <div class="meal-card chart-card">
+      <SignalChart
+        :series-by-category="chartSeries.seriesByCategory.value"
+        :get-data-points="chartSeries.getDataPoints"
+        :default-active="[]"
+        :fixed-range="chartFixedRange"
+        storage-key="log-chart"
+        :loading="chartSeries.endoSim.busy.value && activeEndoSignals.length > 0"
+        empty-text="Add a series to see how it moved through this day."
+      />
+    </div>
+
     <DatePickerModal
       :open="pickerOpen"
       :title="pickerTitle"
@@ -1914,6 +2434,104 @@ function onNoteBlur() {
       @saved="handleEditSaved"
       @close="editModalOpen = false"
     />
+
+    <!-- Quick-log dose modal — deep-linked from QuickLogMenu. The inline
+         compounds card stays as the primary surface; this modal exists so
+         the bottom-nav popover can land users on a focused single-input
+         prompt with no extra taps. -->
+    <div
+      v-if="doseModalOpen"
+      class="modal-backdrop"
+      @click.self="doseModalOpen = false"
+    >
+      <div class="modal quick-log-modal">
+        <h3>
+          Log {{ doseModalCompound?.name }}
+          <span
+            v-if="doseModalCompound?.doseUnit"
+            class="quick-log-unit-hint"
+            >({{ doseModalCompound.doseUnit }})</span
+          >
+          <span class="quick-log-date">{{ quickLogDateLabel }}</span>
+        </h3>
+        <form class="quick-log-form" @submit.prevent="saveDoseModal">
+          <input
+            ref="doseModalInput"
+            v-model="doseModalValue"
+            type="number"
+            step="0.25"
+            inputmode="decimal"
+            :placeholder="doseModalCompound?.doseUnit || 'Dose'"
+            required
+            class="quick-log-input"
+          />
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-cancel"
+              @click="doseModalOpen = false"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              :disabled="doseModalSaving || !doseModalValue"
+            >
+              {{ doseModalSaving ? 'Saving…' : 'Log it' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Quick-log measurement modal — same shape as the dose modal, with
+         the metric's display unit driving placeholder + canonical convert. -->
+    <div
+      v-if="metricModalOpen"
+      class="modal-backdrop"
+      @click.self="metricModalOpen = false"
+    >
+      <div class="modal quick-log-modal">
+        <h3>
+          Log {{ metricModalMetric?.name }}
+          <span
+            v-if="metricModalMetric"
+            class="quick-log-unit-hint"
+            >({{ unitLabel(metricDisplayUnit(metricModalMetric)) || metricModalMetric.dimension }})</span
+          >
+          <span class="quick-log-date">{{ quickLogDateLabel }}</span>
+        </h3>
+        <form class="quick-log-form" @submit.prevent="saveMetricModal">
+          <input
+            ref="metricModalInput"
+            v-model="metricModalValue"
+            type="number"
+            step="0.1"
+            inputmode="decimal"
+            :placeholder="unitLabel(metricDisplayUnit(metricModalMetric)) || metricModalMetric?.dimension || ''"
+            required
+            class="quick-log-input"
+          />
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-cancel"
+              @click="metricModalOpen = false"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              :disabled="metricModalSaving || !metricModalValue"
+            >
+              {{ metricModalSaving ? 'Saving…' : 'Log it' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1986,6 +2604,7 @@ function onNoteBlur() {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 1em;
   padding: var(--space-2) var(--space-4);
   margin-bottom: var(--space-3);
   background: var(--surface);
@@ -2002,6 +2621,29 @@ function onNoteBlur() {
   letter-spacing: var(--tracking-wider);
   color: var(--text-tertiary);
   font-weight: var(--font-weight-bold);
+}
+.cycle-banner-empty {
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-style: italic;
+}
+.cycle-banner-btn {
+  margin-left: auto;
+  padding: 0.25rem 0.6rem;
+  background: var(--bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.cycle-banner-btn:hover {
+  background: var(--surface-raised);
+  color: var(--text);
 }
 .water-card { padding: var(--space-3) var(--space-5); }
 
@@ -2034,9 +2676,9 @@ function onNoteBlur() {
 }
 .exercise-row {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
+  grid-template-columns: auto auto 1fr auto auto auto auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: 6px 0;
   background: transparent;
   border: none;
@@ -2048,19 +2690,43 @@ function onNoteBlur() {
 }
 .exercise-row:first-of-type { border-top: none; }
 .exercise-row:hover { background: var(--bg); }
+.ex-row-icon {
+  font-size: var(--font-size-m);
+  width: 22px;
+  text-align: center;
+  margin-right: -4px;
+}
 .ex-row-time {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
-  min-width: 42px;
+  min-width: 64px;
+  white-space: nowrap;
 }
-.ex-row-label { font-size: var(--font-size-s); }
+.ex-row-label {
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ex-row-class {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  font-family: var(--font-display);
+  white-space: nowrap;
+}
 .ex-row-detail {
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .ex-row-burn {
   font-size: var(--font-size-s);
@@ -2139,26 +2805,104 @@ function onNoteBlur() {
   font-weight: var(--font-weight-medium);
 }
 
-.quick-class-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+.activity-search-row { margin-bottom: var(--space-2); }
+
+.picked-activity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--primary);
+  background: var(--primary-soft);
   margin-bottom: var(--space-3);
 }
-.class-btn {
-  padding: 10px 4px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  cursor: pointer;
+.picked-icon { font-size: var(--font-size-m); }
+.picked-name {
+  flex: 1;
   font-size: var(--font-size-s);
-  font-family: inherit;
-  color: var(--text-secondary);
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
 }
-.class-btn:hover { color: var(--text); }
-.class-btn.active {
-  background: var(--primary-soft, var(--primary));
-  border-color: var(--primary);
-  color: var(--primary);
+.picked-meta {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+.picked-clear {
+  background: transparent;
+  border: 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-l);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.picked-clear:hover { color: var(--text); }
+
+.activity-section {
+  margin-bottom: var(--space-3);
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.activity-section-head {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding: 6px var(--space-2);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-bold);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.activity-count {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-tertiary);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-mono);
+}
+.activity-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px var(--space-2);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--font-size-s);
+  color: var(--text);
+}
+.activity-row:last-child { border-bottom: 0; }
+.activity-row:hover { background: var(--surface-raised); }
+.activity-icon {
+  width: 22px;
+  text-align: center;
+  font-size: var(--font-size-m);
+}
+.activity-name { flex: 1; }
+.activity-meta {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+.activity-empty {
+  padding: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  text-align: center;
 }
 
 .form-row {
@@ -2621,7 +3365,129 @@ function onNoteBlur() {
   margin-left: var(--space-1);
 }
 .entry-name.indent { padding-left: var(--space-4); }
+.group-child td.col-name { padding-left: var(--space-4); }
 .group-child td { background: var(--tint-carbs-softest); }
+.row-prefix { display: inline; }
+
+/* Mobile: each tr becomes a grid with shared columns so headers align
+   with the metric values below them.
+     col 1   — checkbox / empty (its own column)
+     cols 2–6 — Srv | Kcal | Pro | Fat | Carb
+     col 7   — menu / empty
+   Entry rows place the title on row 1 spanning cols 2–6 (single line +
+   ellipsis), metrics on row 2 sitting directly under their headers. */
+@media (max-width: 600px) {
+  .meal-table thead tr,
+  .meal-table tbody tr.entry-row,
+  .meal-table tbody tr.meal-group-header,
+  .meal-table tfoot tr {
+    display: grid;
+    /* 8 columns: check | prefix (emoji/caret) | 5 metric cols | menu.
+       The prefix column is a fixed width so the title text — and the
+       header/value columns under it — start at the same x on every
+       row regardless of whether that row has an emoji, caret, or
+       nothing at all. */
+    grid-template-columns: 15px 1.75rem repeat(5, 1fr) 1.75rem;
+    align-items: center;
+    column-gap: var(--space-1);
+  }
+
+  /* Header row: hide the "Item" label (the title spans this area in
+     each entry row); other headers sit in cols 2-6. */
+  .meal-table thead th {
+    padding: var(--space-1);
+    width: auto;
+    text-align: left;
+  }
+  .meal-table thead th.col-check { grid-column: 1; }
+  .meal-table thead th.col-name { display: none; }
+  .meal-table thead th.col-srv { grid-column: 3; }
+  .meal-table thead th.col-num:not(.col-p):not(.col-f):not(.col-c) { grid-column: 4; }
+  .meal-table thead th.col-p { grid-column: 5; }
+  .meal-table thead th.col-f { grid-column: 6; }
+  .meal-table thead th.col-c { grid-column: 7; }
+  .meal-table thead th.col-del { grid-column: 8; }
+
+  /* Body rows: 2-row grid (title above metrics). Check + menu span
+     both rows so they sit centered next to the stacked content. The
+     prefix (emoji/caret) only spans row 1 so it stays aligned with
+     the title text rather than floating between the two rows. */
+  .meal-table tbody tr.entry-row,
+  .meal-table tbody tr.meal-group-header {
+    grid-template-areas:
+      "check prefix name name name name name menu"
+      "check .      srv  cal  p    f    c    menu";
+    row-gap: 2px;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .meal-table tbody tr.entry-row:last-child,
+  .meal-table tbody tr.meal-group-header:last-child { border-bottom: none; }
+
+  /* Footer (Total): single-row grid — "Total" sits in the servings
+     column (col 3, where the title text begins on entry rows). */
+  .meal-table tfoot tr {
+    grid-template-areas: "check . name cal p f c menu";
+    padding: var(--space-2) 0;
+  }
+  .meal-table tfoot td.col-srv { display: none; }
+
+  .meal-table tbody td,
+  .meal-table tfoot td {
+    display: block;
+    width: auto;
+    min-width: 0;
+    padding: 0 var(--space-1);
+    border-bottom: none;
+    text-align: left;
+  }
+  .meal-table td.col-check { grid-area: check; padding: 0; }
+  .meal-table th.col-check { padding: 0; }
+  /* Promote col-name's children directly into the row's grid so
+     emoji/caret land in the prefix column and the title text lands in
+     the name column (which the metrics align under). */
+  .meal-table tbody td.col-name {
+    display: contents;
+  }
+  .meal-table tbody td.col-name > .entry-emoji,
+  .meal-table tbody td.col-name > .row-prefix {
+    grid-area: prefix;
+    text-align: right;
+    padding: 0;
+    margin: 0;
+  }
+  .meal-table tbody td.col-name > .entry-name,
+  .meal-table tbody td.col-name > .group-name {
+    grid-area: name;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 var(--space-1);
+  }
+  .meal-table tfoot td.col-name {
+    grid-area: name;
+    min-width: 0;
+  }
+  /* Don't double-indent group-children on mobile — col-name has no
+     box, and the prefix column already separates emoji from text. */
+  .meal-table tbody tr.group-child td.col-name { padding-left: 0; }
+  .meal-table td.col-del { grid-area: menu; }
+  .meal-table td.col-srv { grid-area: srv; }
+  .meal-table tbody td.col-num:not(.col-p):not(.col-f):not(.col-c),
+  .meal-table tfoot td.col-num:not(.col-p):not(.col-f):not(.col-c) { grid-area: cal; }
+  .meal-table td.col-p { grid-area: p; }
+  .meal-table td.col-f { grid-area: f; }
+  .meal-table td.col-c { grid-area: c; }
+
+  /* Drop the carb-tint backgrounds on group rows — they look heavy
+     in the stacked mobile layout. */
+  .meal-table tbody tr.meal-group-header,
+  .meal-table tbody tr.meal-group-header:hover { background: transparent; }
+  .meal-table tbody tr.group-child td { background: transparent; }
+
+  .meal-table-wrap { overflow-x: visible; }
+}
 
 .empty {
   color: var(--text-disabled);
@@ -2764,4 +3630,56 @@ function onNoteBlur() {
   line-height: 1.4;
 }
 .error { color: var(--danger); font-size: var(--font-size-xs); margin: var(--space-1) 0 0; }
+
+/* Quick-log modals (dose / measurement) — single big input, enter to
+   submit. Borrows the exercise-modal shell so visual rhythm matches the
+   surrounding surface. */
+.quick-log-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--space-5);
+  width: 92%;
+  max-width: 380px;
+}
+.quick-log-modal h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-m);
+  font-weight: var(--font-weight-medium);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.quick-log-unit-hint {
+  font-size: var(--font-size-s);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-regular);
+}
+.quick-log-date {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-regular);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+.quick-log-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.quick-log-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-l);
+  text-align: center;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+}
+.quick-log-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-ring);
+}
 </style>

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { usePwa } from '../composables/usePwa.js';
-import { bmrMifflin } from '../../../shared/bodyMath.js';
+import { bmrMifflin } from '../../../shared/bio/bodyMath.js';
 
 import StepBasics from '../components/welcome/StepBasics.vue';
 import StepActivity from '../components/welcome/StepActivity.vue';

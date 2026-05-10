@@ -5,6 +5,15 @@ import UserSettings from '../models/UserSettings.js';
 import { childLogger, errContext } from '../lib/logger.js';
 import { evaluateStorageCap } from '../lib/planLimits.js';
 import { PEPTIDE_CATALOG, PEPTIDE_CATALOG_INDEX } from '@kyneticbio/core';
+import { invalidateAsync } from '../sim/invalidationHooks.js';
+import { runCanonicalCompoundMigration } from '../scripts/migrate-canonical-compounds.js';
+
+// PK-affecting fields on a custom compound. Editing these retroactively
+// changes how every dose of this compound is simulated → cache nuke.
+// Cosmetic fields (color, reminderTime, brandNames) don't affect sim.
+const PK_AFFECTING_FIELDS = new Set([
+  'halfLifeDays', 'kineticsShape', 'doseUnit',
+]);
 
 const log = childLogger('compounds');
 const router = Router();
@@ -55,6 +64,17 @@ function shapeCustom(compound) {
 // `source` field disambiguates writes.
 router.get('/', async (req, res) => {
   const rlog = req.log || log;
+  // Lazy per-user migration: any legacy isSystem rows or custom rows
+  // whose name matches a canonical catalog entry get folded into
+  // canonical preferences before the merge. Idempotent + scoped to
+  // this user, so first request after the canonical-compound rollout
+  // self-heals without requiring an out-of-band CLI run.
+  try {
+    await runCanonicalCompoundMigration({ userId: req.userId });
+  } catch (err) {
+    rlog.warn(errContext(err), 'compounds: lazy migration failed (continuing)');
+  }
+
   const [customs, settings] = await Promise.all([
     Compound.find({ userId: req.userId }).sort({ order: 1, createdAt: 1 }),
     UserSettings.findOne({ userId: req.userId }).select('compoundPreferences').lean(),
@@ -238,6 +258,9 @@ router.patch('/:id', async (req, res) => {
 
   try {
     await compound.save();
+    if (changed.some((f) => PK_AFFECTING_FIELDS.has(f))) {
+      invalidateAsync(req.userId, 'compound-pk-update');
+    }
     rlog.info({ compoundId: req.params.id, name: compound.name, changed }, 'compounds: patched');
     res.json({ compound: shapeCustom(compound) });
   } catch (err) {
@@ -261,6 +284,8 @@ router.delete('/:id', async (req, res) => {
   }
   const { deletedCount } = await DoseLog.deleteMany({ userId: req.userId, compoundId: compound._id });
   await compound.deleteOne();
+  // Removed dose logs may have been at any past date — full nuke.
+  if (deletedCount > 0) invalidateAsync(req.userId, 'compound-delete-with-doses');
   rlog.info(
     { compoundId: req.params.id, name: compound.name, cascadedDoses: deletedCount },
     'compounds: deleted + cascaded dose logs',

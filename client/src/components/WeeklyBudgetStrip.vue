@@ -10,7 +10,7 @@ const props = defineProps({
 
 const {
   targets, weekTarget, perDay, counted, countedDays,
-  consumed, delta, adjustedToday, energyMode, windowLabel,
+  consumed, delta, adjustedToday, eLrgyMode, windowLabel,
 } = useWeeklyBudget();
 const dayStatusStore = useDayStatusStore();
 
@@ -301,6 +301,8 @@ const targetLinePct = computed(() => {
 
 
 
+
+
           }}<span class="wb-stat-tgt"> / {{ fmt(weekTarget.calories) }}</span>
         </span>
       </div>
@@ -308,6 +310,8 @@ const targetLinePct = computed(() => {
         <span class="wb-stat-label">{{ calDelta >= 0 ? 'Left' : 'Over' }}</span>
         <span class="wb-stat-value" :class="deltaClass(calDelta)">
           {{ Math.abs(Math.round(calDelta || 0)).toLocaleString()
+
+
 
 
 
@@ -391,7 +395,10 @@ const targetLinePct = computed(() => {
             class="wb-day-value"
             :class="{ over: day.isCounted && day.calories > (targets.calories || 0) }"
           >
-            <template v-if="day.isCounted">{{ day.calories ? fmt(day.calories) : '' }}</template>
+            <template
+              v-if="day.isCounted"
+              >{{ day.calories ? fmt(day.calories) : '' }}</template
+            >
             <template v-else>untracked</template>
           </div>
         </button>
@@ -417,11 +424,7 @@ const targetLinePct = computed(() => {
     <!-- Day-status menu. Inline popover anchored at the bottom of the
          strip — keeps the user's eye on the day they tapped instead of
          a full-screen modal context shift. -->
-    <div
-      v-if="menuDate"
-      class="wb-menu-backdrop"
-      @click.self="closeDayMenu"
-    >
+    <div v-if="menuDate" class="wb-menu-backdrop" @click.self="closeDayMenu">
       <div class="wb-menu">
         <h4>{{ menuDate }}</h4>
         <div class="wb-menu-row">
@@ -432,13 +435,17 @@ const targetLinePct = computed(() => {
               class="wb-status-tab"
               :class="{ active: menuStatus === 'tracked' }"
               @click="menuStatus = 'tracked'; onMenuStatusChange()"
-            >Tracked</button>
+            >
+              Tracked
+            </button>
             <button
               type="button"
               class="wb-status-tab"
               :class="{ active: menuStatus === 'untracked' }"
               @click="menuStatus = 'untracked'; onMenuStatusChange()"
-            >Untracked</button>
+            >
+              Untracked
+            </button>
           </div>
         </div>
         <div class="wb-menu-row">
@@ -448,12 +455,15 @@ const targetLinePct = computed(() => {
               v-for="opt in menuReasonOptions"
               :key="opt.key"
               :value="opt.key"
-            >{{ opt.label }}</option>
+            >
+              {{ opt.label }}
+            </option>
           </select>
         </div>
         <p class="wb-menu-hint">
           <template v-if="menuStatus === 'tracked'">
-            Day counts in the rolling budget. Use "Fasted" for intentional zero-calorie days.
+            Day counts in the rolling budget. Use "Fasted" for intentional
+            zero-calorie days.
           </template>
           <template v-else>
             Day excluded from rolling math — no banked calories from this day.
@@ -463,10 +473,18 @@ const targetLinePct = computed(() => {
           <button type="button" class="wb-menu-btn-text" @click="revertDayMenu">
             Revert to auto
           </button>
-          <button type="button" class="wb-menu-btn-secondary" @click="closeDayMenu">
+          <button
+            type="button"
+            class="wb-menu-btn-secondary"
+            @click="closeDayMenu"
+          >
             Cancel
           </button>
-          <button type="button" class="wb-menu-btn-primary" @click="applyDayMenu">
+          <button
+            type="button"
+            class="wb-menu-btn-primary"
+            @click="applyDayMenu"
+          >
             Save
           </button>
         </div>

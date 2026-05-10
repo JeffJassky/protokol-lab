@@ -726,7 +726,7 @@ const platformRows = [
         <div class="wrap">
           <div class="group-head">
             <div class="eyebrow">03 · Dashboard analysis</div>
-            <h2>Every metric, on one chart.</h2>
+            <h2>Every measurement, on one chart.</h2>
           </div>
 
           <div class="card-grid">

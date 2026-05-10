@@ -3,6 +3,7 @@ import { useFoodLogStore } from '../stores/foodlog.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { useDayStatusStore } from '../stores/dayStatus.js';
 import { useExerciseLogStore } from '../stores/exerciselog.js';
+import { buildPerDay, summarizeBudget } from '../../../shared/logging/weeklyBudget.js';
 
 // Rolling 7-day budget. Gap-aware (skips untracked days from both
 // numerator and denominator) and energy-mode-aware (in `earn` mode
@@ -47,9 +48,15 @@ export function useWeeklyBudget() {
 
   onMounted(refresh);
 
-  // Refetch when any day's entries mutate. fetchDailyNutrition doesn't
-  // touch `entries`, so there's no re-entry loop.
-  watch(() => foodlogStore.entries, refresh, { deep: true });
+  // Refetch when food OR exercise entries mutate. fetchDailyNutrition /
+  // fetchRangeBurn don't touch the watched refs, so there's no
+  // re-entry loop. Without the exercise watch, the "earn" mode bump
+  // never showed up in the budget after logging a workout.
+  watch(
+    () => [foodlogStore.entries, exerciseLogStore.entriesByDay],
+    refresh,
+    { deep: true },
+  );
 
   const targets = computed(() => settingsStore.settings?.targets || null);
   const dailyTarget = computed(() => targets.value?.calories || 0);
@@ -78,69 +85,29 @@ export function useWeeklyBudget() {
     return m;
   });
 
-  // Resolve the effective disposition for each day. Today is special-
-  // cased to never auto-untrack (regardless of mode) since it's
-  // in-progress data, not gap data.
-  function dispositionFor(date) {
-    const today = todayStr();
-    const explicit = dayStatusStore.getStatus(date);
-    const nutrition = nutritionByDay.value.get(date);
-    const hasFood = !!nutrition && nutrition.calories > 0;
-
-    if (date === today) {
-      if (explicit?.status === 'untracked') {
-        return { status: 'untracked', reason: explicit.reason || 'other', source: 'explicit' };
-      }
-      return { status: 'tracked-pending', reason: explicit?.reason || null, source: explicit ? 'explicit' : 'auto' };
+  // Per-day snapshot is delegated to the pure reducer in shared/ —
+  // composable owns reactive plumbing only.
+  const dayStatusMap = computed(() => {
+    const m = new Map();
+    for (const date of windowDates.value) {
+      const s = dayStatusStore.getStatus(date);
+      if (s) m.set(date, s);
     }
-
-    if (explicit) {
-      return { status: explicit.status, reason: explicit.reason, source: 'explicit' };
-    }
-
-    if (confirmationMode.value === 'affirmative') {
-      // Past days require an explicit `tracked` row to count.
-      return { status: 'untracked', reason: 'forgot', source: 'auto' };
-    }
-
-    // Passive mode: any food logged → tracked; zero entries → untracked.
-    return {
-      status: hasFood ? 'tracked' : 'untracked',
-      reason: hasFood ? null : 'forgot',
-      source: 'auto',
-    };
-  }
-
-  const perDay = computed(() => {
-    const today = todayStr();
-    return windowDates.value.map((date) => {
-      const n = nutritionByDay.value.get(date) || { calories: 0, protein: 0, fat: 0, carbs: 0 };
-      const burn = burnByDay.value.get(date) || { caloriesBurned: 0, durationMin: 0 };
-      const disp = dispositionFor(date);
-      const isCounted = disp.status === 'tracked' || disp.status === 'tracked-pending';
-      const dailyT = dailyTarget.value;
-      // Per-day target: in `earn` mode, today's burn extends today's
-      // target. Other modes leave it flat.
-      const effectiveDailyTarget = energyMode.value === 'earn'
-        ? dailyT + (isCounted ? (burn.caloriesBurned || 0) : 0)
-        : dailyT;
-      return {
-        date,
-        isToday: date === today,
-        calories: n.calories || 0,
-        protein: n.protein || 0,
-        fat: n.fat || 0,
-        carbs: n.carbs || 0,
-        burned: burn.caloriesBurned || 0,
-        burnedDurationMin: burn.durationMin || 0,
-        disposition: disp.status,
-        reason: disp.reason,
-        dispositionSource: disp.source,
-        isCounted,
-        effectiveDailyTarget,
-      };
-    });
+    return m;
   });
+
+  const perDay = computed(() =>
+    buildPerDay({
+      windowDates: windowDates.value,
+      nutritionByDay: nutritionByDay.value,
+      burnByDay: burnByDay.value,
+      dayStatusByDate: dayStatusMap.value,
+      dailyTarget: dailyTarget.value,
+      energyMode: energyMode.value,
+      confirmationMode: confirmationMode.value,
+      today: todayStr(),
+    }),
+  );
 
   const counted = computed(() => perDay.value.filter((d) => d.isCounted));
 

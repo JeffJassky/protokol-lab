@@ -1,6 +1,6 @@
 <script setup>
 import { computed, watch } from 'vue';
-import { GOAL_RATES, etaToGoal, tdee, calorieTargetForRate } from '../../../../shared/bodyMath.js';
+import { GOAL_RATES, etaToGoal, tdee, calorieTargetForRate } from '../../../../shared/bio/bodyMath.js';
 
 const props = defineProps({
   draft: { type: Object, required: true },

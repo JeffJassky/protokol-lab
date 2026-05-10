@@ -24,7 +24,7 @@ import {
   PHOTO_TYPE_PRESETS,
   LEGACY_OTHER_KEY,
   LEGACY_OTHER_NAME,
-} from '../../../shared/photoTypePresets.js';
+} from '../../../shared/logging/photoTypePresets.js';
 
 const DRY = process.argv.includes('--dry-run');
 

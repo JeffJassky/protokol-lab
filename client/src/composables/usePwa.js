@@ -1,14 +1,55 @@
 import { ref, computed, onMounted, onUnmounted, readonly } from 'vue';
 
+const INSTALL_STORAGE_KEY = 'pwa:installed';
+
+function readPersistedInstall() {
+  try {
+    return typeof localStorage !== 'undefined'
+      && localStorage.getItem(INSTALL_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writePersistedInstall(val) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (val) localStorage.setItem(INSTALL_STORAGE_KEY, '1');
+    else localStorage.removeItem(INSTALL_STORAGE_KEY);
+  } catch {
+    // private mode / disabled storage — silently degrade.
+  }
+}
+
 // Singleton state — we only want one beforeinstallprompt capture per tab,
 // and multiple components need to observe the same install status.
+//
+// Order matters: `installedPersistent` calls `readPersistedInstall()` at
+// module-eval time, which references `INSTALL_STORAGE_KEY`. `const` is in
+// the temporal dead zone before its declaration, so the storage key MUST be
+// declared above this ref or the read silently throws and the persistent
+// install signal is lost.
 const os = ref(detectOs());
 const browser = ref(detectBrowser());
 const isStandalone = ref(detectStandalone());
 const deferredPrompt = ref(null);
 const installedThisSession = ref(false);
+// Sticky "we've seen this device install the PWA" — needed because a user can
+// install the PWA, then later open the same site in a regular browser tab,
+// where display-mode is `browser` and standalone signals are all false. Without
+// persistence we'd nag them to install something they already have.
+const installedPersistent = ref(readPersistedInstall());
+// Async signal from getInstalledRelatedApps() on Chromium — lets us recover
+// install state across uninstall/reinstall and handle users who installed the
+// PWA on a previous visit before this persistence code shipped.
+const installedRelated = ref(false);
 const swReady = ref(false);
 let listenersAttached = false;
+
+function markInstalled() {
+  installedPersistent.value = true;
+  writePersistedInstall(true);
+}
 
 // Granular OS — separates iPadOS from iOS (Safari install flow differs in
 // copy/UI position) and macOS/Windows/Linux from each other so the install
@@ -77,14 +118,27 @@ function attachListeners() {
   if (listenersAttached || typeof window === 'undefined') return;
   listenersAttached = true;
 
+  // Standalone display-mode at boot is itself proof of install — persist so
+  // future visits in a regular browser tab still know the PWA is installed.
+  if (isStandalone.value) markInstalled();
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt.value = e;
+    // Browser is offering to install → the PWA is NOT currently installed.
+    // If we have a stale persistent flag from a prior install, clear it so
+    // the install nudge reappears after the user uninstalls.
+    if (installedPersistent.value && !isStandalone.value) {
+      installedPersistent.value = false;
+      installedRelated.value = false;
+      writePersistedInstall(false);
+    }
   });
 
   window.addEventListener('appinstalled', () => {
     deferredPrompt.value = null;
     installedThisSession.value = true;
+    markInstalled();
   });
 
   // Re-check standalone on visibility changes so returning from the home
@@ -92,8 +146,24 @@ function attachListeners() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       isStandalone.value = detectStandalone();
+      if (isStandalone.value) markInstalled();
     }
   });
+
+  // Chromium-only authoritative check — when it returns ≥1 the PWA is
+  // installed. We do NOT clear the persistent flag on an empty result: the
+  // API only matches installs whose manifest URL matches the current page's
+  // `related_applications.url`, which can mismatch in dev (localhost vs prod
+  // origin) and would falsely "uninstall" a freshly-installed PWA. Empty is
+  // ambiguous; non-empty is conclusive.
+  if (typeof navigator.getInstalledRelatedApps === 'function') {
+    navigator.getInstalledRelatedApps().then((apps) => {
+      if (Array.isArray(apps) && apps.length > 0) {
+        installedRelated.value = true;
+        markInstalled();
+      }
+    }).catch(() => {});
+  }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.ready.then(() => { swReady.value = true; }).catch(() => {});
@@ -105,7 +175,12 @@ export function usePwa() {
   onUnmounted(() => { /* singleton listeners persist */ });
 
   const canPromptInstall = computed(() => deferredPrompt.value != null);
-  const installed = computed(() => isStandalone.value || installedThisSession.value);
+  const installed = computed(() =>
+    isStandalone.value
+    || installedThisSession.value
+    || installedRelated.value
+    || installedPersistent.value,
+  );
   const needsIosInstallInstructions = computed(
     () => isIosSafari() && !isStandalone.value,
   );

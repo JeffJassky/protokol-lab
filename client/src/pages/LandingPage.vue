@@ -1354,7 +1354,7 @@ const aiTrail = [
               </div>
               <ul class="price-feats">
                 <li>AI chat that reads your data</li>
-                <li>Correlation charts, any two metrics</li>
+                <li>Correlation charts, any two measurements</li>
                 <li>Deeper dose charts and stats</li>
                 <li>Unlimited custom compounds</li>
                 <li>Cloud sync across devices</li>

@@ -4,6 +4,7 @@ import FoodLog from '../models/FoodLog.js';
 import { childLogger } from '../lib/logger.js';
 import { evaluateStorageCap } from '../lib/planLimits.js';
 import { parseLogDate } from '../lib/date.js';
+import { maybeInvalidateAsync } from '../sim/invalidationHooks.js';
 
 const log = childLogger('meals');
 const router = Router();
@@ -192,6 +193,8 @@ router.post('/:id/log', async (req, res) => {
   meal.lastLoggedAt = new Date();
   await meal.save();
 
+  // Each inserted FoodLog row carries the same date — use it for cache scoping.
+  maybeInvalidateAsync(req.userId, entries[0]?.date, 'meal-log');
   rlog.info(
     { mealId: req.params.id, date, mealType, itemCount: entries.length },
     'meals: logged to diary',

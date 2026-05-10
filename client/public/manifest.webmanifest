@@ -9,6 +9,10 @@
   "background_color": "#0b0f0c",
   "theme_color": "#0b0f0c",
   "categories": ["health", "lifestyle", "medical"],
+  "related_applications": [
+    { "platform": "webapp", "url": "https://protokollab.com/manifest.webmanifest" }
+  ],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192.png",

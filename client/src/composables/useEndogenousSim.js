@@ -1,112 +1,93 @@
+// Server-side simulation client. Hits /api/sim/range with checkpoint
+// caching server-side; this composable is just a fetch+state wrapper.
+//
+// The simulation itself runs in `server/src/sim/runner.js` against the
+// user's logged events + subject settings. The server returns dense
+// per-signal arrays at 15-min resolution, sampled across the requested
+// window. Range invalidation lives in
+// `server/src/sim/invalidationHooks.js` — log writes and subject
+// edits clear the per-user checkpoint so the next request recomputes.
+//
+// API (preserved from the legacy worker version so callers don't break):
+//   result          shallowRef<{ timestamps, series, mealCount, ... }>
+//   busy            ref<boolean>
+//   error           ref<string|null>
+//   computeTimeMs   ref<number|null>
+//   run({ from, to, signals })   — fires a fetch + populates result
+
 import { ref, shallowRef } from 'vue';
 import { api } from '../api/index.js';
 
-// Experimental: runs the @kyneticbio/core ODE solver in a worker against
-// the user's food log to produce continuous endogenous-signal series
-// (glucose, insulin, GLP-1, etc.). v1: food-only, default subject, no
-// caching, snacks ignored. The simulation is continuous across the
-// selected window — state is stitched between meals inside the worker.
-
-// Recreate the worker on every run so a stale long-running sim from the
-// previous toggle (or an HMR-leaked worker) gets terminated before we
-// kick off a new one. Saves CPU and prevents the newest run from
-// queueing behind orphaned compute.
-let workerInstance = null;
-function freshWorker() {
-  if (workerInstance) {
-    try { workerInstance.terminate(); } catch { /* ignore */ }
-  }
-  workerInstance = new Worker(
-    new URL('../workers/endogenous.worker.js', import.meta.url),
-    { type: 'module' },
-  );
-  workerInstance.onerror = (e) => {
-    console.error('[endo-worker] uncaught', e.message, e);
-  };
-  workerInstance.onmessageerror = (e) => {
-    console.error('[endo-worker] message decode error', e);
-  };
-  return workerInstance;
-}
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    if (workerInstance) {
-      try { workerInstance.terminate(); } catch { /* ignore */ }
-      workerInstance = null;
-    }
-  });
-}
-
 export function useEndogenousSim() {
-  // shallowRef for the series payload — it's a record of { signal: number[] }
-  // and a sibling number[] of timestamps. Deep reactivity would be wasteful
-  // and triggers Chart.js re-renders we don't need.
-  const result = shallowRef({ timestamps: [], series: {}, mealCount: 0 });
+  const result = shallowRef({
+    timestamps: [],
+    series: {},
+    mealCount: 0,
+    exerciseCount: 0,
+  });
   const busy = ref(false);
   const error = ref(null);
   const computeTimeMs = ref(null);
-
   let runToken = 0;
+  let debounceTimer = null;
+  // 200ms is enough to coalesce a burst of chip toggles ("add glucose,
+  // then insulin, then GLP-1") into a single fetch while staying snappy
+  // on a single deliberate change.
+  const DEBOUNCE_MS = 200;
 
-  async function run({ from, to, signals, subject, conditions }) {
-    if (!signals?.length) {
-      result.value = { timestamps: [], series: {}, mealCount: 0 };
-      return;
-    }
-
+  async function actuallyRun({ from, to, signals }) {
     const myToken = ++runToken;
     busy.value = true;
     error.value = null;
-
-    let meals = [];
-    let exercises = [];
     try {
-      const params = new URLSearchParams({ from, to });
-      // Fetch both event streams in parallel — meals and exercises are
-      // independent in storage but converge in the worker's per-day chunks.
-      const [mealsData, exData] = await Promise.all([
-        api.get(`/api/foodlog/range-meals?${params}`),
-        api.get(`/api/exerciselog/range-events?${params}`),
-      ]);
-      meals = mealsData.meals || [];
-      exercises = exData.events || [];
-      console.debug('[endo-sim] fetched events', {
-        from, to, signals, mealCount: meals.length, exerciseCount: exercises.length,
+      // Send the window as user-local-midnight ms-since-epoch. The
+      // server used to accept YYYY-MM-DD and parse it as UTC midnight,
+      // which shifted the response window by the user's UTC offset
+      // (PT users got data from yesterday evening through this
+      // afternoon, missing tonight). Sending raw ms keeps the
+      // boundaries in the user's frame end-to-end.
+      const fromMs = from instanceof Date
+        ? from.getTime()
+        : (typeof from === 'number' ? from : new Date(from).getTime());
+      const toMs = to instanceof Date
+        ? to.getTime()
+        : (typeof to === 'number' ? to : new Date(to).getTime());
+      const params = new URLSearchParams({
+        fromMs: String(fromMs),
+        toMs: String(toMs),
+        signals: signals.join(','),
       });
+      const data = await api.get(`/api/sim/range?${params}`);
+      if (myToken !== runToken) return;
+      result.value = {
+        timestamps: data.timestamps || [],
+        series: data.series || {},
+        mealCount: data.mealCount || 0,
+        exerciseCount: data.exerciseCount || 0,
+        computeMs: data.computeMs,
+        fromCheckpoint: !!data.fromCheckpoint,
+        fromResponseCache: !!data.fromResponseCache,
+      };
+      computeTimeMs.value = data.computeMs;
     } catch (err) {
-      console.error('[endo-sim] event fetch failed', err);
-      if (myToken === runToken) {
-        error.value = err.message || 'Failed to fetch events';
-        busy.value = false;
-      }
+      if (myToken !== runToken) return;
+      error.value = err?.message || 'Sim fetch failed';
+      console.error('[endo-sim] fetch failed', err);
+    } finally {
+      if (myToken === runToken) busy.value = false;
+    }
+  }
+
+  function run({ from, to, signals }) {
+    if (!signals?.length) {
+      result.value = { timestamps: [], series: {}, mealCount: 0, exerciseCount: 0 };
       return;
     }
-
-    if (myToken !== runToken) return; // a newer call superseded this one
-
-    const worker = freshWorker();
-    await new Promise((resolve) => {
-      const handler = (event) => {
-        if (myToken !== runToken) {
-          // Stale response — ignore. The newer call will install its own handler.
-          worker.removeEventListener('message', handler);
-          resolve();
-          return;
-        }
-        worker.removeEventListener('message', handler);
-        if (event.data?.error) {
-          error.value = event.data.error;
-        } else {
-          result.value = event.data;
-          computeTimeMs.value = event.data.computeTimeMs;
-        }
-        busy.value = false;
-        resolve();
-      };
-      worker.addEventListener('message', handler);
-      worker.postMessage({ meals, exercises, signals, subject, conditions });
-    });
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      actuallyRun({ from, to, signals });
+    }, DEBOUNCE_MS);
   }
 
   return { result, busy, error, computeTimeMs, run };

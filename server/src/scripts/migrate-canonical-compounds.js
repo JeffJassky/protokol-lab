@@ -44,15 +44,18 @@ function extractPreferences(compound) {
   return prefs;
 }
 
-export async function runCanonicalCompoundMigration({ dryRun = false } = {}) {
+export async function runCanonicalCompoundMigration({ dryRun = false, userId = null } = {}) {
   // Pass 1: isSystem=true compounds — the seeded built-ins.
   // Pass 2: isSystem=false rows whose name (or brand) matches a canonical
   //         catalog entry. Common case: user manually created a
   //         "Retatrutide" custom row before the canonical catalog
   //         existed, and dose-logged against it. Those should fold into
   //         the canonical key the same way system rows do.
-  const systemCompounds = await Compound.find({ isSystem: true }).lean();
-  const customCompounds = await Compound.find({ isSystem: { $ne: true } }).lean();
+  // When `userId` is set, scope to that user only (used by the lazy
+  // per-request migration in /api/compounds GET).
+  const filter = userId ? { userId } : {};
+  const systemCompounds = await Compound.find({ ...filter, isSystem: true }).lean();
+  const customCompounds = await Compound.find({ ...filter, isSystem: { $ne: true } }).lean();
   log.info(
     { systemCount: systemCompounds.length, customCount: customCompounds.length, dryRun },
     'migration: scanning compounds (system + custom)',

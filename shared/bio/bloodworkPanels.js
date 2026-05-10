@@ -12,7 +12,7 @@
 import {
   BLOODWORK_PANELS,
   BLOODWORK_FIELD_INDEX,
-} from '../../core/dist/index.js';
+} from '../../../core/dist/index.js';
 
 export { BLOODWORK_PANELS, BLOODWORK_FIELD_INDEX };
 

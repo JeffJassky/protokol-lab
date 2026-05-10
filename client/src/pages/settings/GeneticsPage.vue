@@ -4,7 +4,7 @@ import { useSettingsStore } from '../../stores/settings.js';
 import {
   GENETICS_PANELS,
   flattenGeneticsNested,
-} from '../../../../shared/geneticsPanels.js';
+} from '../../../../shared/bio/geneticsPanels.js';
 
 const store = useSettingsStore();
 

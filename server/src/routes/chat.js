@@ -5,9 +5,10 @@ import ChatUsage from '../models/ChatUsage.js';
 import MealProposal from '../models/MealProposal.js';
 import BloodworkProposal from '../models/BloodworkProposal.js';
 import UserSettings from '../models/UserSettings.js';
-import { BLOODWORK_FIELD_INDEX, sanitizeBloodworkValue, expandBloodworkFlat, flattenBloodworkNested } from '../../../shared/bloodworkPanels.js';
+import { BLOODWORK_FIELD_INDEX, sanitizeBloodworkValue, expandBloodworkFlat, flattenBloodworkNested } from '../../../shared/bio/bloodworkPanels.js';
 import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
+import { invalidateAsync } from '../sim/invalidationHooks.js';
 import User from '../models/User.js';
 import { chatStream } from '../services/agent.js';
 import { touchRecent } from '../services/recentFood.js';
@@ -514,6 +515,7 @@ router.post('/bloodwork-proposals/:id/confirm', async (req, res) => {
   proposal.status = 'confirmed';
   await proposal.save();
 
+  invalidateAsync(req.authUserId, 'bloodwork-proposal-confirm');
   rlog.info(
     { proposalId: id, applied: Object.keys(cleanedFlat).length, dropped: dropped.length },
     'bloodwork-proposal: confirmed',

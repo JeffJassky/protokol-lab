@@ -5,16 +5,30 @@ import { childLogger } from '../lib/logger.js';
 import {
   sanitizeBloodworkValue,
   expandBloodworkFlat,
-} from '../../../shared/bloodworkPanels.js';
-import { sanitizeConditionsState } from '../../../shared/conditionsCatalog.js';
+} from '../../../shared/bio/bloodworkPanels.js';
+import { sanitizeConditionsState } from '../../../shared/bio/conditionsCatalog.js';
 import {
   sanitizeGeneticsValue,
   expandGeneticsFlat,
-} from '../../../shared/geneticsPanels.js';
+} from '../../../shared/bio/geneticsPanels.js';
 import { PEPTIDE_CATALOG_INDEX } from '@kyneticbio/core';
+import { invalidateAsync } from '../sim/invalidationHooks.js';
 
 const log = childLogger('settings');
 const router = Router();
+
+// Subject fields the sim engine reads. Any write that touches one of
+// these invalidates the entire latestSimCheckpoint — there's no
+// time-stamped subject history, so changing weight or bloodwork makes
+// every cached past day's sim wrong by definition.
+const SIM_AFFECTING_FIELDS = [
+  'sex', 'age', 'heightInches', 'currentWeightLbs',
+  'bloodwork', 'conditions', 'genetics', 'menstruation',
+];
+
+function touchesSim(body) {
+  return SIM_AFFECTING_FIELDS.some((k) => body[k] !== undefined);
+}
 
 const ACTIVITY = ['sedentary', 'light', 'moderate', 'very', 'athlete'];
 const FASTING_KINDS = ['none', 'daily', 'weekly'];
@@ -105,6 +119,23 @@ function sanitizeCompoundPreferences(input) {
     if (Object.keys(cleaned).length) out[key] = cleaned;
   }
   return out;
+}
+
+function sanitizeJournal(input) {
+  const j = input || {};
+  return {
+    enabled: j.enabled == null ? true : Boolean(j.enabled),
+  };
+}
+
+function sanitizeInsights(input) {
+  const i = input || {};
+  const raw = Number(i.minConfidence);
+  const min = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.4;
+  return {
+    enabled: i.enabled == null ? true : Boolean(i.enabled),
+    minConfidence: min,
+  };
 }
 
 function sanitizeTracking(input) {
@@ -242,8 +273,25 @@ function sanitizeWater(input) {
   };
 }
 
+// Internal-only fields that should never leak to the client. The sim
+// checkpoint's endState is a giant ODE state vector (thousands of
+// numeric props) — sending it on every settings fetch bloats responses
+// AND has tripped Vue/Worker structured-clone in the past when the
+// reactive copy ended up in worker postMessage payloads.
+const SETTINGS_PROJECTION = '-latestSimCheckpoint';
+
+// Strip internal-only fields from a Mongoose doc before serializing.
+// Use after findOneAndUpdate (which doesn't support `.select()` on
+// the returned doc cleanly).
+function stripInternal(doc) {
+  if (!doc) return doc;
+  const obj = doc.toObject ? doc.toObject() : { ...doc };
+  delete obj.latestSimCheckpoint;
+  return obj;
+}
+
 router.get('/', async (req, res) => {
-  const settings = await UserSettings.findOne({ userId: req.userId });
+  const settings = await UserSettings.findOne({ userId: req.userId }).select(SETTINGS_PROJECTION);
 
   // One-shot migration: the legacy `bmr` field was overloaded — users were
   // entering their TDEE there because the calorie-delta math (calories - bmr)
@@ -307,6 +355,12 @@ router.put('/', async (req, res) => {
   if (req.body.tracking !== undefined) {
     set.tracking = sanitizeTracking(req.body.tracking);
   }
+  if (req.body.journal !== undefined) {
+    set.journal = sanitizeJournal(req.body.journal);
+  }
+  if (req.body.insights !== undefined) {
+    set.insights = sanitizeInsights(req.body.insights);
+  }
   if (req.body.compoundPreferences !== undefined) {
     set.compoundPreferences = sanitizeCompoundPreferences(req.body.compoundPreferences);
   }
@@ -323,11 +377,12 @@ router.put('/', async (req, res) => {
     { upsert: true, returnDocument: 'after', runValidators: true },
   );
 
+  if (touchesSim(req.body)) invalidateAsync(req.userId, 'settings-put');
   (req.log || log).info(
     { fields: Object.keys(set).filter((k) => k !== 'updatedAt') },
     'settings: full update',
   );
-  res.json({ settings });
+  res.json({ settings: stripInternal(settings) });
 });
 
 // Partial upsert. Used by the onboarding wizard so each step persists only
@@ -371,6 +426,12 @@ router.patch('/', async (req, res) => {
   if (req.body.tracking !== undefined) {
     set.tracking = sanitizeTracking(req.body.tracking);
   }
+  if (req.body.journal !== undefined) {
+    set.journal = sanitizeJournal(req.body.journal);
+  }
+  if (req.body.insights !== undefined) {
+    set.insights = sanitizeInsights(req.body.insights);
+  }
   if (req.body.compoundPreferences !== undefined) {
     set.compoundPreferences = sanitizeCompoundPreferences(req.body.compoundPreferences);
   }
@@ -386,6 +447,8 @@ router.patch('/', async (req, res) => {
     { $set: set, $setOnInsert: { userId: req.userId } },
     { upsert: true, new: true, runValidators: true },
   );
+
+  if (touchesSim(req.body)) invalidateAsync(req.userId, 'settings-patch');
 
   // When the wizard's "basics" step writes the user's current weight, also
   // drop a WeightLog for today if they don't have one yet — gives them a real
@@ -421,7 +484,7 @@ router.patch('/', async (req, res) => {
     { fields: Object.keys(set).filter((k) => k !== 'updatedAt') },
     'settings: patched',
   );
-  res.json({ settings });
+  res.json({ settings: stripInternal(settings) });
 });
 
 router.patch('/notifications', async (req, res) => {
@@ -443,7 +506,7 @@ router.patch('/notifications', async (req, res) => {
     { timezone, trackReminderEnabled: settings?.trackReminder?.enabled, trackReminderTime: settings?.trackReminder?.time },
     'settings: notifications patched',
   );
-  res.json({ settings });
+  res.json({ settings: stripInternal(settings) });
 });
 
 export default router;

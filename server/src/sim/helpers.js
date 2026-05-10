@@ -1,13 +1,13 @@
-// Pure helpers used by `endogenous.worker.js`. Extracted so they can be
-// unit-tested without spinning up a Worker / loading the full simulation
-// engine bundle. The worker re-exports nothing — it just imports from
-// here and wires self.onmessage.
+// Pure helpers for the server-side endogenous sim runner. Ported from
+// client/src/workers/endogenous.helpers.js — no DOM, no globals, callable
+// from Node. The two implementations must stay structurally identical
+// so server-rendered series matches what the worker would have produced.
 
 import { DEFAULT_SUBJECT, CONDITION_LIBRARY } from '@kyneticbio/core';
 
-// Build a Subject from the partial profile passed by the client. Anything
-// the client doesn't supply falls back to DEFAULT_SUBJECT (cycle params,
-// genetics, bloodwork — none of which the log app currently tracks).
+// Build a Subject from a partial profile (see buildSubjectFromUser in
+// inputs.js for how UserSettings → partial). Anything not supplied falls
+// back to DEFAULT_SUBJECT.
 export function buildSubject(partial = {}) {
   const out = { ...DEFAULT_SUBJECT };
   if (partial.sex === 'male' || partial.sex === 'female') out.sex = partial.sex;
@@ -38,9 +38,6 @@ export function buildSubject(partial = {}) {
   return out;
 }
 
-// Hydrate a sparse `{ [conditionKey]: { enabled, params } }` map from
-// the user into the full state shape buildConditionAdjustments expects:
-// every condition present, defaulted to disabled with library defaults.
 export function buildConditionState(partial = {}) {
   const out = {};
   for (const def of CONDITION_LIBRARY) {
@@ -64,9 +61,6 @@ export function foodParamsFromNutrients(n = {}) {
   const fiber = Number(n.fiber) || 0;
   const protein = Number(n.protein) || 0;
   const fat = Number(n.fat) || 0;
-  // Starch = total carbs minus the carb subtypes already accounted for
-  // (sugar, fiber). Common case: USDA reports carbs+fiber+sugar with
-  // starch implicit in the remainder.
   const carbStarch = Math.max(0, carbs - sugar - fiber);
   return {
     carbSugar: sugar,
@@ -89,10 +83,6 @@ export function utcMidnight(isoDate) {
   return Date.UTC(y, mo - 1, d, 0, 0);
 }
 
-// Convert an absolute timestamp into the "minute of UTC day" the engine
-// uses for `startMin`. Anchors on UTC midnight so chunks line up with
-// their day-key. Local-tz fidelity is acceptable to lose at this level
-// — the chart x-axis renders user-local anyway.
 export function minuteOfUtcDay(timestampMs) {
   const ms = timestampMs - utcMidnight(utcDayKey(timestampMs));
   return Math.max(0, Math.min(1439, Math.round(ms / 60_000)));

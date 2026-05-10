@@ -10,7 +10,7 @@ import {
 import {
   METRIC_CATEGORIES,
   CUSTOM_METRIC_DIMENSIONS,
-} from '../../../../shared/metricPresets.js';
+} from '../../../../shared/logging/metricPresets.js';
 
 const metricsStore = useMetricsStore();
 const settingsStore = useSettingsStore();
@@ -105,7 +105,7 @@ function unitsForDimension(dimension) {
       <router-link to="/profile" class="back-link" aria-label="Back"
         >‹ Profile</router-link
       >
-      <h2 class="page-title">Metrics</h2>
+      <h2 class="page-title">Measurements</h2>
     </div>
 
     <div class="card">
@@ -130,7 +130,7 @@ function unitsForDimension(dimension) {
           </button>
         </div>
         <p class="hint">
-          Default unit for new measurements. Each metric can override below.
+          Default unit for new measurements. Each measurement can override below.
         </p>
       </div>
     </div>
@@ -210,7 +210,7 @@ function unitsForDimension(dimension) {
           </template>
         </li>
         <li v-if="group.key === 'custom' && group.metrics.length === 0" class="empty-hint">
-          No custom metrics yet.
+          No custom measurements yet.
         </li>
       </ul>
 
@@ -221,13 +221,13 @@ function unitsForDimension(dimension) {
           class="btn-secondary"
           @click="adding = true"
         >
-          + Add custom metric
+          + Add custom measurement
         </button>
         <form v-else class="add-form" @submit.prevent="handleAdd">
           <input
             v-model="newName"
             type="text"
-            placeholder="Metric name (e.g. Resting heart rate)"
+            placeholder="Measurement name (e.g. Resting heart rate)"
             autofocus
           />
           <select v-model="newDimension">

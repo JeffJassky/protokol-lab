@@ -38,7 +38,7 @@ import Compound from '../models/Compound.js';
 import DoseLog from '../models/DoseLog.js';
 import ChatThread from '../models/ChatThread.js';
 import { toCanonical } from '../../../shared/units.js';
-import { findPreset } from '../../../shared/metricPresets.js';
+import { findPreset } from '../../../shared/logging/metricPresets.js';
 
 const REVIEWER_EMAIL = (process.env.REVIEWER_EMAIL || 'appstore-review@protokollab.com')
   .toLowerCase()

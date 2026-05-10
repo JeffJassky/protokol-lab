@@ -1,19 +1,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Line } from 'vue-chartjs';
-import {
-  Chart as ChartJS,
-  Interaction,
-  LineElement,
-  PointElement,
-  LinearScale,
-  TimeScale,
-  Tooltip,
-  Filler,
-  Legend,
-} from 'chart.js';
-import 'chartjs-adapter-date-fns';
+import SignalChart from '../components/SignalChart.vue';
+// SignalChart registers Chart.js elements + the custom nearestX
+// interaction mode internally; the dashboard inherits both via the
+// component import.
 import { useWeightStore } from '../stores/weight.js';
 import { useFoodLogStore } from '../stores/foodlog.js';
 import { useSettingsStore } from '../stores/settings.js';
@@ -31,7 +22,7 @@ import { useDosesStore } from '../stores/doses.js';
 import { useExerciseLogStore } from '../stores/exerciselog.js';
 import { usePhotosStore } from '../stores/photos.js';
 import { useWaterStore, mlToUnit } from '../stores/water.js';
-import { computeNutritionScore } from '../utils/nutritionScore.js';
+import { computeNutritionScore } from '../../../shared/logging/nutritionScore.js';
 import { contrastText } from '../utils/contrast.js';
 import WeeklyBudgetStrip from '../components/WeeklyBudgetStrip.vue';
 import InsightsCard from '../components/InsightsCard.vue';
@@ -41,45 +32,9 @@ import FastingBanner from '../components/FastingBanner.vue';
 import { usePlanLimits } from '../composables/usePlanLimits.js';
 import { useUpgradeModalStore } from '../stores/upgradeModal.js';
 import { useEndogenousSim } from '../composables/useEndogenousSim.js';
+import { useChartSeries } from '../composables/useChartSeries.js';
 import { localYmd } from '../utils/date.js';
 import { getAllUnifiedDefinitions } from '@kyneticbio/core';
-
-ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Filler, Legend);
-
-// Custom interaction mode: for each dataset, find the single point whose
-// x-coordinate is closest to the cursor. Built-in modes don't handle our
-// mixed cadence well — `mode: 'index'` assumes a shared x array (breaks
-// with dense PK curves alongside sparse weigh-ins), and `mode: 'x'` returns
-// all points intersecting the x band (duplicates from dense series, drops
-// sparse series with no point in range). This guarantees one item per
-// dataset, regardless of cadence.
-Interaction.modes.nearestX = function nearestX(chart, e, options, useFinalPosition) {
-  const eventX = e?.x ?? 0;
-  const items = [];
-  chart.data.datasets.forEach((_ds, datasetIndex) => {
-    if (!chart.isDatasetVisible(datasetIndex)) return;
-    const meta = chart.getDatasetMeta(datasetIndex);
-    if (!meta?.data?.length) return;
-    let closestIndex = -1;
-    let minDist = Infinity;
-    meta.data.forEach((el, i) => {
-      const props = el.getProps(['x'], useFinalPosition);
-      const d = Math.abs(props.x - eventX);
-      if (d < minDist) {
-        minDist = d;
-        closestIndex = i;
-      }
-    });
-    if (closestIndex >= 0) {
-      items.push({
-        element: meta.data[closestIndex],
-        datasetIndex,
-        index: closestIndex,
-      });
-    }
-  });
-  return items;
-};
 
 const router = useRouter();
 const weightStore = useWeightStore();
@@ -94,6 +49,9 @@ const photosVisibleOnDashboard = computed(() => {
   if (!p || !p.enabled) return false;
   return p.showOnDashboard !== false;
 });
+const insightsEnabled = computed(
+  () => settingsStore.settings?.insights?.enabled !== false,
+);
 const notesStore = useNotesStore();
 const compoundsStore = useCompoundsStore();
 const dosesStore = useDosesStore();
@@ -141,15 +99,11 @@ function cssVar(name, fallback = '') {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
 }
-function applyChartFont() {
-  const family = getComputedStyle(document.documentElement).getPropertyValue('--font-body').trim();
-  if (family) ChartJS.defaults.font.family = family;
-}
+// Chart.js font registration now lives inside SignalChart, so the
+// dashboard only needs to track the theme tick (for chip colors etc.)
+// and the mobile breakpoint (still used by the endpointLabelsPlugin).
 let themeObserver = null;
 
-// Mobile breakpoint drives chart-axis behavior: on mobile we hide y-axis
-// tick columns and draw first/last value labels inline (see
-// endpointLabelsPlugin) to recover plot width.
 const isMobile = ref(false);
 let mobileMql = null;
 function syncMobile() {
@@ -158,10 +112,8 @@ function syncMobile() {
 }
 
 onMounted(() => {
-  applyChartFont();
   themeObserver = new MutationObserver(() => {
     themeTick.value += 1;
-    applyChartFont();
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
 
@@ -177,318 +129,140 @@ onUnmounted(() => {
 });
 
 // ---- Series definitions -------------------------------------------------
-
-// Color lookups read live from the theme so dark mode re-renders correctly.
-const CORE_SERIES = computed(() => {
-  themeTick.value; // reactive dependency
-  const out = [
-    { id: 'weight', label: 'Weight', unit: 'lbs', color: cssVar('--color-weight', '#4f46e5'), cat: 'Body', axis: 'y', fill: true },
-    { id: 'calories', label: 'Calories', unit: 'kcal', color: cssVar('--color-cal', '#3b82f6'), cat: 'Nutrition', axis: 'yCal', fill: true },
-    { id: 'protein', label: 'Protein', unit: 'g', color: cssVar('--color-protein', '#16a34a'), cat: 'Nutrition', axis: 'yGrams', fill: false },
-    { id: 'fat', label: 'Fat', unit: 'g', color: cssVar('--color-fat', '#f59e0b'), cat: 'Nutrition', axis: 'yGrams', fill: false, dash: [4, 3] },
-    { id: 'carbs', label: 'Carbs', unit: 'g', color: cssVar('--color-carbs', '#ef4444'), cat: 'Nutrition', axis: 'yGrams', fill: false, dash: [4, 3] },
-    { id: 'score', label: 'Score', unit: '/100', color: cssVar('--color-score', '#8b5cf6'), cat: 'Nutrition', axis: 'yScore', fill: false },
-  ];
-  // Exercise-derived series. Surfaces only when the user enabled exercise
-  // tracking AND opted to show it on the dashboard. Burn shares the same
-  // calorie axis (yCal) as the food-calorie series so the "in vs out"
-  // comparison is visually honest. Net = consumed − burned, derived
-  // per-day from the same two stores.
-  const ex = settingsStore.settings?.exercise;
-  if (ex?.enabled && ex?.showOnDashboard) {
-    out.push({ id: 'caloriesBurned', label: 'Calories burned', unit: 'kcal', color: cssVar('--color-burn', '#dc2626'), cat: 'Exercise', axis: 'yCal', fill: false, dash: [3, 3] });
-    out.push({ id: 'caloriesNet', label: 'Net calories', unit: 'kcal', color: cssVar('--color-net', '#0ea5e9'), cat: 'Exercise', axis: 'yCal', fill: false });
-    out.push({ id: 'exerciseMinutes', label: 'Exercise minutes', unit: 'min', color: cssVar('--color-burn-time', '#f97316'), cat: 'Exercise', axis: 'yMinutes', fill: false });
-  }
-  return out;
-});
-
-// One dashboard series per enabled compound. ID is `dosage:<compoundId>` so
-// the existing activeSeries Set + popover structure works unchanged.
-const DEFAULT_DOSE_COLOR = '#f59e0b';
-const compoundSeries = computed(() => {
-  themeTick.value; // reactive dep
-  return compoundsStore.enabled.map((c) => {
-    // Canonical compounds have no _id and live behind a coreInterventionKey;
-    // custom compounds keep their existing identity. Series id encodes
-    // both via the `dosage:` prefix the analysis layer recognizes:
-    //   dosage:<compoundId>           — custom
-    //   dosage:core:<interventionKey> — canonical
-    const isCanonical = c.source === 'core';
-    const ref = isCanonical ? `core:${c.coreInterventionKey}` : c._id;
-    return {
-      id: `dosage:${ref}`,
-      label: c.name,
-      unit: c.doseUnit,
-      color: c.color || DEFAULT_DOSE_COLOR,
-      cat: 'Compounds',
-      axis: 'yDose',
-      fill: true,
-      dash: [4, 3],
-      // Carry both ref slots so getSeriesDataPoints can route through
-      // the right dose-curve lookup without re-parsing the id.
-      compoundId: isCanonical ? null : c._id,
-      coreInterventionKey: isCanonical ? c.coreInterventionKey : null,
-      compoundRefKey: isCanonical ? `core:${c.coreInterventionKey}` : c._id,
-      doseUnit: c.doseUnit,
-    };
-  });
-});
-
-const SYMPTOM_COLOR_VARS = [
-  '--color-symptom-1', '--color-symptom-2', '--color-symptom-3', '--color-symptom-4',
-  '--color-symptom-5', '--color-symptom-6', '--color-symptom-7', '--color-symptom-8',
-];
-
-const symptomSeries = computed(() => {
-  themeTick.value; // reactive dep
-  return symptomsStore.symptoms.map((s, i) => ({
-    id: `symptom:${s._id}`,
-    label: s.name,
-    unit: '/10',
-    color: cssVar(SYMPTOM_COLOR_VARS[i % SYMPTOM_COLOR_VARS.length], '#8b5cf6'),
-    cat: 'Symptoms',
-    axis: 'ySymptom',
-    fill: false,
-    symptomId: s._id,
-  }));
-});
-
-// Metric series: one per enabled user-tracked metric (waist, arms, body fat,
-// custom, etc.). Reuses the symptom palette for visual consistency. All
-// metrics share `yMetric` even though their dimensions differ — same
-// trade-off as compounds sharing yDose: the per-axis scale is hidden so
-// the visual overlap is by design.
-const metricSeries = computed(() => {
-  themeTick.value; // reactive dep
-  const system = settingsStore.settings?.unitSystem || 'imperial';
-  return metricsStore.metrics
-    .filter((m) => m.enabled)
-    .sort((a, b) => a.order - b.order)
-    .map((m, i) => {
-      const unit = m.displayUnit || defaultUnitFor(m.dimension, system);
-      return {
-        id: `metric:${m._id}`,
-        label: m.name,
-        unit: unitLabel(unit) || m.dimension,
-        color: cssVar(SYMPTOM_COLOR_VARS[i % SYMPTOM_COLOR_VARS.length], '#0ea5e9'),
-        cat: 'Metrics',
-        axis: 'yMetric',
-        fill: false,
-        metricId: m._id,
-        // Carried so getSeriesDataPoints can resolve display unit without
-        // re-looking up the metric def.
-        dimension: m.dimension,
-        displayUnit: unit,
-      };
-    });
-});
-
-// Endogenous signals — experimental. We pick which signal keys to expose
-// in the chart picker and which palette color each one gets, but `label`,
-// `unit`, and `description` come straight from core's signal definitions
-// (`getAllUnifiedDefinitions()`). Re-defining them here would risk drift
-// from whatever core renames or re-units a signal to.
 //
-// Flags here govern UI gating only:
-//   cyclical — hidden unless menstrual tracking is on + show-on-dashboard
-//   fasting  — hidden unless fasting feature is on + show-on-dashboard
-const SIGNAL_DEFS = getAllUnifiedDefinitions();
-
-const ENDO_SIGNALS = [
-  { key: 'glucose',      color: '#ef4444' },
-  { key: 'insulin',      color: '#06b6d4' },
-  { key: 'glp1',         color: '#10b981' },
-  { key: 'ghrelin',      color: '#f59e0b' },
-  { key: 'leptin',       color: '#8b5cf6' },
-  { key: 'cortisol',     color: '#ec4899' },
-  // Cycle-driven hormones — flat for non-cycling users, so gated.
-  { key: 'estrogen',     color: '#d946ef', cyclical: true },
-  { key: 'progesterone', color: '#a855f7', cyclical: true },
-  { key: 'lh',           color: '#0ea5e9', cyclical: true },
-  { key: 'fsh',          color: '#14b8a6', cyclical: true },
-  // Fasting-responsive signals — gated on the fasting feature toggle.
-  { key: 'ketone',        color: '#16a34a', fasting: true },
-  { key: 'glucagon',      color: '#f97316', fasting: true },
-  { key: 'growthHormone', color: '#22d3ee', fasting: true },
-  { key: 'ampk',          color: '#84cc16', fasting: true },
-  { key: 'mtor',          color: '#e11d48', fasting: true },
-];
-
-// Cycle-driven hormones only surface in the picker when the user has
-// menstrual tracking enabled and opted in to dashboard cycle data —
-// otherwise they'd render as flat baselines for everyone else. Fasting-
-// responsive signals follow the same gate against the fasting feature.
-const endoSeries = computed(() => {
-  const m = settingsStore.settings?.menstruation;
-  const f = settingsStore.settings?.fasting;
-  const showCyclical = Boolean(m?.enabled && m?.showOnDashboard);
-  const showFasting = Boolean(f?.enabled && f?.showOnDashboard);
-  return ENDO_SIGNALS
-    .filter((s) => (!s.cyclical || showCyclical) && (!s.fasting || showFasting))
-    .map((s) => {
-      // Pull display metadata straight from core's signal definitions.
-      // Falls back to the signal key if the def is missing (shouldn't
-      // happen — guards against typos in ENDO_SIGNALS).
-      const def = SIGNAL_DEFS[s.key];
-      return {
-        id: `endo:${s.key}`,
-        label: def?.label || s.key,
-        unit: def?.unit || '',
-        color: s.color,
-        cat: 'Signal Simulations',
-        axis: `yEndo_${s.key}`,
-        fill: false,
-        endoSignal: s.key,
-      };
-    });
-});
-
-// For any series, build a sibling "trend" def — same color/category/axis,
-// dashed best-fit line. Compounds get one too even though their PK curve
-// is modeled rather than measured — the regression slope still tells the
-// user whether their average active level is trending up or down across
-// the selected range.
-function makeTrendDef(source) {
-  return {
-    id: `${source.id}-trend`,
-    label: `${source.label} trend`,
-    color: source.color,
-    cat: source.cat,
-    axis: source.axis,
-    unit: source.unit,
-    isTrend: true,
-    sourceSeriesId: source.id,
-  };
-}
-
-// Interleave each value series with its trend companion so the popover
-// groups them adjacent within their category ("Weight, Weight trend, …").
-const allSeries = computed(() => {
-  const out = [];
-  for (const s of [
-    ...CORE_SERIES.value,
-    ...metricSeries.value,
-    ...compoundSeries.value,
-    ...symptomSeries.value,
-    ...endoSeries.value,
-  ]) {
-    out.push(s);
-    out.push(makeTrendDef(s));
-  }
-  return out;
-});
-
-// Group series by category for the popover.
-const seriesByCategory = computed(() => {
-  const groups = new Map();
-  for (const s of allSeries.value) {
-    if (!groups.has(s.cat)) groups.set(s.cat, []);
-    groups.get(s.cat).push(s);
-  }
-  return groups;
-});
+// Series catalog + per-def data resolution live in the shared composable
+// (client/src/composables/useChartSeries.js) so the dashboard, the log
+// page, and the agent share one source of truth. The dashboard wraps
+// the resolver with its own range filter (filterByRange) for backward
+// compatibility with the inline chart code below; once that chart is
+// also migrated to <SignalChart>, range filtering moves into the
+// component and this wrapper goes away.
+const chartSeries = useChartSeries();
+const allSeries = chartSeries.allSeries;
+const seriesByCategory = chartSeries.seriesByCategory;
 
 // ---- Active series (persisted to localStorage) --------------------------
 
-const STORAGE_KEY = 'dashboard-active-series';
-const LAYOUT_KEY = 'dashboard-chart-layout';
-const DEFAULT_ACTIVE = ['weight', 'weight-trend', 'calories', 'dosage'];
-const LAYOUTS = ['overlay', 'stacked'];
+// Default active series for the dashboard chart. SignalChart manages
+// the active-series Set + layout + range internally now and persists
+// them under `dashboard-chart:*` localStorage keys.
+const DEFAULT_ACTIVE_DASHBOARD = ['weight', 'weight-trend', 'calories', 'dosage'];
 
-function loadActive() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return new Set(JSON.parse(raw));
-  } catch { /* ignore */ }
-  return new Set(DEFAULT_ACTIVE);
-}
-function saveActive(s) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...s]));
-}
-
-function loadLayout() {
-  try {
-    const raw = localStorage.getItem(LAYOUT_KEY);
-    if (raw && LAYOUTS.includes(raw)) return raw;
-  } catch { /* ignore */ }
-  return 'overlay';
-}
-const chartLayout = ref(loadLayout());
-watch(chartLayout, (v) => {
-  try { localStorage.setItem(LAYOUT_KEY, v); } catch { /* ignore */ }
-});
-
-const activeSeries = reactive(loadActive());
-
-// Cap for simultaneously-selected chart series. Free=2, paid=∞. The cap
-// only applies to ADDING — removing is always allowed even past cap (so a
-// user who somehow holds more than the cap can prune back down).
+// Cap for simultaneously-selected chart series. Free=2, paid=∞.
 const seriesCap = computed(() => planLimits.storageCap('maxCorrelationMetrics'));
 const seriesUpgradeTier = computed(() => {
   const target = planLimits.planRequiredFor({ storageKey: 'maxCorrelationMetrics' });
   return target?.id || null;
 });
-const atSeriesCap = computed(
-  () => Number.isFinite(seriesCap.value) && activeSeries.size >= seriesCap.value,
-);
 
-function toggleSeries(id) {
-  if (activeSeries.has(id)) {
-    activeSeries.delete(id);
-    saveActive(activeSeries);
-    return;
-  }
-  // Adding a new series — gate against the cap.
-  if (atSeriesCap.value) {
-    upgradeModal.openForGate({
-      limitKey: 'maxCorrelationMetrics',
-      used: activeSeries.size,
-    });
-    return;
-  }
-  activeSeries.add(id);
-  saveActive(activeSeries);
+// Mirror of SignalChart's active set so derivations (activeEndoSignals)
+// remain reactive without poking at localStorage.
+const localActiveSeries = ref(new Set(DEFAULT_ACTIVE_DASHBOARD));
+function onChartActiveChange(ids) {
+  localActiveSeries.value = new Set(ids);
 }
 
-const activeSeriesDefs = computed(() =>
-  allSeries.value.filter((s) => activeSeries.has(s.id)),
-);
+// Plugins shown alongside the chart's built-in tooltip / interaction.
+// Wrapped in a computed because the plugin consts are declared later in
+// this file — referencing them at module scope here would TDZ.
+// crosshairPlugin is now built into SignalChart (used on every page),
+// so the dashboard only contributes its page-specific annotation
+// plugins here.
+const dashboardChartPlugins = computed(() => [
+  pillLabelsPlugin,
+  noteIconsPlugin,
+  endpointLabelsPlugin,
+]);
+
+// Build invisible injection-marker datasets for compounds the user
+// has on the chart. The pillLabelsPlugin renders dose pills against
+// these (via `_injection:` label prefix). Color carried via
+// `pillColor` so the plugin stays self-contained.
+function injectDashboardDatasets(activeDefs) {
+  const datasets = [];
+  for (const def of activeDefs) {
+    if (def.isTrend) continue;
+    if (!def.compoundRefKey) continue;
+    const doses = filteredDosesFor(def.compoundRefKey);
+    if (!doses.length) continue;
+    datasets.push({
+      label: `_injection:${def.compoundRefKey}`,
+      pillColor: def.color,
+      data: doses.map((d) => ({
+        x: parseLocalDate(d.date),
+        y: 0,
+        value: d.value,
+        unit: def.doseUnit,
+      })),
+      borderColor: 'transparent',
+      backgroundColor: 'transparent',
+      pointRadius: 0,
+      showLine: false,
+      yAxisID: 'yCal',
+    });
+  }
+  return datasets;
+}
+
+// Dashboard-only axis tweak: cap yCal high enough to expose TDEE +
+// the largest logged-calorie day, so the calorie line never grazes
+// the top edge.
+function dashboardAxisCustomizer(opts, defs, { stacked }) {
+  if (stacked) return;
+  const tdeeVal = settingsStore.settings?.tdee;
+  const hasCalories = defs.some((d) => d.id === 'calories');
+  if (!tdeeVal || !hasCalories || !opts.scales.yCal) return;
+  const cals = (foodLogStore.dailyNutrition || []).map((d) => d.calories);
+  const maxCal = cals.length ? Math.max(...cals) : 0;
+  opts.scales.yCal.max = Math.max(tdeeVal + 100, maxCal + 100);
+}
+
+// Bridge SignalChart's range to the dashboard's loadRangeData /
+// filterByRange / endo-sim. SignalChart emits the {from, to} window;
+// we translate to the matching `ranges[]` option (by day-span match)
+// so the existing day-based filters keep working unchanged.
+function onChartRangeChange(range) {
+  if (!range) return;
+  const days = Math.round(
+    (range.to.getTime() - range.from.getTime()) / 86_400_000,
+  );
+  const match = ranges.find((r) => r.days === days);
+  if (match && selectedRange.value !== match) {
+    selectedRange.value = match;
+  }
+}
 
 
 // ---- Chart plugins (dose pills) -----------------------------------------
 
+// Self-contained: reads `_injection:*` datasets straight off the chart
+// (the inject-datasets prop on SignalChart is what puts them there) so
+// the plugin doesn't depend on the page's reactive state. Color +
+// dose value/unit travel on the dataset/point themselves.
 const pillLabelsPlugin = {
   id: 'pillLabels',
   afterDatasetsDraw(chart) {
     const ctx = chart.ctx;
-
-    // Dose pills — one set per active compound, stacked vertically from the
-    // top of the chart area. In stacked layout each chart only contains one
-    // compound's `_injection` dataset, so we filter to only those defs whose
-    // dataset is actually in this chart — otherwise rows would offset based
-    // on the global compound count and pills would float in empty space.
-    const allCompoundDefs = activeSeriesDefs.value.filter((d) => d.compoundRefKey);
-    const compoundDefs = allCompoundDefs.filter((def) =>
-      chart.data.datasets.some((d) => d?.label === `_injection:${def.compoundRefKey}`),
-    );
+    const injectionDatasets = [];
+    chart.data.datasets.forEach((ds, idx) => {
+      if (String(ds?.label || '').startsWith('_injection:')) {
+        injectionDatasets.push({ ds, idx });
+      }
+    });
+    if (!injectionDatasets.length) return;
     const topBase = chart.chartArea.top + 14;
-    compoundDefs.forEach((def, row) => {
-      const injLabel = `_injection:${def.compoundRefKey}`;
-      const injIdx = chart.data.datasets.findIndex((d) => d?.label === injLabel);
-      if (injIdx === -1) return;
-      const meta = chart.getDatasetMeta(injIdx);
-      const ds = chart.data.datasets[injIdx];
+    injectionDatasets.forEach(({ ds, idx }, row) => {
+      const meta = chart.getDatasetMeta(idx);
       if (!meta?.data?.length) return;
+      const color = ds.pillColor || ds.borderColor || ds.backgroundColor || '#999';
       const y = topBase + row * 18;
       meta.data.forEach((point, i) => {
         const v = ds.data[i]?.value;
         const u = ds.data[i]?.unit;
         if (v == null) return;
-        drawPill(ctx, `${v}${u}`, point.x, y, def.color, true, chart.chartArea.bottom);
+        drawPill(ctx, `${v}${u}`, point.x, y, color, true, chart.chartArea.bottom);
       });
     });
-
   },
 };
 
@@ -613,134 +387,10 @@ const endpointLabelsPlugin = {
   },
 };
 
-// ---- Synchronized crosshair across charts -------------------------------
-// Tracks one shared time value (ms since epoch) so that hovering or tapping
-// any chart draws a vertical reference line at the same x on every chart in
-// stacked layout, and propagates the tooltip activation to peer charts so
-// the user sees readouts for every series at the same date — not just the
-// chart they're directly hovering. The plugin tracks chart instances in a
-// Set; when the shared value changes we manually call draw() on each peer
-// (Chart.js doesn't auto-redraw siblings on a reactive change).
-const crosshairTime = ref(null);
-const crosshairCharts = new Set();
-
-// Find the index in each visible dataset whose x is closest to time `t`.
-// Used to drive peer-chart tooltips programmatically. Skips hidden helper
-// datasets (`_injection:`) since the tooltip would filter them anyway.
-function nearestItemsAtTime(chart, t) {
-  const items = [];
-  chart.data.datasets.forEach((ds, datasetIndex) => {
-    if (!chart.isDatasetVisible(datasetIndex)) return;
-    if (String(ds?.label || '').startsWith('_injection')) return;
-    if (!ds.data?.length) return;
-    let closestIndex = -1;
-    let minDist = Infinity;
-    ds.data.forEach((pt, i) => {
-      const ptT = pt?.x instanceof Date ? pt.x.getTime() : pt?.x;
-      if (!Number.isFinite(ptT)) return;
-      const d = Math.abs(ptT - t);
-      if (d < minDist) {
-        minDist = d;
-        closestIndex = i;
-      }
-    });
-    if (closestIndex >= 0) items.push({ datasetIndex, index: closestIndex });
-  });
-  return items;
-}
-
-// Activate (or clear) a peer chart's tooltip at the shared crosshair time.
-// The originating chart is left alone — Chart.js's native interaction
-// resolves its own tooltip from the actual mouse event, and overwriting
-// active elements there fights with that handler.
-function syncPeerTooltip(chart, t) {
-  if (!chart.tooltip?.setActiveElements) return;
-  if (t == null) {
-    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-    return;
-  }
-  const items = nearestItemsAtTime(chart, t);
-  const xScale = chart.scales.x;
-  if (!items.length || !xScale) {
-    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-    return;
-  }
-  const px = xScale.getPixelForValue(t);
-  const firstMeta = chart.getDatasetMeta(items[0].datasetIndex);
-  const firstEl = firstMeta?.data?.[items[0].index];
-  const py = firstEl?.y ?? chart.chartArea.top + 20;
-  chart.tooltip.setActiveElements(items, { x: px, y: py });
-}
-
-function setCrosshair(t, origin) {
-  if (crosshairTime.value === t) return;
-  crosshairTime.value = t;
-  // Schedule peer updates so the originating chart's event handler can
-  // finish before re-entering its render cycle. Peers use `update('none')`
-  // (no animation, but a full update pass) — `draw()` alone only repaints
-  // the current state and doesn't drive the tooltip controller through
-  // show/move/hide, which causes peer tooltips to:
-  //   - not appear on the first hover (controller never kicks in)
-  //   - drift out of sync after the cursor pauses (caret never refreshes)
-  //   - fail to clear on mouseout (hidden state never renders)
-  // The originating chart only needs a redraw — Chart.js's native event
-  // flow has already updated its tooltip from the real mouse event.
-  requestAnimationFrame(() => {
-    for (const c of crosshairCharts) {
-      if (c === origin) {
-        c.draw();
-      } else {
-        syncPeerTooltip(c, t);
-        c.update('none');
-      }
-    }
-  });
-}
-
-const crosshairPlugin = {
-  id: 'crosshair',
-  install(chart) {
-    crosshairCharts.add(chart);
-  },
-  uninstall(chart) {
-    crosshairCharts.delete(chart);
-  },
-  afterEvent(chart, args) {
-    const event = args.event;
-    if (!event) return;
-    const xScale = chart.scales.x;
-    if (!xScale) return;
-    const move = ['mousemove', 'touchmove', 'touchstart', 'pointermove', 'pointerdown'];
-    const exit = ['mouseout', 'mouseleave', 'touchend', 'touchcancel', 'pointerleave'];
-    if (move.includes(event.type)) {
-      // event.x is canvas-relative; clamp to plot area so the cursor doesn't
-      // produce a value outside the chart bounds.
-      const px = Math.max(chart.chartArea.left, Math.min(chart.chartArea.right, event.x));
-      const v = xScale.getValueForPixel(px);
-      if (Number.isFinite(v)) setCrosshair(v, chart);
-    } else if (exit.includes(event.type)) {
-      setCrosshair(null, chart);
-    }
-  },
-  afterDraw(chart) {
-    if (crosshairTime.value == null) return;
-    const xScale = chart.scales.x;
-    if (!xScale) return;
-    const px = xScale.getPixelForValue(crosshairTime.value);
-    if (!Number.isFinite(px)) return;
-    if (px < chart.chartArea.left || px > chart.chartArea.right) return;
-    const ctx = chart.ctx;
-    ctx.save();
-    ctx.strokeStyle = cssVar('--text-tertiary', '#9ca3af');
-    ctx.setLineDash([4, 3]);
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(px, chart.chartArea.top);
-    ctx.lineTo(px, chart.chartArea.bottom);
-    ctx.stroke();
-    ctx.restore();
-  },
-};
+// Crosshair plugin moved to client/src/components/chart-plugins/
+// crosshairPlugin.js and is registered by SignalChart for every chart
+// instance on the page (dashboard + log + future). No page-level
+// scaffolding needed.
 
 function drawPill(ctx, label, x, y, color, showTick, tickBottom) {
   ctx.save();
@@ -786,12 +436,22 @@ function parseLocalDate(value) {
   return new Date(y, m - 1, d);
 }
 
+// Returns BOTH local Date instances and YYYY-MM-DD strings for the
+// window. The sim composable consumes Dates (so the end-of-window is
+// genuinely "now" in user-local time, not UTC midnight of "today" —
+// which would render as 8pm ET / 5pm PT, visibly truncated). The
+// daily-aggregate fetchers consume the YMD strings.
 function rangeDates(days) {
   const to = new Date();
   const from = new Date();
   if (days) from.setDate(from.getDate() - days);
   else from.setFullYear(from.getFullYear() - 5);
-  return { from: localYmd(from), to: localYmd(to) };
+  return {
+    from,
+    to,
+    fromYmd: localYmd(from),
+    toYmd: localYmd(to),
+  };
 }
 
 // ---- Range + data loading -----------------------------------------------
@@ -806,7 +466,9 @@ const ranges = [
 const selectedRange = ref(ranges[0]);
 
 async function loadRangeData() {
-  const { from, to } = rangeDates(selectedRange.value.days);
+  const { fromYmd, toYmd } = rangeDates(selectedRange.value.days);
+  const from = fromYmd;
+  const to = toYmd;
   await Promise.all([
     foodLogStore.fetchDailyNutrition(from, to),
     symptomsStore.fetchRangeLogs(from, to),
@@ -826,7 +488,10 @@ async function loadRangeData() {
 // range changes. No caching for v1 — each trigger refetches meals and
 // re-simulates the full window. Cap at 60 days to keep the test bounded;
 // longer ranges short-circuit until we measure perf and decide on chunking.
-const endoSim = useEndogenousSim();
+// Use the chart composable's endoSim instance so the resolver and
+// the dashboard share one set of result refs (the underlying worker is
+// already a module-level singleton; the reactive state isn't).
+const endoSim = chartSeries.endoSim;
 const ENDO_MAX_DAYS = 60;
 
 // Extract the underlying signal keys for any active endo entry, including
@@ -835,7 +500,7 @@ const ENDO_MAX_DAYS = 60;
 // regression). Deduped so the worker doesn't compute the same signal twice.
 const activeEndoSignals = computed(() => {
   const out = new Set();
-  for (const id of activeSeries) {
+  for (const id of localActiveSeries.value) {
     if (!id.startsWith('endo:')) continue;
     const key = id.slice(5).replace(/-trend$/, '');
     out.add(key);
@@ -843,90 +508,24 @@ const activeEndoSignals = computed(() => {
   return [...out];
 });
 
-// Maps the user's settings (lbs/inches, partial fields) to the worker's
-// expected SI units. Anything missing falls through to the worker which
-// patches it from DEFAULT_SUBJECT — that's why the keys can be undefined.
-function endoSubjectFromSettings() {
-  const s = settingsStore.settings || {};
-  const heightCm = s.heightInches != null ? Number(s.heightInches) * 2.54 : undefined;
-  const weightKg = s.currentWeightLbs != null
-    ? Number(s.currentWeightLbs) * 0.45359237
-    : undefined;
-
-  // Cycle inputs are only meaningful for female users with the toggle on
-  // and a starting date. cycleDay is derived here (today minus start,
-  // mod cycle length) so the worker stays a pure function of the message.
-  let cycleDay, cycleLengthOut, lutealPhaseLength;
-  const m = s.menstruation;
-  if (s.sex === 'female' && m?.enabled && m.lastPeriodStart) {
-    const start = new Date(m.lastPeriodStart);
-    if (!Number.isNaN(start.getTime())) {
-      const cl = Math.max(15, Math.min(60, Number(m.cycleLength) || 28));
-      const lp = Math.max(7, Math.min(20, Number(m.lutealPhaseLength) || 14));
-      const daysSince = Math.floor((Date.now() - start.getTime()) / 86400000);
-      cycleDay = ((daysSince % cl) + cl) % cl;
-      cycleLengthOut = cl;
-      lutealPhaseLength = lp;
-    }
-  }
-
-  // Bloodwork is stored nested (matches Subject.bloodwork directly) so
-  // we can pass it through to the worker untouched. Empty object is fine —
-  // the worker merger leaves DEFAULT_SUBJECT.bloodwork alone in that case.
-  const bloodwork = s.bloodwork && typeof s.bloodwork === 'object' ? s.bloodwork : undefined;
-  // Genetics: same — nested { panelId: { fieldKey: value } } already in
-  // Subject.genetics shape.
-  const genetics = s.genetics && typeof s.genetics === 'object' ? s.genetics : undefined;
-
-  return {
-    sex: s.sex || undefined,
-    ageYears: s.age != null ? Number(s.age) : undefined,
-    weightKg: Number.isFinite(weightKg) ? weightKg : undefined,
-    heightCm: Number.isFinite(heightCm) ? heightCm : undefined,
-    cycleDay,
-    cycleLength: cycleLengthOut,
-    lutealPhaseLength,
-    bloodwork,
-    genetics,
-  };
-}
-
+// Kick a server-side sim run for the active signals + selected range.
+// Subject + conditions live on the server (UserSettings) and the
+// checkpoint is invalidated automatically by settings/log mutations
+// (see server/src/sim/invalidationHooks.js), so the client only sends
+// {from, to, signals}.
 async function maybeRunEndoSim() {
   const signals = activeEndoSignals.value;
   if (!signals.length) return;
   const days = selectedRange.value.days;
-  if (days != null && days > ENDO_MAX_DAYS) return; // skip — too expensive for test
+  if (days != null && days > ENDO_MAX_DAYS) return;
   const { from, to } = rangeDates(Math.min(days ?? ENDO_MAX_DAYS, ENDO_MAX_DAYS));
-  const conditions = settingsStore.settings?.conditions || {};
-  await endoSim.run({
-    from, to, signals,
-    subject: endoSubjectFromSettings(),
-    conditions,
-  });
+  await endoSim.run({ from, to, signals });
 }
 
-watch(activeEndoSignals, maybeRunEndoSim);
-// Re-sim whenever the user's profile changes — biological sex, age,
-// weight, and height all flow into the engine's physiology derivation
-// (BMR, total body water, drug clearance, etc.) and shift signal curves.
-watch(
-  () => {
-    const s = settingsStore.settings;
-    if (!s) return null;
-    const m = s.menstruation || {};
-    return [
-      s.sex, s.age, s.heightInches, s.currentWeightLbs,
-      m.enabled, m.lastPeriodStart, m.cycleLength, m.lutealPhaseLength,
-      // JSON-stringify so the watcher fires on any nested bloodwork /
-      // conditions / genetics edit without paying for deep-traversal
-      // reactivity setup.
-      JSON.stringify(s.bloodwork || {}),
-      JSON.stringify(s.conditions || {}),
-      JSON.stringify(s.genetics || {}),
-    ];
-  },
-  maybeRunEndoSim,
-);
+// Immediate so the very first activeEndoSignals (populated when
+// SignalChart emits its persisted active set on mount) kicks the sim
+// without waiting for a second change.
+watch(activeEndoSignals, maybeRunEndoSim, { immediate: true });
 
 // Gate the chart on the first data load so we don't paint cached store
 // values, then animate again when fresh data arrives. The chart only
@@ -971,7 +570,6 @@ function filterByRange(arr, dateField = 'date') {
     .sort((a, b) => String(a[dateField]).localeCompare(String(b[dateField])));
 }
 
-const filteredWeight = computed(() => filterByRange(weightStore.entries));
 const filteredNutrition = computed(() => foodLogStore.dailyNutrition || []);
 // Polymorphic ref lookup. `ref` is either a custom compound _id or
 // a `core:<key>` token built from the canonical intervention key.
@@ -987,44 +585,6 @@ function filteredDosesFor(ref) {
   cutoff.setDate(cutoff.getDate() - selectedRange.value.days);
   return all.filter((d) => new Date(d.date) >= cutoff);
 }
-
-function filteredPkFor(ref) {
-  const entry = dosesStore.curvesByCompound[ref];
-  if (!entry?.curve?.length) return [];
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const cutoff = selectedRange.value.days ? new Date() : null;
-  if (cutoff) cutoff.setDate(cutoff.getDate() - selectedRange.value.days);
-  return entry.curve.filter((p) => {
-    const t = new Date(p.date);
-    if (t > todayStart) return false;
-    if (cutoff && t < cutoff) return false;
-    return true;
-  });
-}
-
-// Build per-symptom data: Map<symptomId, [{date, severity}]>
-const symptomDataById = computed(() => {
-  const map = new Map();
-  for (const log of symptomsStore.rangeLogs) {
-    if (!map.has(log.symptomId)) map.set(log.symptomId, []);
-    map.get(log.symptomId).push(log);
-  }
-  return map;
-});
-
-// Build per-metric data: Map<metricId, [{date, value}]>. Stored in canonical
-// units; conversion to display unit happens in getSeriesDataPoints so the
-// per-metric `displayUnit` override is honored.
-const metricDataById = computed(() => {
-  const map = new Map();
-  for (const log of metricsStore.rangeLogs) {
-    const id = String(log.metricId);
-    if (!map.has(id)) map.set(id, []);
-    map.get(id).push(log);
-  }
-  return map;
-});
 
 // Map<date, [{symptomId, name, severity}]> for the log-table symptom popover.
 // Severity 0 means "explicitly none" — useful for charting trends but noisy
@@ -1055,517 +615,20 @@ function severityColor(sev) {
 
 // ---- Dynamic chart data -------------------------------------------------
 
+// Range-aware wrapper around the shared resolver. The shared composable
+// returns full-history points; the inline chart below pre-filters to
+// the selected range so we don't change buildChartData's contract. Once
+// the chart migrates to <SignalChart>, range filtering moves into the
+// component and this wrapper can be dropped in favor of
+// chartSeries.getDataPoints directly.
 function getSeriesDataPoints(def) {
-  switch (def.id) {
-    case 'weight':
-      return filteredWeight.value.map((e) => ({ x: parseLocalDate(e.date), y: e.weightLbs }));
-    case 'calories':
-      return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.calories }));
-    case 'protein':
-      return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.protein }));
-    case 'fat':
-      return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.fat }));
-    case 'carbs':
-      return filteredNutrition.value.map((d) => ({ x: parseLocalDate(d.date), y: d.carbs }));
-    case 'caloriesBurned': {
-      const days = filterByRange(exerciseLogStore.dailyBurn || []);
-      return days.map((d) => ({
-        x: parseLocalDate(d.date),
-        y: Math.round(d.caloriesBurned || 0),
-      }));
-    }
-    case 'caloriesNet': {
-      // Net = consumed − burned. Days with only one side present fall
-      // back to that side (so a workout-only day doesn't disappear).
-      const burnByDay = new Map(
-        (exerciseLogStore.dailyBurn || []).map((d) => [d.date, d.caloriesBurned || 0]),
-      );
-      const calByDay = new Map(
-        filteredNutrition.value.map((d) => [d.date, d.calories || 0]),
-      );
-      const dates = new Set([...burnByDay.keys(), ...calByDay.keys()]);
-      const sorted = [...dates].sort();
-      return filterByRange(sorted.map((d) => ({ date: d }))).map(({ date }) => ({
-        x: parseLocalDate(date),
-        y: Math.round((calByDay.get(date) || 0) - (burnByDay.get(date) || 0)),
-      }));
-    }
-    case 'exerciseMinutes': {
-      const days = filterByRange(exerciseLogStore.dailyBurn || []);
-      return days.map((d) => ({
-        x: parseLocalDate(d.date),
-        y: Math.round(d.durationMin || 0),
-      }));
-    }
-    case 'score': {
-      const targets = settingsStore.settings?.targets;
-      if (!targets) return [];
-      return filteredNutrition.value
-        .map((d) => {
-          const val = computeNutritionScore(
-            { calories: d.calories, protein: d.protein, fat: d.fat, carbs: d.carbs },
-            targets,
-          );
-          return val != null ? { x: parseLocalDate(d.date), y: val } : null;
-        })
-        .filter(Boolean);
-    }
-    default:
-      if (def.compoundRefKey) {
-        return filteredPkFor(def.compoundRefKey).map((p) => ({
-          x: new Date(p.date),
-          y: p.activeValue,
-        }));
-      }
-      if (def.symptomId) {
-        const logs = symptomDataById.value.get(def.symptomId) || [];
-        return logs.map((l) => ({ x: parseLocalDate(l.date), y: l.severity }));
-      }
-      if (def.metricId) {
-        const logs = metricDataById.value.get(String(def.metricId)) || [];
-        const unit = def.displayUnit;
-        return logs.map((l) => ({
-          x: parseLocalDate(l.date),
-          y: fromCanonical(l.value, unit),
-        }));
-      }
-      if (def.endoSignal) {
-        const r = endoSim.result.value;
-        const arr = r.series?.[def.endoSignal];
-        if (!arr || !r.timestamps?.length) return [];
-        // Pair timestamps with the per-signal sample buffer. Both arrays
-        // are dense (same length), produced by the worker.
-        const pts = new Array(arr.length);
-        for (let i = 0; i < arr.length; i++) {
-          pts[i] = { x: new Date(r.timestamps[i]), y: arr[i] };
-        }
-        return pts;
-      }
-      return [];
-  }
+  const pts = chartSeries.getDataPoints(def);
+  if (!pts?.length) return [];
+  if (!selectedRange.value?.days) return pts;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - selectedRange.value.days);
+  return pts.filter((p) => (p.x instanceof Date ? p.x : new Date(p.x)) >= cutoff);
 }
-
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-// Magnitude-aware rounding so trend tooltip values aren't drowning in
-// decimals. Larger magnitudes get fewer decimals; small values keep two.
-//   ≥ 1000  → 0 decimals (e.g., 2,480)
-//   ≥ 100   → 1 decimal  (e.g., 215.3)
-//   <  100  → 2 decimals (e.g., 12.34)
-function smartRoundForTooltip(v) {
-  if (!Number.isFinite(v)) return '';
-  const abs = Math.abs(v);
-  if (abs >= 1000) return Math.round(v).toLocaleString();
-  if (abs >= 100) return v.toFixed(1);
-  return v.toFixed(2);
-}
-
-// Linear-regression best-fit line across the series data, returned as a
-// Chart.js dataset configured with a dashed style. Returns null if there
-// aren't enough points to fit a line.
-//
-// We emit a trend point at every x in the source series (not just the two
-// endpoints) so Chart.js's index-mode tooltip can pair a trend value with
-// every hover position. With `tension: 0` the line is straight, so this is
-// visually identical to a two-endpoint version.
-function buildTrendLineDataset(data, { color, label, yAxisID, unit }) {
-  if (data.length < 2) return null;
-  const t0 = data[0].x.getTime();
-  const n = data.length;
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-  for (const pt of data) {
-    const x = (pt.x.getTime() - t0) / 86400000; // days from first point
-    sumX += x;
-    sumY += pt.y;
-    sumXY += x * pt.y;
-    sumXX += x * x;
-  }
-  const denom = n * sumXX - sumX * sumX;
-  if (denom === 0) return null; // all x identical → no slope
-  const slope = (n * sumXY - sumX * sumY) / denom;
-  const intercept = (sumY - slope * sumX) / n;
-  const trendData = data.map((pt) => {
-    const x = (pt.x.getTime() - t0) / 86400000;
-    return { x: pt.x, y: intercept + slope * x };
-  });
-  return {
-    label,
-    data: trendData,
-    borderColor: color,
-    backgroundColor: 'transparent',
-    fill: false,
-    tension: 0,
-    pointRadius: 0,
-    borderWidth: 2,
-    borderDash: [6, 4],
-    yAxisID,
-    unit,
-  };
-}
-
-// Build datasets for the given list of series defs. Trend defs render as
-// dashed best-fit lines pulled from their source series's data; value defs
-// render as the standard line/area dataset. Compound injection markers
-// follow at the end so the pill plugin can find their data.
-function buildChartData(defs) {
-  const datasets = [];
-
-  for (const def of defs) {
-    if (def.isTrend) {
-      const source = allSeries.value.find((s) => s.id === def.sourceSeriesId);
-      if (!source) continue;
-      const data = getSeriesDataPoints(source);
-      const trend = buildTrendLineDataset(data, {
-        color: def.color,
-        label: `${source.label} trend`,
-        yAxisID: def.axis,
-        unit: source.unit,
-      });
-      if (trend) datasets.push(trend);
-      continue;
-    }
-
-    const data = getSeriesDataPoints(def);
-    if (!data.length) continue;
-
-    const isCompound = !!def.compoundRefKey;
-    datasets.push({
-      label: def.label,
-      data,
-      borderColor: def.color,
-      backgroundColor: def.fill ? hexToRgba(def.color, 0.06) : 'transparent',
-      fill: def.fill || false,
-      tension: isCompound ? 0.4 : 0.3,
-      pointRadius: isCompound ? 0 : (def.pills ? 4 : 3),
-      pointBackgroundColor: def.color,
-      borderWidth: 2,
-      borderDash: def.dash || [],
-      yAxisID: def.axis,
-      unit: def.unit,
-    });
-  }
-
-  // Injection markers — one hidden dataset per compound so the pill plugin
-  // can draw value/unit annotations at each dose point.
-  for (const def of defs) {
-    if (def.isTrend) continue;
-    if (!def.compoundRefKey) continue;
-    const doses = filteredDosesFor(def.compoundRefKey);
-    if (!doses.length) continue;
-    datasets.push({
-      label: `_injection:${def.compoundRefKey}`,
-      data: doses.map((d) => ({
-        x: parseLocalDate(d.date),
-        y: 0,
-        value: d.value,
-        unit: def.doseUnit,
-      })),
-      borderColor: 'transparent',
-      backgroundColor: 'transparent',
-      pointRadius: 0,
-      showLine: false,
-      yAxisID: 'yCal',
-    });
-  }
-
-  return { datasets };
-}
-
-const chartDataClean = computed(() => buildChartData(activeSeriesDefs.value));
-
-// ---- Dynamic chart options ----------------------------------------------
-
-const hasActiveCompound = computed(() =>
-  activeSeriesDefs.value.some((s) => s.compoundId),
-);
-
-// Build chart options for the given list of series defs. Like buildChartData
-// this is callable per-series (stacked layout) or with the full active list
-// (overlay). `hideXAxis` skips x-axis ticks/border so stacked charts can hide
-// duplicate date labels and only show them on the bottom chart. `stacked`
-// switches the y-axis to a single right-aligned axis with grid + ticks
-// (regardless of which series uses which `axis` id internally).
-function buildChartOptions(defs, { hideXAxis = false, stacked = false } = {}) {
-  const usedAxes = new Set(defs.map((s) => s.axis));
-  const hasCompoundLocal = defs.some((s) => s.compoundId);
-  const hasCaloriesLocal = defs.some((s) => s.id === 'calories');
-  // Injection markers ride on yCal so they stay pinned at y=0 regardless of
-  // the dose curve's own y-scale.
-  if (hasCompoundLocal) usedAxes.add('yCal');
-
-  // Reserve vertical headroom for one row of dose pills per compound IN THIS
-  // CHART (in stacked layout each chart gets its own headroom).
-  const compoundRows = defs.filter((s) => s.compoundId).length;
-  const topPadding = compoundRows ? 24 + (compoundRows - 1) * 18 : 4;
-
-  const opts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    // Custom `nearestX` mode (registered above): one point per dataset,
-    // nearest by x. Built-in `'index'` breaks with mismatched cadences
-    // (dense PK curve indices outrun sparse weigh-in indices), and `'x'`
-    // returns multiple points from dense series while skipping sparse ones
-    // entirely.
-    interaction: { mode: 'nearestX', intersect: false },
-    // Multi-series time chart animation: snap x immediately so range/series
-    // toggles don't slide points sideways (the default 1s easeOutQuart on x
-    // makes lines warp as some points move horizontally before others). Only
-    // y interpolates, with a short color tween for theme swaps. Hover and
-    // resize stay instant.
-    //
-    // Stagger by datasetIndex so series cascade in instead of animating all
-    // at once. Animation order = dataset order in `chartDataClean`, which
-    // follows `activeSeriesDefs` order (driven by CORE_SERIES → compound →
-    // symptom). To make a different series animate first, reorder CORE_SERIES
-    // in this file. The stagger only applies to data updates (`mode:
-    // 'default'`) — hover, resize, and theme color tweens stay synchronous.
-    animation: {
-      duration: 400,
-      easing: 'easeOutQuart',
-    },
-    animations: {
-      x: { duration: 0 },
-      y: {
-        duration: 400,
-        easing: 'easeOutQuart',
-        // Two-axis stagger: dataset-level (Cal → Pro → Fat → ...) plus
-        // point-level so each series waves in left-to-right rather than
-        // all points snapping together. Per-point step is capped so dense
-        // PK curves (~150 points) don't drag past ~500ms total wave time;
-        // short series (a few weigh-ins) still get a noticeable cascade.
-        delay: (ctx) => {
-          if (ctx.type !== 'data' || ctx.mode !== 'default') return 0;
-          const n = ctx.chart.data.datasets[ctx.datasetIndex]?.data?.length || 1;
-          const perPoint = Math.min(15, 500 / n);
-          // Overlay needs more space between series so the cascade reads as
-          // distinct lines arriving one after another. Stacked charts each
-          // contain just a main + trend dataset, so a small stagger is plenty.
-          const datasetStagger = stacked ? 40 : 200;
-          return ctx.datasetIndex * datasetStagger + ctx.dataIndex * perPoint;
-        },
-      },
-      colors: { duration: 250 },
-    },
-    transitions: {
-      active: { animation: { duration: 0 } },
-      resize: { animation: { duration: 0 } },
-    },
-    layout: {
-      padding: {
-        top: topPadding,
-        bottom: notesStore.rangeNotes.length ? 28 : 4,
-      },
-    },
-    scales: {
-      x: {
-        type: 'time',
-        time: { unit: 'day', tooltipFormat: 'MMM d, yyyy' },
-        grid: { display: false },
-        ticks: {
-          display: !hideXAxis,
-          // Cap tick density so the x-axis doesn't read as a wall of dates.
-          // Mobile is tighter (4) since labels are rotated and plot width is
-          // already constrained.
-          maxTicksLimit: isMobile.value ? 4 : 8,
-          autoSkipPadding: 16,
-        },
-        border: { display: !hideXAxis },
-      },
-    },
-    plugins: {
-      legend: { display: false }, // We use the chip bar instead.
-      tooltip: {
-        mode: 'nearestX',
-        intersect: false,
-        filter: (item) => !String(item.dataset?.label || '').startsWith('_injection'),
-        callbacks: {
-          // Smart-round trend lines so the regression's full-precision
-          // floating-point output doesn't blow up the tooltip ("215.4837..."
-          // → "215.5"). Real-data series keep the default localized format
-          // since their values are already rounded by the store/server.
-          label(item) {
-            const label = String(item.dataset?.label || '');
-            const v = item.parsed?.y;
-            if (v == null) return label;
-            const isTrend = label.endsWith('trend');
-            const formatted = isTrend
-              ? smartRoundForTooltip(v)
-              : (typeof v === 'number' ? v.toLocaleString() : String(v));
-            // Datasets carry their `unit` straight through from the
-            // series def — appended as a dimension hint so the tooltip
-            // reads "Glucose: 142 mg/dL" rather than the bare number.
-            const unit = item.dataset?.unit;
-            const suffix = unit ? ` ${unit}` : '';
-            return `${label}: ${formatted}${suffix}`;
-          },
-        },
-      },
-    },
-  };
-
-  const monoFamily = cssVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace');
-
-  // ===== STACKED MODE =====
-  // Single primary y-axis on the right with tick labels rendered INSIDE the
-  // chart area so the line/area can extend edge-to-edge. `mirror: true` flips
-  // labels from outside-right to inside-right; we hide the border and tick
-  // marks so there's no axis "rail" visible. Title suppressed — each chart
-  // has its own labeled heading above it.
-  if (stacked && defs[0]) {
-    const primary = defs[0].axis;
-    const primaryAxisConfig = {
-      position: 'right',
-      title: { display: false },
-      ticks: {
-        display: !isMobile.value,
-        font: { family: monoFamily },
-        maxTicksLimit: 6,
-        mirror: true,
-        padding: 6,
-        z: 1,
-      },
-      grid: {
-        color: cssVar('--chart-grid', '#f3f4f6'),
-        drawTicks: false,
-        drawOnChartArea: true,
-      },
-      border: { display: false },
-    };
-    // y (weight) and yMetric (body measurements) auto-fit so small variations
-    // around a high baseline (e.g. 90cm waist trending to 88cm) aren't visually
-    // squashed against a hard zero.
-    if (primary !== 'y' && primary !== 'yMetric') primaryAxisConfig.min = 0;
-    if (primary === 'ySymptom') primaryAxisConfig.max = 10;
-    if (primary === 'yScore') primaryAxisConfig.max = 100;
-    if (primary === 'yCal' && tdee.value) {
-      const cals = filteredNutrition.value.map((d) => d.calories);
-      const maxCal = cals.length ? Math.max(...cals) : 0;
-      primaryAxisConfig.max = Math.max(tdee.value + 100, maxCal + 100);
-    }
-    opts.scales[primary] = primaryAxisConfig;
-
-    // Auxiliary axes — hidden, just there to satisfy datasets that reference
-    // them (e.g., injection markers pinned to yCal at y=0).
-    for (const ax of usedAxes) {
-      if (ax === primary) continue;
-      const aux = { position: 'right', display: false, grid: { drawOnChartArea: false } };
-      if (ax !== 'y' && ax !== 'yMetric') aux.min = 0;
-      if (ax === 'ySymptom') aux.max = 10;
-      if (ax === 'yScore') aux.max = 100;
-      opts.scales[ax] = aux;
-    }
-    return opts;
-  }
-
-  // ===== OVERLAY MODE =====
-  // Left axis: weight (visible only when weight is active). On mobile, hide
-  // the tick column + title; endpointLabelsPlugin draws first/last values
-  // inline to free up horizontal plot width.
-  if (usedAxes.has('y')) {
-    opts.scales.y = {
-      position: 'left',
-      title: { display: !isMobile.value, text: 'lbs', color: cssVar('--chart-axis', '#9ca3af') },
-      ticks: { display: !isMobile.value, font: { family: monoFamily }, maxTicksLimit: 6 },
-      grid: { color: cssVar('--chart-grid', '#f3f4f6'), drawTicks: !isMobile.value },
-      border: { display: !isMobile.value },
-    };
-  }
-
-  // Right axis: calories (visible when calories is in this chart).
-  if (usedAxes.has('yCal')) {
-    opts.scales.yCal = {
-      position: 'right',
-      title: {
-        display: !isMobile.value && hasCaloriesLocal,
-        text: 'Calories',
-        color: cssVar('--color-cal', '#3b82f6'),
-      },
-      ticks: { display: !isMobile.value, font: { family: monoFamily }, maxTicksLimit: 6 },
-      grid: { drawOnChartArea: false, drawTicks: !isMobile.value },
-      border: { display: !isMobile.value },
-      min: 0,
-    };
-    if (tdee.value && hasCaloriesLocal) {
-      const cals = filteredNutrition.value.map((d) => d.calories);
-      const maxCal = cals.length ? Math.max(...cals) : 0;
-      opts.scales.yCal.max = Math.max(tdee.value + 100, maxCal + 100);
-    }
-  }
-
-  // Hidden axes for other unit groups.
-  if (usedAxes.has('yGrams')) {
-    opts.scales.yGrams = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0 };
-  }
-  if (usedAxes.has('yDose')) {
-    opts.scales.yDose = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0 };
-  }
-  if (usedAxes.has('ySymptom')) {
-    opts.scales.ySymptom = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0, max: 10 };
-  }
-  if (usedAxes.has('yScore')) {
-    opts.scales.yScore = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0, max: 100 };
-  }
-
-  if (usedAxes.has('yMinutes')) {
-    opts.scales.yMinutes = { position: 'right', display: false, grid: { drawOnChartArea: false }, min: 0 };
-  }
-  // Endogenous signals: one hidden axis per signal so very different
-  // magnitudes (glucose ~80–200 mg/dL vs GLP-1 ~5–50 pmol/L) don't squash
-  // each other on a shared scale.
-  for (const ax of usedAxes) {
-    if (typeof ax === 'string' && ax.startsWith('yEndo_')) {
-      opts.scales[ax] = {
-        position: 'right',
-        display: false,
-        grid: { drawOnChartArea: false },
-        min: 0,
-      };
-    }
-  }
-
-  return opts;
-}
-
-const chartOptions = computed(() => buildChartOptions(activeSeriesDefs.value));
-
-// Stacked layout: one chart per active series, with x-axis labels only on
-// the bottom-most chart so the dates don't repeat through the column.
-// Stacked layout grouping: an active trend pairs onto its source series's
-// chart so they render together (just like the previous auto-trend
-// behavior). Trends whose source isn't active become their own chart.
-const stackedCharts = computed(() => {
-  const defs = activeSeriesDefs.value;
-  const valueDefs = defs.filter((d) => !d.isTrend);
-  const trendDefs = defs.filter((d) => d.isTrend);
-  const valueIds = new Set(valueDefs.map((d) => d.id));
-
-  const charts = [];
-  for (const def of valueDefs) {
-    const trend = trendDefs.find((t) => t.sourceSeriesId === def.id);
-    charts.push({ def, defs: trend ? [def, trend] : [def] });
-  }
-  for (const trend of trendDefs) {
-    if (!valueIds.has(trend.sourceSeriesId)) {
-      charts.push({ def: trend, defs: [trend] });
-    }
-  }
-
-  return charts.map((c, i) => ({
-    def: c.def,
-    data: buildChartData(c.defs),
-    options: buildChartOptions([c.def], {
-      stacked: true,
-      hideXAxis: i < charts.length - 1,
-    }),
-  }));
-});
-
-const hasAnyData = computed(() => chartDataClean.value.datasets.length > 0);
 
 // ---- Combined history table ---------------------------------------------
 
@@ -1584,7 +647,7 @@ const allLogRows = computed(() => {
     if (!byDate.has(dateStr)) byDate.set(dateStr, {
       date: dateStr,
       weight: null,
-      doses: {}, // compoundId → value
+      doses: {}, // compoundRefKey → value (custom mongo-id OR `core:<key>`)
       cal: null, protein: null, fat: null, carbs: null, score: null,
       symptoms: false, note: null,
     });
@@ -1595,7 +658,11 @@ const allLogRows = computed(() => {
     ensure(String(e.date).slice(0, 10)).weight = e.weightLbs;
   }
   for (const e of dosesStore.entries) {
-    ensure(String(e.date).slice(0, 10)).doses[e.compoundId] = e.value;
+    // Canonical compounds have no compoundId — use the same ref-key the
+    // doses store builds so custom + canonical doses share a namespace.
+    const k = dosesStore.refKeyFor(e);
+    if (!k) continue;
+    ensure(String(e.date).slice(0, 10)).doses[k] = e.value;
   }
   const targets = settingsStore.settings?.targets;
   for (const d of filteredNutrition.value) {
@@ -1837,168 +904,34 @@ function bmiClass(bmi) {
 
     <!-- Chart -->
     <div class="card chart-section">
-      <div class="chart-controls">
-        <div class="range-buttons">
-          <button
-            v-for="r in ranges"
-            :key="r.label"
-            :class="{ active: selectedRange.label === r.label }"
-            @click="selectedRange = r"
-          >
-            {{ r.label }}
-          </button>
-        </div>
-        <div class="range-buttons layout-toggle">
-          <button
-            :class="{ active: chartLayout === 'overlay' }"
-            title="Show all series on a single chart"
-            @click="chartLayout = 'overlay'"
-          >
-            Overlay
-          </button>
-          <button
-            :class="{ active: chartLayout === 'stacked' }"
-            title="Show each series on its own chart"
-            @click="chartLayout = 'stacked'"
-          >
-            Stacked
-          </button>
-        </div>
-      </div>
-
-      <!-- Active series chips -->
-      <div class="chip-bar">
-        <button
-          v-for="def in activeSeriesDefs"
-          :key="def.id"
-          class="chip"
-          @click="toggleSeries(def.id)"
-        >
-          <span
-            class="chip-dot"
-            :class="{ 'chip-dot-trend': def.isTrend }"
-            :style="def.isTrend
-              ? { borderColor: def.color }
-              : { background: def.color }"
-          />
-          {{ def.label }}
-          <span class="chip-x">×</span>
-        </button>
-        <span
-          v-if="activeEndoSignals.length"
-          class="chip endo-status"
-          :title="endoSim.error.value || ''"
-        >
-          <span v-if="endoSim.busy.value">simulating…</span>
-          <span v-else-if="endoSim.error.value">sim error</span>
-          <span v-else-if="endoSim.result.value.mealCount != null">
-            sim: {{ endoSim.result.value.mealCount }} meals ·
-            {{ Math.round(endoSim.computeTimeMs.value || 0) }}ms
-          </span>
-        </span>
-        <VDropdown placement="bottom-start" :distance="6">
-          <button class="chip chip-add">+ Add</button>
-          <template #popper>
-            <div class="popover">
-              <div
-                v-if="Number.isFinite(seriesCap)"
-                class="pop-cap-note"
-                :class="{ 'at-cap': atSeriesCap }"
-              >
-                {{ activeSeries.size }} / {{ seriesCap }} series
-                <UpgradeBadge
-                  v-if="seriesUpgradeTier"
-                  :tier="seriesUpgradeTier"
-                  limit-key="maxCorrelationMetrics"
-                  clickable
-                />
-              </div>
-              <div
-                v-for="[cat, items] in seriesByCategory"
-                :key="cat"
-                class="pop-group"
-              >
-                <div class="pop-cat">{{ cat }}</div>
-                <label
-                  v-for="s in items"
-                  :key="s.id"
-                  class="pop-item"
-                  :class="{ disabled: atSeriesCap && !activeSeries.has(s.id) }"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="activeSeries.has(s.id)"
-                    @change="toggleSeries(s.id)"
-                  />
-                  <span
-                    class="pop-dot"
-                    :class="{ 'pop-dot-trend': s.isTrend }"
-                    :style="s.isTrend
-                      ? { borderColor: s.color }
-                      : { background: s.color }"
-                  />
-                  {{ s.label }}
-                </label>
-              </div>
-            </div>
-          </template>
-        </VDropdown>
-      </div>
-
-      <!-- Overlay: single multi-series chart. -->
+      <SignalChart
+        :series-by-category="seriesByCategory"
+        :get-data-points="getSeriesDataPoints"
+        :default-active="DEFAULT_ACTIVE_DASHBOARD"
+        :ranges="ranges"
+        :default-range-idx="0"
+        storage-key="dashboard-chart"
+        :series-cap="seriesCap"
+        :series-upgrade-tier="seriesUpgradeTier"
+        :loading="endoSim.busy.value && activeEndoSignals.length > 0"
+        :extra-plugins="dashboardChartPlugins"
+        :inject-datasets="injectDashboardDatasets"
+        :axis-customizer="dashboardAxisCustomizer"
+        empty-text="Select a series above to view data."
+        @chart-mouse-move="onChartMouseMove"
+        @chart-mouse-leave="onChartMouseLeave"
+        @range-change="onChartRangeChange"
+        @active-change="onChartActiveChange"
+      />
       <div
-        v-if="chartLayout === 'overlay'"
-        class="chart-container"
-        @mousemove="onChartMouseMove"
-        @mouseleave="onChartMouseLeave"
+        v-if="hoveredNote"
+        class="popover note-popover note-chart-popover"
+        :style="{ left: hoveredNote.x + 'px', top: hoveredNote.y + 'px' }"
       >
-        <Line
-          v-if="dataReady && hasAnyData"
-          :data="chartDataClean"
-          :options="chartOptions"
-          :plugins="[pillLabelsPlugin, noteIconsPlugin, endpointLabelsPlugin, crosshairPlugin]"
-        />
-        <p v-else-if="!dataReady" class="empty">Loading…</p>
-        <p v-else class="empty">Select a series above to view data.</p>
-        <div
-          v-if="hoveredNote"
-          class="popover note-popover note-chart-popover"
-          :style="{ left: hoveredNote.x + 'px', top: hoveredNote.y + 'px' }"
-        >
-          <div class="note-pop-title">
-            Note · {{ formatDate(hoveredNote.date) }}
-          </div>
-          <div class="note-pop-text">{{ hoveredNote.text }}</div>
+        <div class="note-pop-title">
+          Note · {{ formatDate(hoveredNote.date) }}
         </div>
-      </div>
-
-      <!-- Stacked: one chart per active series, sharing the date range. -->
-      <div v-else class="stacked-charts">
-        <p v-if="!dataReady" class="empty">Loading…</p>
-        <p v-else-if="!stackedCharts.length" class="empty">
-          Select a series above to view data.
-        </p>
-        <div
-          v-for="(c, i) in stackedCharts"
-          :key="c.def.id"
-          v-show="dataReady"
-          class="stacked-chart"
-        >
-          <div class="stacked-chart-head">
-            <span class="chip-dot" :style="{ background: c.def.color }" />
-            <span class="stacked-chart-title">{{ c.def.label }}</span>
-          </div>
-          <div
-            class="chart-container chart-container-small"
-            :class="{ 'chart-container-tail': i === stackedCharts.length - 1 }"
-          >
-            <Line
-              :data="c.data"
-              :options="c.options"
-              :plugins="[pillLabelsPlugin, noteIconsPlugin, endpointLabelsPlugin, crosshairPlugin]"
-            />
-          </div>
-        </div>
+        <div class="note-pop-text">{{ hoveredNote.text }}</div>
       </div>
     </div>
 
@@ -2008,7 +941,7 @@ function bmiClass(bmi) {
          to mutate the main chart above. Always rendered so users get the
          "need more data" empty state on day 1 instead of a missing
          surface. -->
-    <InsightsCard />
+    <InsightsCard v-if="insightsEnabled" />
 
     <!-- Progress photos timeline -->
     <PhotoTimelineCard v-if="photosVisibleOnDashboard" />
@@ -2024,7 +957,7 @@ function bmiClass(bmi) {
               <th class="lt-num">Weight</th>
               <th
                 v-for="c in tableCompounds"
-                :key="c._id"
+                :key="dosesStore.refKeyForCompound(c) || c._id"
                 class="lt-num"
                 :style="{ color: c.color || '' }"
               >
@@ -2052,14 +985,14 @@ function bmiClass(bmi) {
               </td>
               <td
                 v-for="c in tableCompounds"
-                :key="c._id"
+                :key="dosesStore.refKeyForCompound(c) || c._id"
                 class="lt-num lt-dose"
               >
                 <span
-                  v-if="row.doses[c._id] != null"
+                  v-if="row.doses[dosesStore.refKeyForCompound(c)] != null"
                   class="dose-tag"
                   :style="{ background: c.color || 'var(--border)', color: contrastText(c.color) }"
-                  >{{ row.doses[c._id] }}{{ c.doseUnit }}</span
+                  >{{ row.doses[dosesStore.refKeyForCompound(c)] }}{{ c.doseUnit }}</span
                 >
               </td>
               <td class="lt-num lt-cal">

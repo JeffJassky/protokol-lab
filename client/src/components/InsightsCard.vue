@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useInsightsStore } from '../stores/insights.js';
 import { useChatStarterStore } from '../stores/chatStarter.js';
+import { useSettingsStore } from '../stores/settings.js';
 import InsightsChart from './InsightsChart.vue';
 
 const props = defineProps({
@@ -13,6 +14,7 @@ const props = defineProps({
 
 const insights = useInsightsStore();
 const chatStarter = useChatStarterStore();
+const settings = useSettingsStore();
 // Only one finding's chart is expanded at a time — keeps the surface tidy
 // and avoids spawning a chart per finding (each pulls 1-2 series fetches).
 const expandedId = ref(null);
@@ -28,7 +30,13 @@ watch(
   { immediate: true },
 );
 
-const findings = computed(() => insights.findings);
+const minConfidence = computed(() => {
+  const m = Number(settings.settings?.insights?.minConfidence);
+  return Number.isFinite(m) ? m : 0.4;
+});
+const findings = computed(() =>
+  insights.findings.filter((f) => (f.confidence ?? 0) >= minConfidence.value),
+);
 const loading = computed(() => insights.loading);
 const error = computed(() => insights.error);
 const windowLabel = computed(() => {

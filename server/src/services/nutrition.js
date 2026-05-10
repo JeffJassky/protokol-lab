@@ -12,7 +12,7 @@
 //
 // Returning null means the payload is unusable (no calorie data at all).
 
-import { NUTRIENT_KEYS, NUTRIENT_UNITS } from '../../../shared/nutrients.js';
+import { NUTRIENT_KEYS, NUTRIENT_UNITS } from '../../../shared/logging/nutrients.js';
 
 const BEVERAGE_CATEGORY_PATTERNS = [
   'beverages', 'drinks', 'beers', 'wines', 'spirits', 'sodas',

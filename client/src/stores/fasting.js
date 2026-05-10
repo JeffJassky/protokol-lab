@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { api } from '../api/index.js';
-import { computeFastingStatus } from '../../../shared/fasting.js';
+import { computeFastingStatus } from '../../../shared/logging/fasting.js';
 import { useSettingsStore } from './settings.js';
 
 // Holds the last-fetched fasting events (active + upcoming + recent history)

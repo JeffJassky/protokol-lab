@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 // User-tracked photo categorization. Two flavors:
-//   - presets (`isPreset: true`) seeded from shared/photoTypePresets.js on
+//   - presets (`isPreset: true`) seeded from shared/logging/photoTypePresets.js on
 //     first fetch. Disabling a preset hides its slot in the capture UI but
 //     existing photos keep their reference. Deleting a preset is forbidden.
 //   - customs created by the user (skin-condition tracking, outfit shots,

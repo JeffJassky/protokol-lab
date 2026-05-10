@@ -6,7 +6,7 @@ import {
   FASTING_PROTOCOLS,
   protocolDurationMinutes,
   formatDuration,
-} from '../../../../shared/fasting.js';
+} from '../../../../shared/logging/fasting.js';
 
 const store = useSettingsStore();
 const fasting = useFastingStore();

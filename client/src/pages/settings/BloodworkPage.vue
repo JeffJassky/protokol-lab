@@ -5,7 +5,7 @@ import {
   BLOODWORK_PANELS,
   BLOODWORK_FIELD_INDEX,
   flattenBloodworkNested,
-} from '../../../../shared/bloodworkPanels.js';
+} from '../../../../shared/bio/bloodworkPanels.js';
 
 const store = useSettingsStore();
 

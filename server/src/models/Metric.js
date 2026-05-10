@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 // User-tracked biometric measurement type. Two flavors:
-//   - presets (`isPreset: true`) seeded from shared/metricPresets.js on first
+//   - presets (`isPreset: true`) seeded from shared/logging/metricPresets.js on first
 //     fetch. Disabling a preset hides it; deleting is forbidden.
 //   - customs created by the user with their own name + dimension.
 //

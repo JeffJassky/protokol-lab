@@ -1,3 +1,13 @@
+// Asymmetric adherence score (0-100) for a day's nutrition. Calories
+// and carbs penalize on either side of target (under or over);
+// protein only penalizes when under-target (eating extra protein
+// isn't a problem); fat only penalizes when over-target (under-target
+// fat is fine). Weights bias toward calories + protein since those
+// are the two macros users most often anchor their day on.
+//
+// Returns null when both actual and targets are absent so a blank
+// profile doesn't display as "0/100".
+
 const WEIGHTS = { calories: 0.4, protein: 0.3, fat: 0.2, carbs: 0.1 };
 
 function clamp01(n) {
@@ -7,11 +17,9 @@ function clamp01(n) {
 }
 
 /**
- * Compute the asymmetric adherence score (0-100) for a day's nutrition.
- *
  * @param {{ calories: number, protein: number, fat: number, carbs: number }} actual
  * @param {{ calories?: number, proteinGrams?: number, fatGrams?: number, carbsGrams?: number }} targets
- * @returns {number|null} Score 0-100, or null if targets are missing.
+ * @returns {number|null}
  */
 export function computeNutritionScore(actual, targets) {
   if (!actual || !targets) return null;

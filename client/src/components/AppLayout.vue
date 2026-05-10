@@ -19,6 +19,7 @@ import DemoBanner from './DemoBanner.vue';
 import ProfileFieldsModal from './ProfileFieldsModal.vue';
 import BrandLockup from './BrandLockup.vue';
 import BugReportFab from './BugReportFab.vue';
+import QuickLogMenu from './QuickLogMenu.vue';
 
 const auth = useAuthStore();
 const onboarding = useOnboardingStore();
@@ -172,23 +173,7 @@ watch(() => auth.user, (u) => {
         <BrandLockup class="brand-desktop" :size="16" :show-icon="false" />
       </router-link>
       <div class="nav-links">
-        <router-link to="/log" class="nav-link">
-          <svg
-            class="nav-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-            <path d="m15 5 4 4" />
-          </svg>
-          <span class="nav-label">Log</span>
-        </router-link>
+        <QuickLogMenu />
         <router-link to="/dashboard" class="nav-link">
           <svg
             class="nav-icon"
@@ -544,13 +529,21 @@ watch(() => auth.user, (u) => {
     justify-content: space-around;
     gap: 0;
   }
-  .nav-links a {
+  /* QuickLogMenu wraps its trigger in a .v-popper div, so the flex:1
+     rule that distributed nav slots evenly when every item was an
+     anchor needs to also reach that wrapper. */
+  .nav-links > a,
+  .nav-links > .v-popper {
     flex: 1;
+    display: flex;
     text-align: center;
-    padding: 8px 4px;
+    padding: 0;
     border-radius: 0;
     font-size: 10px;
     letter-spacing: 0.03em;
+  }
+  .nav-links > a {
+    padding: 8px 4px;
   }
   /* iOS-style stacked icon + label for primary nav items. */
   .nav-link {
@@ -603,18 +596,20 @@ watch(() => auth.user, (u) => {
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
 
-  /* Hide the FAB while chat is open, and lift it above the bottom nav.
-     Mobile drops the rotating CTA label and falls back to a circular
-     icon-only FAB so it doesn't crowd the bottom nav. */
+  /* Lift the FAB above the bottom nav so it doesn't sit on top of nav
+     items. Keep the rotating CTA label visible on mobile, but shrink
+     the pill so it doesn't dominate the lower-right corner. */
   .chat-fab {
     bottom: calc(56px + env(safe-area-inset-bottom, 0) + var(--space-3));
     right: var(--space-3);
-    width: 52px;
-    padding: 0;
-    gap: 0;
+    height: 40px;
+    padding: 0 var(--space-3) 0 var(--space-2);
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
   }
-  .chat-fab-label {
-    display: none;
+  .chat-fab-icon {
+    width: 20px;
+    height: 20px;
   }
 }
 </style>
