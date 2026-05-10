@@ -58,6 +58,11 @@ const log = childLogger('agent');
 const MODEL = "gemini-3-flash-preview";
 const MAX_ITERATIONS = 8;
 
+const HELP_DOCS_URL = "https://help.protokollab.com/llms-full.txt";
+const HELP_DOCS_TTL_MS = 60 * 60 * 1000;
+const HELP_DOCS_MAX_CHARS = 200_000;
+let helpDocsCache = { text: null, fetchedAt: 0, etag: null };
+
 const functionDeclarations = [
   {
     name: "get_food_log",
@@ -561,6 +566,15 @@ const functionDeclarations = [
         },
       },
       required: ["mealType", "items"],
+    },
+  },
+  {
+    name: "get_help_docs",
+    description:
+      "Fetch the full Protokol help documentation (features, how-tos, troubleshooting, policies). Use when the user asks a support question about how Protokol itself works — how to use a feature, where to find a setting, what a setting does, plan/billing questions, what the app supports, etc. Returns the entire docs as plain text; cite specific sections in your answer.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {},
     },
   },
 ];
@@ -1245,6 +1259,48 @@ async function executeToolImpl(name, args, userId, ctx = {}) {
       };
     }
 
+    case "get_help_docs": {
+      const now = Date.now();
+      if (
+        helpDocsCache.text &&
+        now - helpDocsCache.fetchedAt < HELP_DOCS_TTL_MS
+      ) {
+        return {
+          source: HELP_DOCS_URL,
+          cached: true,
+          fetchedAt: new Date(helpDocsCache.fetchedAt).toISOString(),
+          docs: helpDocsCache.text,
+        };
+      }
+      try {
+        const resp = await fetch(HELP_DOCS_URL, {
+          headers: { accept: "text/plain" },
+        });
+        if (!resp.ok) {
+          return {
+            error: `Failed to fetch help docs: ${resp.status} ${resp.statusText}`,
+          };
+        }
+        let text = await resp.text();
+        const truncated = text.length > HELP_DOCS_MAX_CHARS;
+        if (truncated) text = text.slice(0, HELP_DOCS_MAX_CHARS);
+        helpDocsCache = {
+          text,
+          fetchedAt: now,
+          etag: resp.headers.get("etag"),
+        };
+        return {
+          source: HELP_DOCS_URL,
+          cached: false,
+          fetchedAt: new Date(now).toISOString(),
+          truncated,
+          docs: text,
+        };
+      } catch (err) {
+        return { error: `Failed to fetch help docs: ${err.message}` };
+      }
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
@@ -1589,6 +1645,10 @@ You already have the last 7 days of user data above. Tool usage:
   - Use when you need accurate nutrition facts for a food the user wants logged.
   - Use to look up macros for a branded product visible in a photo (read the label text, then search the brand + product name).
   - Use when you want to cite evidence for a recommendation.
+- Help docs tool (get_help_docs):
+  - Use FIRST whenever the user asks a support / "how does Protokol work" question — how to use a feature, where a setting lives, what a feature does, plan/billing/limits, troubleshooting, or anything about the app itself.
+  - Do NOT guess answers about Protokol's features from prior knowledge. Pull the docs, then answer from them.
+  - One call per turn is enough; the response is cached. Don't call for health/nutrition questions — those go to Google Search.
 
 IMAGE HANDLING:
 When the user sends an image of food, your job is to identify every distinct item and calculate realistic macros for each portion. Approach:

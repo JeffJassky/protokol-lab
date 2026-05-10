@@ -145,6 +145,7 @@ To confirm in Search Console: Google's URL Inspection → "Test live URL" → sc
 
 ## Related docs
 
+- [Deploy Build Pipeline](./deploy-build.md) — full matrix of build artifacts across client/help/marketing, what regenerates in CI vs locally.
 - [Funnel Analytics](./funnel-analytics.md) — how marketing visitors get tracked through the funnel after they land.
 - [Observability](./observability.md) — Sentry + Pino, how to tell if prod is actually broken vs. just slow.
 - [Testing](./testing.md) — Playwright `@synthetic` subset hits real prod URLs, including prerendered ones.

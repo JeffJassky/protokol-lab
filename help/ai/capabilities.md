@@ -51,6 +51,17 @@ The assistant has tools that compute live, not just retrieve:
 
 For lookups not in your data — drug information, nutrition databases, research. The assistant uses Google Search and cites sources.
 
+### Answer support questions
+
+The assistant can pull this help site's full documentation on demand, so you can ask it how Protokol itself works:
+
+- "How do I turn on fasting tracking?"
+- "Where do I change my calorie target?"
+- "What's the difference between earn and baseline energy mode?"
+- "Does Premium include photo logging?"
+
+It fetches the docs live and answers from them rather than guessing, so the response stays in sync with the actual app.
+
 ### Add or edit entries
 
 Premium and Unlimited tiers can write:
@@ -118,7 +129,7 @@ The dashboard's pattern insights are precomputed and embedded into the assistant
 **Changing app settings:**
 > "Turn on the rolling 7-day budget."
 >
-> AI: I can't change settings. That setting lives in Profile → Tracking → Confirmation mode. The rolling 7-day budget is on by default for tracked accounts.
+> AI: I can't change settings for you, but I can tell you where it lives — Profile → Tracking → Confirmation mode. The rolling 7-day budget is on by default for tracked accounts. (Pulled from the help docs.)
 
 ## Tier differences
 

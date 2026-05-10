@@ -83,7 +83,7 @@ useRouteSeo();
           <li><strong>Hosting and database</strong> — infrastructure providers for application hosting and data storage.</li>
           <li><strong>Payment processor</strong> — Stripe (<a href="https://stripe.com/privacy" rel="nofollow noopener" target="_blank">privacy policy</a>) for subscriptions and billing.</li>
           <li><strong>AI model provider</strong> — Google (Gemini API, <a href="https://policies.google.com/privacy" rel="nofollow noopener" target="_blank">privacy policy</a>) to process AI chat requests.</li>
-          <li><strong>Transactional email</strong> — the provider used to deliver account and billing emails.</li>
+          <li><strong>Transactional email</strong> — SendGrid (<a href="https://www.twilio.com/legal/privacy" rel="nofollow noopener" target="_blank">privacy policy</a>) for account, security, and billing emails.</li>
         </ul>
         <p class="mkt-p">We do not sell, license, or otherwise transfer your
         personal data to advertisers, data brokers, or any third party for

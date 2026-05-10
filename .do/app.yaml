@@ -93,6 +93,13 @@ envs:
 - key: VITE_GOOGLE_CLIENT_ID
   scope: RUN_AND_BUILD_TIME
   value: 115225969206-l4k65gaudiqk6tst5ih6mgbnb5orcbal.apps.googleusercontent.com
+# Skip puppeteer's chromium download in the buildpack. DO can't run
+# headless Chromium (missing system libs), and we don't need to —
+# prerender + og artifacts are generated locally and committed. See
+# docs/deploy-build.md for the full pipeline.
+- key: PUPPETEER_SKIP_DOWNLOAD
+  scope: BUILD_TIME
+  value: "true"
 features:
 - buildpack-stack=ubuntu-22
 ingress:
