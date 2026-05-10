@@ -193,9 +193,9 @@ watch(() => auth.user, (u) => {
           </svg>
           <span class="nav-label">Dashboard</span>
         </router-link>
-        <!-- Settings + Support are tied to a real account (subscription,
-             tickets) — hide in anon demo where they'd 403 on first fetch.
-             Authed-in-toggle still sees them; the underlying account is real. -->
+        <!-- Settings is tied to a real account (subscription) — hide in anon
+             demo where it'd 403 on first fetch. Authed-in-toggle still sees
+             it; the underlying account is real. -->
         <router-link v-if="auth.user" to="/profile" class="nav-link">
           <svg
             class="nav-icon"
@@ -213,12 +213,29 @@ watch(() => auth.user, (u) => {
           </svg>
           <span class="nav-label">Profile</span>
         </router-link>
-        <router-link
-          v-if="auth.user"
-          to="/support"
-          class="nav-link nav-link-support"
-          >Support</router-link
+        <a
+          href="https://help.protokollab.com"
+          target="_blank"
+          rel="noopener"
+          class="nav-link nav-link-help"
         >
+          <svg
+            class="nav-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <span class="nav-label">Help</span>
+        </a>
         <router-link
           v-if="auth.user?.isAdmin"
           to="/admin"
@@ -308,7 +325,7 @@ watch(() => auth.user, (u) => {
       <span class="chat-fab-label">{{ chatCta }}</span>
     </button>
 
-    <!-- Always-on bug reporter (real accounts only — demo skips it like Support nav). -->
+    <!-- Always-on bug reporter — real accounts only (demo skips ticket flows). -->
     <BugReportFab v-if="auth.user" />
 
     <!-- Just-in-time profile field gate (PRD §9). Listens to a global queue;
@@ -568,8 +585,6 @@ watch(() => auth.user, (u) => {
     border: none;
     margin-left: 0;
   }
-  /* Bottom bar holds 4 slots on mobile; Support stays desktop-only. */
-  .nav-link-support { display: none; }
   .theme-toggle {
     flex: 0 0 auto;
     margin-left: 0;

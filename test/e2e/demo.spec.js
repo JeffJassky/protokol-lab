@@ -229,7 +229,7 @@ test.describe('Regressions', () => {
     await expect(page.getByRole('button', { name: /try the demo/i }).first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test('Anon demo nav hides Settings + Support (account-only sections)', async ({ page }) => {
+  test('Anon demo nav hides Settings, shows Help (Settings is account-only; Help is external docs)', async ({ page }) => {
     await seedTemplate(page);
     await startDemo(page);
 
@@ -237,9 +237,12 @@ test.describe('Regressions', () => {
     // QuickLogMenu popover trigger (a <button>), Dashboard is a real link.
     await expect(page.getByRole('button', { name: /^log$/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /^dashboard$/i }).first()).toBeVisible();
-    // Settings + Support are hidden — they're tied to the real account.
+    // Settings is hidden — tied to the real account.
     await expect(page.getByRole('link', { name: /^settings$/i })).toHaveCount(0);
+    // Support has been replaced by Help — external link to help.protokollab.com,
+    // no auth required, visible to anon demo users.
     await expect(page.getByRole('link', { name: /^support$/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /^help$/i }).first()).toBeVisible();
   });
 
   // TODO: re-target nav links. Settings now nests under sub-pages
