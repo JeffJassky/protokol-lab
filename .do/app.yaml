@@ -4,6 +4,8 @@ alerts:
 domains:
 - domain: protokollab.com
   type: PRIMARY
+- domain: help.protokollab.com
+  type: ALIAS
 envs:
 - key: MONGODB_URI
   scope: RUN_AND_BUILD_TIME

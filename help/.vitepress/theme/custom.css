@@ -1,0 +1,431 @@
+/*
+ * VitePress theme override matching client/src/styles/themes.css.
+ * Terminal / reticle aesthetic — JetBrains Mono headings, sharp corners,
+ * phosphor green primary. Light = inverted mint, Dark = deep slate.
+ *
+ * Mirrors palette + semantic tokens from the client app verbatim where
+ * VitePress has an equivalent variable, and re-skins the rest in plain CSS.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+/* ---- Raw palette (mirrors client/src/styles/colors.css) -------------- */
+:root {
+  /* Green — primary / phosphor */
+  --palette-green-300: #86fbad;
+  --palette-green-400: #5bf591;
+  --palette-green-500: #3fb26a;
+  --palette-green-600: #2d8a51;
+  --palette-green-700: #1f6b3e;
+
+  /* Amber — warning */
+  --palette-amber-300: #f3d08a;
+  --palette-amber-400: #eac574;
+  --palette-amber-500: #e6b855;
+
+  /* Red — danger */
+  --palette-red-400: #ff8a8a;
+  --palette-red-500: #ff5a5a;
+  --palette-red-600: #e04545;
+
+  /* Aqua / blue */
+  --palette-aqua-400: #62f9f4;
+  --palette-blue-400: #60a5fa;
+  --palette-blue-500: #4ea3ff;
+
+  /* Slate — terminal neutrals */
+  --palette-slate-950: #05080a;
+  --palette-slate-900: #0a0f12;
+  --palette-slate-850: #0d1318;
+  --palette-slate-800: #111a20;
+  --palette-slate-700: #1a2630;
+  --palette-slate-600: #24333e;
+  --palette-slate-500: #2e3a43;
+  --palette-slate-400: #355046;
+  --palette-slate-300: #4f7266;
+  --palette-slate-200: #9ab9a8;
+  --palette-slate-100: #d8f5de;
+}
+
+/* ---- Typography contract --------------------------------------------- */
+:root {
+  --vp-font-family-base:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --vp-font-family-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Headings → display (JetBrains Mono), tight tracking */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4,
+.vp-doc h5,
+.vp-doc h6,
+.VPHero .name,
+.VPHero .text,
+.VPFeature .title,
+.VPNavBarTitle .title,
+.VPSidebarItem .text {
+  font-family: var(--vp-font-family-mono);
+  letter-spacing: -0.01em;
+}
+
+.VPHero .name {
+  font-weight: 700;
+}
+
+/* ---- Sharp corners — terminal aesthetic ------------------------------ */
+:root {
+  --vp-button-radius: 0;
+}
+
+.vp-doc a.button,
+.VPButton,
+.VPFeature,
+.VPHomeFeatures .item,
+.VPSidebarItem .link,
+.custom-block,
+.vp-doc div[class*='language-'],
+.vp-doc table,
+.vp-doc th,
+.vp-doc td,
+.VPNavBarSearchButton,
+.VPLocalSearchBox,
+input,
+button,
+.VPImage,
+.image-bg {
+  border-radius: 0 !important;
+}
+
+.vp-doc code {
+  border-radius: 0;
+}
+
+/* ---- LIGHT THEME (default) — inverted mint --------------------------- */
+:root {
+  /* Surfaces */
+  --vp-c-bg: #f5f8f5;
+  --vp-c-bg-alt: #eef3ee;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #e4ecdf;
+
+  /* Text */
+  --vp-c-text-1: #0f1a12;
+  --vp-c-text-2: #4f7266;
+  --vp-c-text-3: #7a9a8a;
+
+  /* Dividers / borders */
+  --vp-c-divider: #e0ebdd;
+  --vp-c-gutter: #dfe8dd;
+  --vp-c-border: #b6c8b3;
+
+  /* Brand — phosphor green */
+  --vp-c-brand-1: var(--palette-green-500);          /* #3fb26a */
+  --vp-c-brand-2: var(--palette-green-600);          /* #2d8a51 */
+  --vp-c-brand-3: var(--palette-green-700);          /* #1f6b3e */
+  --vp-c-brand-soft: rgba(63, 178, 106, 0.14);
+  --vp-c-brand-softer: rgba(63, 178, 106, 0.08);
+
+  /* Status colors */
+  --vp-c-tip-1: var(--palette-green-500);
+  --vp-c-tip-2: var(--palette-green-600);
+  --vp-c-tip-3: var(--palette-green-700);
+  --vp-c-tip-soft: rgba(63, 178, 106, 0.14);
+
+  --vp-c-warning-1: var(--palette-amber-500);
+  --vp-c-warning-2: var(--palette-amber-300);
+  --vp-c-warning-3: #c49840;
+  --vp-c-warning-soft: rgba(230, 184, 85, 0.18);
+
+  --vp-c-danger-1: var(--palette-red-500);
+  --vp-c-danger-2: var(--palette-red-400);
+  --vp-c-danger-3: var(--palette-red-600);
+  --vp-c-danger-soft: rgba(255, 90, 90, 0.12);
+
+  --vp-c-note-1: var(--palette-slate-300);
+  --vp-c-note-soft: rgba(79, 114, 102, 0.12);
+
+  /* Buttons */
+  --vp-button-brand-border: var(--palette-green-500);
+  --vp-button-brand-text: #05080a;
+  --vp-button-brand-bg: var(--palette-green-500);
+  --vp-button-brand-hover-border: var(--palette-green-600);
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-hover-bg: var(--palette-green-600);
+  --vp-button-brand-active-border: var(--palette-green-700);
+  --vp-button-brand-active-text: #ffffff;
+  --vp-button-brand-active-bg: var(--palette-green-700);
+
+  --vp-button-alt-border: #b6c8b3;
+  --vp-button-alt-text: #0f1a12;
+  --vp-button-alt-bg: #ffffff;
+  --vp-button-alt-hover-border: #b6c8b3;
+  --vp-button-alt-hover-text: #0f1a12;
+  --vp-button-alt-hover-bg: #eef3ee;
+
+  /* Code blocks */
+  --vp-code-color: var(--palette-green-700);
+  --vp-code-bg: rgba(63, 178, 106, 0.10);
+  --vp-code-block-bg: #0a0f12;          /* deep slate even in light mode */
+  --vp-code-block-color: #d8f5de;
+  --vp-code-line-highlight-color: rgba(91, 245, 145, 0.08);
+  --vp-code-line-number-color: #4f7266;
+  --vp-code-tab-active-bar-color: var(--palette-green-400);
+
+  /* Inline highlight (like ==text==) */
+  --vp-c-highlight: rgba(63, 178, 106, 0.20);
+  --vp-c-highlight-bg: rgba(63, 178, 106, 0.06);
+
+  /* Hero gradient — quiet phosphor wash */
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+  --vp-home-hero-name-background: linear-gradient(
+    120deg,
+    var(--palette-green-500),
+    var(--palette-green-600)
+  );
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(63, 178, 106, 0.18) 50%,
+    rgba(98, 249, 244, 0.10) 50%
+  );
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+/* ---- DARK THEME — terminal / reticle --------------------------------- */
+.dark {
+  /* Surfaces */
+  --vp-c-bg: var(--palette-slate-950);                /* #05080a */
+  --vp-c-bg-alt: var(--palette-slate-900);            /* #0a0f12 */
+  --vp-c-bg-elv: var(--palette-slate-850);            /* #0d1318 */
+  --vp-c-bg-soft: var(--palette-slate-800);           /* #111a20 */
+
+  /* Text */
+  --vp-c-text-1: var(--palette-slate-100);            /* #d8f5de */
+  --vp-c-text-2: var(--palette-slate-200);            /* #9ab9a8 */
+  --vp-c-text-3: var(--palette-slate-300);            /* #4f7266 */
+
+  /* Dividers / borders */
+  --vp-c-divider: var(--palette-slate-700);
+  --vp-c-gutter: var(--palette-slate-700);
+  --vp-c-border: var(--palette-slate-600);
+
+  /* Brand — terminal phosphor (brighter in dark) */
+  --vp-c-brand-1: var(--palette-green-400);           /* #5bf591 */
+  --vp-c-brand-2: var(--palette-green-300);           /* #86fbad */
+  --vp-c-brand-3: var(--palette-green-500);
+  --vp-c-brand-soft: rgba(91, 245, 145, 0.14);
+  --vp-c-brand-softer: rgba(91, 245, 145, 0.08);
+
+  /* Status colors */
+  --vp-c-tip-1: var(--palette-green-400);
+  --vp-c-tip-2: var(--palette-green-300);
+  --vp-c-tip-3: var(--palette-green-500);
+  --vp-c-tip-soft: rgba(91, 245, 145, 0.10);
+
+  --vp-c-warning-1: var(--palette-amber-500);
+  --vp-c-warning-2: var(--palette-amber-300);
+  --vp-c-warning-3: var(--palette-amber-400);
+  --vp-c-warning-soft: rgba(230, 184, 85, 0.16);
+
+  --vp-c-danger-1: var(--palette-red-500);
+  --vp-c-danger-2: var(--palette-red-400);
+  --vp-c-danger-3: var(--palette-red-600);
+  --vp-c-danger-soft: rgba(255, 90, 90, 0.12);
+
+  --vp-c-note-1: var(--palette-slate-200);
+  --vp-c-note-soft: rgba(154, 185, 168, 0.10);
+
+  /* Buttons — green buttons take near-black text for max contrast */
+  --vp-button-brand-border: var(--palette-green-400);
+  --vp-button-brand-text: var(--palette-slate-950);
+  --vp-button-brand-bg: var(--palette-green-400);
+  --vp-button-brand-hover-border: var(--palette-green-300);
+  --vp-button-brand-hover-text: var(--palette-slate-950);
+  --vp-button-brand-hover-bg: var(--palette-green-300);
+  --vp-button-brand-active-border: var(--palette-green-500);
+  --vp-button-brand-active-text: var(--palette-slate-950);
+  --vp-button-brand-active-bg: var(--palette-green-500);
+
+  --vp-button-alt-border: var(--palette-slate-600);
+  --vp-button-alt-text: var(--palette-slate-100);
+  --vp-button-alt-bg: var(--palette-slate-850);
+  --vp-button-alt-hover-border: var(--palette-slate-500);
+  --vp-button-alt-hover-text: var(--palette-slate-100);
+  --vp-button-alt-hover-bg: var(--palette-slate-800);
+
+  /* Code blocks */
+  --vp-code-color: var(--palette-green-300);
+  --vp-code-bg: rgba(91, 245, 145, 0.10);
+  --vp-code-block-bg: #0a0f12;
+  --vp-code-block-color: var(--palette-slate-100);
+  --vp-code-line-highlight-color: rgba(91, 245, 145, 0.08);
+  --vp-code-line-number-color: var(--palette-slate-300);
+  --vp-code-tab-active-bar-color: var(--palette-green-400);
+
+  --vp-c-highlight: rgba(91, 245, 145, 0.22);
+  --vp-c-highlight-bg: rgba(91, 245, 145, 0.06);
+
+  /* Hero gradient — phosphor against deep slate */
+  --vp-home-hero-name-color: var(--palette-green-400);
+  --vp-home-hero-name-background: linear-gradient(
+    120deg,
+    var(--palette-green-400),
+    var(--palette-aqua-400)
+  );
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(91, 245, 145, 0.20) 50%,
+    rgba(98, 249, 244, 0.10) 50%
+  );
+  --vp-home-hero-image-filter: blur(72px);
+}
+
+/* ---- Component-level adjustments ------------------------------------- */
+
+/* Subtle phosphor glow on dark headings (very low opacity to avoid kitsch) */
+.dark .vp-doc h1 {
+  text-shadow: 0 0 24px rgba(91, 245, 145, 0.12);
+}
+
+/* Sidebar — terminal feel: monospace nav, no rounded hover chips */
+.VPSidebarItem .text {
+  font-size: 0.88rem;
+}
+
+.VPSidebarItem.is-active > .item .link .text {
+  color: var(--vp-c-brand-1);
+}
+
+/* Nav bar */
+.VPNavBar .title .VPNavBarTitle {
+  font-family: var(--vp-font-family-mono);
+}
+
+/* Custom blocks (tip / warning / danger / info) — left bar instead of round */
+.custom-block {
+  border-left-width: 3px;
+  border-radius: 0;
+  font-family: var(--vp-font-family-base);
+}
+
+.custom-block.tip {
+  border-color: var(--vp-c-tip-1);
+  background: var(--vp-c-tip-soft);
+}
+
+.custom-block.warning {
+  border-color: var(--vp-c-warning-1);
+  background: var(--vp-c-warning-soft);
+}
+
+.custom-block.danger {
+  border-color: var(--vp-c-danger-1);
+  background: var(--vp-c-danger-soft);
+}
+
+/* Inline code: phosphor on subtle tint */
+.vp-doc :not(pre) > code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.88em;
+  padding: 0.15em 0.35em;
+  background: var(--vp-code-bg);
+  color: var(--vp-code-color);
+}
+
+/* Code blocks: slightly tighter, no shadow */
+.vp-doc div[class*='language-'] {
+  box-shadow: none;
+  border: 1px solid var(--vp-c-divider);
+}
+
+.dark .vp-doc div[class*='language-'] {
+  border-color: var(--palette-slate-700);
+}
+
+/* Tables — terminal-style straight borders */
+.vp-doc table {
+  border: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc th {
+  background: var(--vp-c-bg-soft);
+  font-family: var(--vp-font-family-mono);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+/* Hero CTAs */
+.VPButton.brand {
+  font-family: var(--vp-font-family-mono);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.VPButton.alt {
+  font-family: var(--vp-font-family-mono);
+  letter-spacing: 0.03em;
+}
+
+/* Feature cards on the home page — terminal panels */
+.VPFeature {
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-elv);
+  transition: border-color var(--transition-fast, 100ms);
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-1);
+}
+
+.VPFeature .title {
+  font-family: var(--vp-font-family-mono);
+  letter-spacing: -0.01em;
+}
+
+/* Search box */
+.VPNavBarSearchButton {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85rem;
+}
+
+/* Page outline (right rail) — denser, terminal-feeling */
+.VPDocOutlineItem {
+  font-size: 0.78rem;
+  letter-spacing: -0.005em;
+}
+
+/* Edit-this-page link */
+.VPDocFooter .edit-link {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85rem;
+}
+
+/* Selection — phosphor highlight */
+::selection {
+  background: rgba(63, 178, 106, 0.32);
+  color: inherit;
+}
+
+.dark ::selection {
+  background: rgba(91, 245, 145, 0.32);
+  color: inherit;
+}
+
+/* Scrollbar — subtle terminal styling */
+.dark *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: var(--palette-slate-700);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: var(--palette-slate-600);
+}

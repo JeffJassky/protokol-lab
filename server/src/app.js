@@ -138,6 +138,45 @@ export function createApp({ serveClient = true } = {}) {
 
   app.use(httpLogger);
 
+  // Subdomain dispatch — help.* hostnames serve the VitePress help site
+  // out of help/.vitepress/dist/ and never reach the API stack. Single DO
+  // component handles both protokollab.com and help.protokollab.com; the
+  // ALIAS domain is configured in .do/app.yaml. Order: this comes after
+  // httpLogger (so help requests still get logged) but before any API
+  // routes (so the API surface isn't exposed on the subdomain).
+  if (serveClient) {
+    const __dirnameForHelp = path.dirname(fileURLToPath(import.meta.url));
+    const helpDist = path.resolve(__dirnameForHelp, '../../help/.vitepress/dist');
+    const helpAvailable = fs.existsSync(path.join(helpDist, 'index.html'));
+    if (!helpAvailable) {
+      log.warn({ helpDist }, 'help: dist not found — help.* requests will 503 until built');
+    }
+    // `extensions: ['html']` makes /getting-started/first-week resolve to
+    // first-week.html — VitePress builds with cleanUrls but the files on
+    // disk are still .html. The default index lookup handles directory
+    // index.html (e.g. /tracking → tracking/index.html).
+    const helpStatic = helpAvailable ? express.static(helpDist, { extensions: ['html'] }) : null;
+    const helpHostPattern = /^help\./i;
+    app.use((req, res, next) => {
+      if (!helpHostPattern.test(req.hostname || '')) return next();
+      if (!helpAvailable) return res.status(503).send('Help site not built');
+      // The help subdomain is a static-only surface. Block API + admin so
+      // none of the protocol's authenticated endpoints leak onto help.*.
+      if (req.path.startsWith('/api/') || req.path.startsWith('/admin/')) {
+        return res.status(404).send('Not Found');
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return res.status(405).set('Allow', 'GET, HEAD').send('Method Not Allowed');
+      }
+      helpStatic(req, res, () => {
+        // express.static didn't match — serve the prebuilt 404 page.
+        res.status(404).sendFile(path.join(helpDist, '404.html'), (err) => {
+          if (err) res.status(404).type('text/plain').send('Not Found');
+        });
+      });
+    });
+  }
+
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
   });
