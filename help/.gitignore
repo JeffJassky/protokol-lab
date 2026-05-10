@@ -2,3 +2,8 @@ node_modules
 .vitepress/cache
 .vitepress/dist
 .DS_Store
+
+# Override global ~/.gitignore_global which excludes config.js — VitePress
+# uses .vitepress/config.js as its primary config; it MUST be tracked.
+!.vitepress/config.js
+!config.js
