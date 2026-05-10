@@ -351,6 +351,24 @@ The DO app spec lives in DO's dashboard and is mirrored at `.do/app.yaml` for vi
 ### Required GHA secrets
 - `DIGITALOCEAN_ACCESS_TOKEN` — Personal Access Token with `apps:write` scope, used by `deploy.yml` to trigger DO deployments and rollbacks.
 
+### `@kyneticbio/core` is vendored, not installed from npm
+
+`server/package.json` and `client/package.json` reference `@kyneticbio/core` as `file:../core` (i.e. `log/core`). The package is **not** published to npm — only the GitHub repo at `kyneticbio/core` (public) is the source of truth. Every install therefore needs a local copy of core sitting at `log/core` before `npm install` runs, or it fails with `ERR_MODULE_NOT_FOUND`.
+
+`scripts/ensure-core.mjs` is the single seam that makes this work across environments:
+
+| Where | What it does |
+|---|---|
+| Local dev (`protokol/{log,core}` siblings) | Symlinks `log/core` → `../core` so edits in the real repo are picked up live without a rebuild dance. |
+| GitHub Actions (`test.yml`, `e2e.yml`) | Shallow-clones `kyneticbio/core` into `log/core` and runs `npm ci && npm run build` so `dist/` exists when the inner installs resolve. |
+| DigitalOcean (heroku-buildpack-nodejs) | Same as GHA — invoked from the root `heroku-postbuild` script before any `npm install --prefix server\|client`. |
+
+Constraints worth remembering:
+- DO's buildpack runs in `/workspace` and the parent directory is read-only. That's why `core/` lives **inside** the repo (`log/core`) rather than as a true sibling — the previous attempt at `file:../../core` failed on DO with `EACCES` writing to `/core`.
+- `log/core` is gitignored. Locally it's a symlink; on CI/DO it's a fresh `.git` working tree of core. Neither is tracked by `protokol-lab`.
+- `shared/bio/{bloodwork,genetics}Panels.js` reach into `../../core/dist/index.js` directly (relative path, not the package alias) because `log/shared/` has no `node_modules` of its own. If the vendoring path ever moves, those imports must move with it.
+- core is **not** a git submodule — there's no tracked SHA pointer, so CI always pulls `kyneticbio/core@main`. Pinning would mean either publishing core to npm or converting to a submodule; today we trade reproducibility for a faster iteration loop.
+
 ---
 
 ## Environments at a glance
