@@ -8,11 +8,14 @@
 // up from the importer file's location, and neither log/ nor / hold the
 // `@kyneticbio/core` package. Going through a relative path is uglier
 // than the package alias but keeps the shared module dep-free.
+//
+// Path: log/shared/bio/<here> → log/core/dist (vendored sibling-of-shared/
+// directory, populated by scripts/ensure-core.mjs).
 
 import {
   BLOODWORK_PANELS,
   BLOODWORK_FIELD_INDEX,
-} from '../../../core/dist/index.js';
+} from '../../core/dist/index.js';
 
 export { BLOODWORK_PANELS, BLOODWORK_FIELD_INDEX };
 

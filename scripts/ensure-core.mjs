@@ -1,20 +1,24 @@
 #!/usr/bin/env node
-// Ensures @kyneticbio/core exists as a sibling of the repo root before
-// npm tries to resolve `file:../../core` specs in client/ and server/.
+// Ensures @kyneticbio/core is present at <repoRoot>/core before npm
+// resolves `file:../core` specs in client/ and server/, and before
+// shared/bio imports `../../core/dist/index.js` at runtime.
 //
-// Local dev: ../core already exists (the protokol/ workspace) — this is a no-op.
-// CI / DigitalOcean: only this repo gets cloned, so we shallow-clone core
-// and build its dist/ so npm install can copy it into node_modules.
+// Layout strategy:
+//   - Local dev (protokol/{log,core} siblings): symlink log/core -> ../core
+//     so edits in the real repo are picked up live.
+//   - CI / DigitalOcean (only this repo cloned): shallow-clone core into
+//     log/core and build its dist/.
 //
-// The repo is public on GitHub even though the package isn't published to npm,
-// so no auth is required.
+// kyneticbio/core is public on GitHub (the npm package isn't published) so
+// no auth token is required for the clone.
 
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync, symlinkSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { resolve, relative, dirname } from 'node:path';
 
 const repoRoot = resolve(import.meta.dirname, '..');
-const coreDir = resolve(repoRoot, '..', 'core');
+const target = resolve(repoRoot, 'core');
+const sibling = resolve(repoRoot, '..', 'core');
 const coreRepoUrl = 'https://github.com/kyneticbio/core.git';
 
 const run = (cmd, cwd) => {
@@ -22,17 +26,32 @@ const run = (cmd, cwd) => {
   execSync(cmd, { cwd, stdio: 'inherit' });
 };
 
-if (existsSync(coreDir)) {
-  console.log(`[ensure-core] ${coreDir} already exists — skipping clone.`);
+const exists = (p) => {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+if (exists(target)) {
+  console.log(`[ensure-core] ${target} already present — skipping setup.`);
+} else if (existsSync(resolve(sibling, 'package.json'))) {
+  // Local dev: link to the real repo so edits propagate without a rebuild
+  // dance. Use a relative target so it survives moving the parent folder.
+  const linkTarget = relative(dirname(target), sibling);
+  console.log(`[ensure-core] symlinking ${target} -> ${linkTarget}`);
+  symlinkSync(linkTarget, target, 'dir');
 } else {
-  console.log(`[ensure-core] cloning ${coreRepoUrl} -> ${coreDir}`);
-  run(`git clone --depth 1 ${coreRepoUrl} "${coreDir}"`, repoRoot);
+  console.log(`[ensure-core] cloning ${coreRepoUrl} -> ${target}`);
+  run(`git clone --depth 1 ${coreRepoUrl} "${target}"`, repoRoot);
 }
 
-if (!existsSync(resolve(coreDir, 'dist'))) {
+if (!existsSync(resolve(target, 'dist'))) {
   console.log('[ensure-core] dist/ missing — installing + building core.');
-  run('npm ci', coreDir);
-  run('npm run build', coreDir);
+  run('npm ci', target);
+  run('npm run build', target);
 } else {
   console.log('[ensure-core] dist/ present — skipping build.');
 }

@@ -1,6 +1,11 @@
 node_modules
 dist
 dist-native
+
+# Vendored @kyneticbio/core — populated by scripts/ensure-core.mjs as a
+# symlink (local) or shallow clone (CI/DO). Never committed.
+/core
+
 .env
 .env.local
 .env.*.local

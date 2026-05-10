@@ -18,7 +18,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1035.0",
     "@google/genai": "^1.50.1",
     "@jeffjassky/marketing-admin": "file:../marketing",
-    "@kyneticbio/core": "file:../../core",
+    "@kyneticbio/core": "file:../core",
     "@sendgrid/mail": "^8.1.6",
     "@sentry/node": "^10.50.0",
     "@sentry/vite-plugin": "^5.2.0",

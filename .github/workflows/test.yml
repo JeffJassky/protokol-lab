@@ -27,13 +27,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
 
-      # Server + client depend on @kyneticbio/core via file:../../core.
-      # That package isn't published to npm, so clone+build it as a sibling
-      # of the repo before any install that would resolve the file: spec.
-      - name: Clone & build @kyneticbio/core
-        run: |
-          git clone --depth 1 https://github.com/kyneticbio/core.git ../core
-          cd ../core && npm ci && npm run build
+      # @kyneticbio/core is referenced via file:../core. Not published to
+      # npm — this script clones+builds it into log/core (or symlinks the
+      # local sibling on dev machines).
+      - name: Vendor @kyneticbio/core
+        run: node scripts/ensure-core.mjs
 
       # Server depends on @jeffjassky/marketing-admin via file:../marketing.
       # That package's runtime imports (mongoose, claude-agent-sdk) need its
@@ -81,12 +79,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
 
-      # @kyneticbio/core is not published to npm — referenced as
-      # file:../../core. Clone+build it as a sibling so npm ci can resolve.
-      - name: Clone & build @kyneticbio/core
-        run: |
-          git clone --depth 1 https://github.com/kyneticbio/core.git ../core
-          cd ../core && npm ci && npm run build
+      # @kyneticbio/core is referenced via file:../core — see server job.
+      - name: Vendor @kyneticbio/core
+        run: node scripts/ensure-core.mjs
 
       - name: Install client deps
         working-directory: client

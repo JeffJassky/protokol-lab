@@ -7,7 +7,7 @@
 import {
   GENETICS_PANELS,
   GENETICS_FIELD_INDEX,
-} from '../../../core/dist/index.js';
+} from '../../core/dist/index.js';
 
 export { GENETICS_PANELS, GENETICS_FIELD_INDEX };
 
