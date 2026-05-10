@@ -1276,7 +1276,7 @@ function onNoteBlur() {
       <button
         v-if="cycleBanner.plausible"
         type="button"
-        class="cycle-banner-btn"
+        class="btn-secondary sm"
         @click="markPeriodStartedToday"
       >
         Period started {{ date === localYmd() ? 'today' : 'this day' }}
@@ -1561,7 +1561,7 @@ function onNoteBlur() {
         <div class="meal-section-header">
           <h4>{{ meal.label }}</h4>
           <button
-            class="add-btn"
+            class="btn-add-icon"
             v-tooltip="`Add to ${meal.label.toLowerCase()}`"
             @click="addFood(meal.key)"
           >
@@ -2003,7 +2003,7 @@ function onNoteBlur() {
           </button>
         </button>
       </div>
-      <button type="button" class="exercise-add" @click="openExerciseModal()">
+      <button type="button" class="btn-add" @click="openExerciseModal()">
         + Add exercise
       </button>
     </div>
@@ -2349,7 +2349,7 @@ function onNoteBlur() {
       <div class="add-symptom">
         <button
           v-if="!addingSymptom"
-          class="btn-secondary"
+          class="btn-add"
           @click="addingSymptom = true"
         >
           + Add custom symptom
@@ -2627,24 +2627,8 @@ function onNoteBlur() {
   font-family: inherit;
   font-style: italic;
 }
-.cycle-banner-btn {
-  margin-left: auto;
-  padding: 0.25rem 0.6rem;
-  background: var(--bg);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wider);
-  font-weight: var(--font-weight-bold);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-.cycle-banner-btn:hover {
-  background: var(--surface-raised);
-  color: var(--text);
-}
+.cycle-banner .btn-secondary.sm { margin-left: auto; }
+
 .water-card { padding: var(--space-3) var(--space-5); }
 
 /* Exercise card — same shell as water-card; rows are tappable to edit. */
@@ -2746,18 +2730,6 @@ function onNoteBlur() {
   line-height: 1;
 }
 .ex-row-del:hover { color: var(--danger); }
-.exercise-add {
-  width: 100%;
-  padding: 8px;
-  background: transparent;
-  border: 1px dashed var(--border);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: var(--font-size-s);
-  font-weight: var(--font-weight-medium);
-}
-.exercise-add:hover { color: var(--text); border-color: var(--text-tertiary); }
-
 /* Exercise modal */
 .modal-backdrop {
   position: fixed;
@@ -3145,22 +3117,6 @@ function onNoteBlur() {
   letter-spacing: var(--tracking-wide);
   color: var(--text-secondary);
 }
-
-.add-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-small);
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  font-size: var(--font-size-l);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--transition-base);
-}
-.add-btn:hover { background: var(--primary-hover); }
 
 .meal-table {
   width: 100%;

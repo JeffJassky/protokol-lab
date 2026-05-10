@@ -140,6 +140,55 @@ button:focus-visible {
   padding: 0 var(--space-3);
 }
 
+/* ---- List-extender buttons --------------------------------------- *
+ * .btn-add        — sparse list "tray opener" (e.g. + Add exercise).
+ *                   Full-width, dashed border, sentence-case, muted.
+ *                   Low frequency: signals "this list is rarely added to."
+ * .btn-add-icon   — frequent inline add (e.g. meal + buttons).
+ *                   Small filled square. Higher visual weight because the
+ *                   user reaches for it many times per session.
+ */
+.btn-add {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  transition:
+    color var(--transition-base),
+    border-color var(--transition-base);
+}
+.btn-add:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-tertiary);
+}
+.btn-add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-add-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-small);
+  background: var(--primary);
+  color: var(--text-on-primary);
+  border: none;
+  font-size: var(--font-size-l);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-base);
+}
+.btn-add-icon:hover:not(:disabled) { background: var(--primary-hover); }
+.btn-add-icon:disabled { opacity: 0.55; cursor: not-allowed; }
+
 /* ---- Eyebrow label ------------------------------------------------ *
  * Small uppercase caption with a leading dash. Use for grouping labels
  * above section headings. Not required on every card — reserve for top-
