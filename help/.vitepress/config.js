@@ -6,6 +6,12 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
 
+  // Auto-generates sitemap.xml at build time. Submitted to Google Search
+  // Console; referenced from robots.txt and llms.txt.
+  sitemap: {
+    hostname: 'https://help.protokollab.com',
+  },
+
   head: [
     ['meta', { name: 'theme-color', content: '#0f172a' }],
     ['meta', { name: 'robots', content: 'index,follow' }],

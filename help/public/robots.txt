@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+
+# LLM-specific crawlers — explicit allow so docs can be cited correctly
+# instead of hallucinated. Public reading material; no opt-out needed.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://help.protokollab.com/sitemap.xml

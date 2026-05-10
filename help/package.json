@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev .",
-    "build": "vitepress build .",
+    "build": "vitepress build . && node scripts/generate-llms.mjs",
     "preview": "vitepress preview ."
   },
   "devDependencies": {
