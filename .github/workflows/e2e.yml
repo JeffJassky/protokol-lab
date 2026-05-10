@@ -39,6 +39,13 @@ jobs:
       - name: Install root deps (Playwright)
         run: npm ci
 
+      # Server + client depend on @kyneticbio/core via file:../../core.
+      # Not published to npm — clone+build sibling so file: spec resolves.
+      - name: Clone & build @kyneticbio/core
+        run: |
+          git clone --depth 1 https://github.com/kyneticbio/core.git ../core
+          cd ../core && npm ci && npm run build
+
       # Server depends on @jeffjassky/marketing-admin via file:../marketing.
       # That package's runtime imports need its own node_modules populated.
       # --legacy-peer-deps mirrors the heroku-postbuild step.

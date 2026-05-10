@@ -27,6 +27,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
 
+      # Server + client depend on @kyneticbio/core via file:../../core.
+      # That package isn't published to npm, so clone+build it as a sibling
+      # of the repo before any install that would resolve the file: spec.
+      - name: Clone & build @kyneticbio/core
+        run: |
+          git clone --depth 1 https://github.com/kyneticbio/core.git ../core
+          cd ../core && npm ci && npm run build
+
       # Server depends on @jeffjassky/marketing-admin via file:../marketing.
       # That package's runtime imports (mongoose, claude-agent-sdk) need its
       # own node_modules populated, so install marketing first. --legacy-peer-deps
@@ -72,6 +80,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
+
+      # @kyneticbio/core is not published to npm — referenced as
+      # file:../../core. Clone+build it as a sibling so npm ci can resolve.
+      - name: Clone & build @kyneticbio/core
+        run: |
+          git clone --depth 1 https://github.com/kyneticbio/core.git ../core
+          cd ../core && npm ci && npm run build
 
       - name: Install client deps
         working-directory: client
