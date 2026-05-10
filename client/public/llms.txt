@@ -1,88 +1,377 @@
 # Protokol Lab
 
-> The tracker built for GLP-1s. Log doses with pharmacokinetic half-life curves, weekly rolling calorie budgets that forgive low-appetite days, symptoms, weight, and progress photos — all in one app. Works with every FDA-approved GLP-1: Tirzepatide (Mounjaro, Zepbound), Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide (Saxenda, Victoza), and Dulaglutide (Trulicity), plus compounded versions of those peptides.
+> The tracker built for GLP-1s. Log doses with pharmacokinetic half-life curves, weekly rolling calorie budgets that forgive low-appetite days, symptoms, weight, exercise, fasting, cycle phase, bloodwork, and progress photos — all in one app, with an agentic AI assistant that reads your full log and writes entries on your behalf. Works with every FDA-approved GLP-1: Tirzepatide (Mounjaro, Zepbound), Semaglutide (Ozempic, Wegovy, Rybelsus), Liraglutide (Saxenda, Victoza), and Dulaglutide (Trulicity), plus Retatrutide and compounded versions of those peptides.
 
-Protokol Lab is an organizational and mathematical modeling tool. It does not provide medical advice, diagnose conditions, or recommend the consumption of any substance. Users are solely responsible for how they interpret their own data.
+Protokol Lab is an organizational and mathematical modeling tool. It does not provide medical advice, diagnose conditions, or recommend the consumption of any substance. Users are solely responsible for how they interpret their own data. Always consult a licensed medical professional about your medication, dose, and protocol.
 
 ## What Protokol Lab Does
 
 - **Dose tracking with half-life curves.** Every compound has a t½. Protokol Lab plots the active blood level in real time so you can see exactly how much medication is in your system — and why appetite comes and goes the way it does. Stacked doses modeled correctly (Bateman equation; subcutaneous, bolus, and depot profiles supported).
 - **Weekly rolling calorie budget.** GLP-1s flatten appetite for a few days, then it returns. A 24-hour calorie counter treats that as failure. Protokol Lab's target is a 7-day total — eat light when you can't eat, catch up when you can. Unused calories roll forward. Daily targets recalibrate as the week unfolds.
-- **Agentic AI assistant.** Not a chatbot. The AI has tools: it reads your full log (food, dose, weight, symptoms, notes), searches the web for new restaurants or supplements, creates custom foods, and writes entries directly into your day. You describe what you ate; it handles the rest.
-- **Symptoms tracking.** Rate any symptom 0–10 in three seconds. Nausea, fatigue, injection site reactions, constipation, custom. Later, correlate against your dose curve to see what's causing what.
-- **Weight and waist trend.** Daily weigh-ins smoothed into a trend line. Weekly average and goal ETA always visible. One bad morning doesn't throw off the picture.
-- **Progress photos.** Monthly shots attached to your account. Swipe between any two months to see what actually changed.
-- **Food library.** Barcode scanning, custom foods with exact macros, saved meals for one-tap relog, recents, favorites.
-- **Offline-first PWA.** Works fully offline. Syncs across devices when online. Export everything as JSON or CSV anytime — no paywall.
+- **Endogenous biomarker simulation.** Server-side ODE model that predicts hormone and biomarker responses (glucose, insulin, cortisol, growth hormone, GLP-1, GIP, leptin, ghrelin, and dozens more) from your logged food, doses, exercise, and subject characteristics (age, sex, height, weight, cycle phase, bloodwork, genetics, conditions).
+- **Agentic AI assistant.** Not a chatbot. The AI has tools: it reads your full log (food, dose, weight, symptoms, notes, exercise, fasting, cycle, bloodwork, genetics), searches the web for new restaurants or supplements, creates custom foods, computes correlations, detects trend change-points, and writes entries directly into your day. You describe what you ate; it handles the rest.
+- **Symptom tracking.** Rate any symptom 0–10 in three seconds. Built-in: nausea, fatigue, bloating, constipation, sulfur burps, injection site reactions, heartburn, headache. Add custom symptoms. Pattern engine correlates symptoms against dose timing automatically.
+- **Weight, waist, and custom measurements.** Daily weigh-ins smoothed into a regression trend line. Weekly average and goal ETA always visible. Track waist, hip, neck, body fat %, lean mass, or any custom measurement.
+- **Exercise tracking with energy modes.** Log workouts (cardio, resistance, HIIT, recovery). Pick whether exercise calories add to your daily target ("earn") or just track for awareness ("baseline").
+- **Fasting tracking.** Recurring schedules (16:8, 18:6, 20:4, OMAD) or one-off fasts. Live banner shows elapsed time, remaining time, current metabolic stage. Notifications for fast start and fast end.
+- **Menstrual cycle tracking.** Cycle phase (menstrual, follicular, ovulation, luteal), period predictions, predicted ovulation date. The simulation accounts for cycle-phase effects on insulin sensitivity, cortisol, and water retention.
+- **Bloodwork tracking.** Enter labs across panels (metabolic, lipids, hormones, thyroid, CBC, iron, inflammation, renal, liver, vitamins). Reference ranges per field. Trends over time. Bloodwork values feed the simulation as subject inputs.
+- **Genetics integration.** Enter relevant variants (CYP2D6/2C9/2C19, MTHFR, COMT, APOE, HFE, VDR, etc.) so the simulation tunes pharmacokinetic and methylation pathway responses to your specific physiology.
+- **Conditions catalog.** Track diagnosed conditions (PCOS, T2D, ADHD, depression, anxiety, POTS, MCAS, insomnia) — the simulation adjusts baseline accordingly.
+- **Pattern insights.** Auto-detected correlations across your data with a confidence floor. "Tirzepatide rises ~3 days before nausea rises (r=0.34, n=38)" — surfaces relationships you'd miss manually.
+- **Photo timeline.** Front, side, back, or custom angles. Side-by-side compare any two months with a draggable divider.
+- **Day notes / journal.** Free-text notes per day, pinned to the weight chart so context for unusual readings stays visible.
+- **Food library.** Barcode scanning (USDA Branded + Open Food Facts), 30+ macro and micronutrient tracking, custom foods, saved meals, recents, favorites.
+- **USDA + Open Food Facts.** Search prefers USDA FoodData Central (FDA-mandated label values, full lab-analyzed micronutrients), falls back to Open Food Facts for international or long-tail items.
+- **Native iOS app + installable PWA.** Sign in with Apple, Apple Push Notifications, native barcode scanner. Web app installs to home screen on iPhone, iPad, Android, macOS, Windows, Linux.
+- **Offline-first.** Food, dose, weight, and symptom logging all work offline. Syncs when you reconnect. Export everything as JSON or CSV anytime — no paywall.
 
 ## Who It's For
 
-- People taking FDA-approved GLP-1 medications: Ozempic, Wegovy, Mounjaro, Zepbound, Rybelsus, Saxenda, Victoza.
-- People on compounded tirzepatide or compounded semaglutide from a licensed compounding pharmacy.
-- Users who need to track custom compounds (compounded formulations, clinical-trial prescriptions, etc.) using user-supplied half-lives.
-- Anyone switching from MyFitnessPal, Cronometer, or Lose It who wants a tracker that actually understands GLP-1 physiology.
+- **People taking FDA-approved GLP-1 medications:** Ozempic, Wegovy, Mounjaro, Zepbound, Rybelsus, Saxenda, Victoza, Trulicity.
+- **People on compounded tirzepatide or compounded semaglutide** from a licensed compounding pharmacy.
+- **Recomp athletes on GLP-1s** worried about muscle loss during weight loss — exercise tracking with energy modes, body measurements beyond weight, micronutrient tracking on suppressed appetite.
+- **Women on GLP-1s** who want their tracker to know that appetite returns in luteal phase — cycle phase tracking, simulation accounts for cycle effects.
+- **PCOS, T2D, hypothyroid users** who need GLP-1 tracked alongside their condition's bloodwork and symptoms.
+- **Self-experimenters and biohackers** stacking peptides — track multiple compounds simultaneously with correct PK summation.
+- **Anyone switching from MyFitnessPal, Cronometer, or LoseIt** who wants a tracker that actually understands GLP-1 physiology.
+- **Users with research-grade tracking habits** — bloodwork uploads, genetics variants, condition flags, full data export, peer-reviewed citations.
 
 ## Supported Compounds (Built-in Library)
 
-| Compound | Brand names | Half-life | Route |
-|----------|-------------|-----------|-------|
-| Tirzepatide | Mounjaro, Zepbound | ~5 days | Sub-Q, weekly |
-| Semaglutide | Ozempic, Wegovy, Rybelsus | ~7 days | Sub-Q weekly / oral daily |
-| Liraglutide | Saxenda, Victoza | ~13 hours | Sub-Q, daily |
-| Dulaglutide | Trulicity | ~5 days | Sub-Q, weekly |
-| Custom | user-defined | user-defined | user-defined |
+| Compound | Brand names | Half-life | Route | Dose schedule |
+|----------|-------------|-----------|-------|---------------|
+| Tirzepatide | Mounjaro, Zepbound | ~5 days | Sub-Q | Weekly |
+| Semaglutide | Ozempic, Wegovy | ~7 days | Sub-Q | Weekly |
+| Semaglutide (oral) | Rybelsus | ~7 days | Oral | Daily |
+| Liraglutide | Saxenda, Victoza | ~13 hours | Sub-Q | Daily |
+| Dulaglutide | Trulicity | ~5 days | Sub-Q | Weekly |
+| Retatrutide | (clinical, no FDA brand yet) | ~6 days | Sub-Q | Weekly |
+| Custom | user-defined | user-defined | bolus / sub-Q / depot | user-defined |
 
-Protokol Lab publishes pharmacokinetic defaults only for FDA-approved GLP-1 receptor agonists. For any other compound — a compounded formulation, a substance prescribed under a clinical trial — users add a custom compound by entering a name and a half-life. Users supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track. Protokol Lab does not sell, ship, distribute, refer users to, or endorse any pharmacy, telehealth provider, compounding facility, or substance.
+Protokol Lab publishes pharmacokinetic defaults only for FDA-approved GLP-1 receptor agonists and Retatrutide (where Phase 3 trial data is published). For any other compound — a compounded formulation, a substance prescribed under a clinical trial, hormone replacement, BPC-157, TB-500, or other peptides — users add a custom compound by entering a name and a half-life. Users supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track. Protokol Lab does not sell, ship, distribute, refer users to, or endorse any pharmacy, telehealth provider, compounding facility, or substance.
 
 ## Pricing
 
 - **Free** — $0/forever. Food log, meals, barcode scan, weight, waist, symptoms, notes, dose tracking with half-life curves, rolling 7-day calorie budget, progress photos. No credit card required.
-- **Premium** — $9.99/month or $79/year ($6.58/month billed yearly, save ~35%). Everything in Free plus AI chat that reads your data, correlation charts, deeper dose stats, unlimited custom compounds, cloud sync, full data export. 14-day free trial.
-- **Unlimited** — $19.99/month or $149/year ($12.42/month billed yearly). Everything in Premium plus uncapped AI messages, longer conversation context, uncapped food image recognition, priority support. 14-day free trial.
+- **Premium** — $9.99/month or $79/year ($6.58/month billed yearly, save ~35%). Everything in Free plus AI chat that reads your data, correlation charts, deeper dose stats, up to 3 custom compounds, cloud sync, full data export. 14-day free trial.
+- **Unlimited** — $19.99/month or $149/year ($12.42/month billed yearly, save ~38%). Everything in Premium plus uncapped AI messages, longer conversation context, uncapped food image recognition, unlimited custom compounds, priority support. 14-day free trial.
 
-## FAQ
+## Frequently Asked Questions
 
-### Does Protokol Lab work with Mounjaro, Zepbound, Ozempic, Wegovy?
-Yes. Mounjaro and Zepbound are both tirzepatide. Ozempic and Wegovy are both semaglutide. Pick the compound name from the built-in library and Protokol Lab handles the half-life modeling automatically.
+### Compound and brand questions
 
-### Can I track compounded GLP-1s?
-Yes. Use the built-in Tirzepatide or Semaglutide preset for compounded versions of those peptides, or add a custom compound with any name and half-life.
+#### Does Protokol Lab work with Mounjaro and Zepbound?
+Yes. Mounjaro and Zepbound are both tirzepatide. Pick Tirzepatide from the built-in compound library and Protokol Lab handles the half-life modeling automatically. Your dose, schedule, and active blood level are tracked identically whether you're on Mounjaro (FDA-approved for type 2 diabetes) or Zepbound (FDA-approved for obesity).
 
-### Can I track custom or compounded compounds?
-For any compound outside the FDA-approved GLP-1s Protokol Lab ships by default, users can add a custom compound by entering a name and a half-life. The kinetic model supports bolus, subcutaneous, and depot absorption profiles. Protokol Lab does not publish pharmacokinetic defaults for compounds that are not FDA-approved; users supply their own values and assume full responsibility for the accuracy of those values and for the legality of any substance they track.
+#### Does Protokol Lab work with Ozempic and Wegovy?
+Yes. Ozempic and Wegovy are both semaglutide. Pick Semaglutide from the built-in compound library. The half-life (~7 days) and subcutaneous kinetics are the same across both brands. If you also use oral semaglutide (Rybelsus), switch to the Rybelsus preset for its daily dose pattern and oral absorption profile.
 
-### How accurate is the half-life curve?
-Protokol Lab uses the Bateman equation — the standard two-compartment pharmacokinetic model for extravascular absorption. Defaults are based on published PK data: tirzepatide ~5 days (Urva et al., Lancet 2020), semaglutide ~7 days (Lau et al., J Med Chem 2015). Users can override half-life per compound to match individual metabolism or compounded formulations.
+#### Does Protokol Lab work with Rybelsus?
+Yes. Rybelsus is oral semaglutide. The built-in Rybelsus preset uses oral absorption kinetics and a daily dose schedule. Bioavailability is ~1% — Rybelsus's "effective" dose is much smaller than the swallowed dose, but the catalog handles this so you log the prescribed mg.
 
-### Is my health data private?
-Your data stays yours. Protokol Lab does not sell, share, or monetize user health data. Cloud sync is opt-in. Full JSON/CSV export is always free and unlimited. Offline-first architecture means your data lives on-device by default.
+#### Does Protokol Lab work with Trulicity?
+Yes. Trulicity is dulaglutide, weekly subcutaneous, half-life ~5 days. Pick Dulaglutide from the built-in compound library.
 
-### Does it work offline?
-Yes. Protokol Lab is a Progressive Web App (PWA) that installs to your home screen. Food logging, dose logging, weight, and symptoms all work fully offline and sync when you reconnect.
+#### Does Protokol Lab work with Saxenda or Victoza?
+Yes. Saxenda and Victoza are both liraglutide, daily subcutaneous, half-life ~13 hours. Saxenda is FDA-approved for obesity at higher doses; Victoza is approved for type 2 diabetes. Same molecule, same pharmacokinetics.
 
-### What's the difference between a 24-hour and a weekly calorie budget?
-A 24-hour budget resets at midnight, treating every day as independent. GLP-1s don't work that way — appetite is suppressed for a few days after each dose, then returns. A rolling 7-day budget lets unused calories from suppression days carry forward to higher-appetite days. You hit your weekly target instead of failing daily.
+#### Can I track compounded tirzepatide or compounded semaglutide?
+Yes. Compounded GLP-1s contain the same peptide as the brand-name versions — same molecule, same pharmacokinetics. Use the built-in Tirzepatide or Semaglutide preset. For any non-standard formulation (e.g., long-acting depot versions or atypical concentrations), add a custom compound with your own half-life and kinetics shape.
 
-### Can the AI actually log food for me?
-Yes. Describe what you ate in plain English — the AI checks your food library, searches the web for nutrition data if needed, creates a custom food entry, and writes it into your day. It has write access to your account, not just chat.
+#### Can I track Retatrutide?
+Yes. Retatrutide is in the built-in catalog with default half-life ~6 days and weekly subcutaneous kinetics, based on published Phase 2 and 3 trial pharmacokinetic data. As a triple agonist (GLP-1, GIP, glucagon), the simulation models combined receptor activation when stacked with other GLP-1s.
 
-### How is this different from MyFitnessPal?
-MyFitnessPal is a generic calorie counter. Protokol Lab is built specifically for GLP-1 patterns: it models dose half-lives, runs weekly rolling budgets instead of daily resets, tracks injection-site symptoms and medication timing, and its AI reads your dose and symptom data together.
+#### Can I track Cagrilintide, Survodutide, Tesofensine, BPC-157, TB-500, GHK-Cu, or other peptides?
+Yes, via custom compounds. Enter the name, half-life (in days), interval, and kinetics shape (bolus / sub-Q / depot). The dashboard plots the active-amount curve. Custom compounds are not included in the simulation engine (which has explicit pharmacology only for the canonical GLP-1 catalog), but they show up everywhere else: dose log, dashboard PK curve, reminders, pattern insights, data export.
 
-### Is Protokol Lab FDA-approved?
-No. Protokol Lab is an organizational and mathematical modeling tool, not a medical device. It does not diagnose, treat, or prescribe. Consult a licensed medical professional before making decisions about your medication or health.
+#### Can I track multiple compounds at once (stacks)?
+Yes. Run any number of compounds simultaneously. Each compound has its own active-amount curve, plotted independently. The simulation models combined receptor occupancy where compounds share targets (e.g., Tirzepatide + Retatrutide both activate GLP-1R and GIPR — combined effect is captured).
 
-### Do you sell or ship GLP-1 medications?
-No. Protokol Lab is a tracker only. We do not sell, distribute, or endorse any compound in the library. Obtain medications from a licensed prescriber and pharmacy.
+#### What if I switch from Tirzepatide to Retatrutide (or any compound to another)?
+The previous compound's active-amount curve continues for ~3 weeks while the new compound's curve builds up. The simulation models receptor occupancy across the transition correctly. Both curves remain visible on the dashboard during the cross-fade.
 
-### Can I export all my data?
-Yes. Full history export as JSON or CSV, anytime, no paywall, no support ticket. Your data belongs to you.
+### Pharmacokinetics and dose curve questions
 
-### What if I want to track a compound that's not in the library?
-Add a custom compound in seconds: name, half-life (days), dose schedule, and optionally a kinetic shape (bolus, subcutaneous, depot). The PK curve is generated automatically.
+#### How accurate is the half-life curve?
+Protokol Lab uses the Bateman equation — the standard two-compartment pharmacokinetic model for extravascular absorption. Defaults are based on published PK: tirzepatide ~5 days (Urva et al., 2021), semaglutide ~7 days (Lau et al., 2015), dulaglutide ~5 days (Barrington et al., 2011), liraglutide ~13 hours (Agersø et al., 2002). You can override half-life per compound to match individual metabolism, compounded formulations, or clinical measurements.
 
-### Does Protokol Lab support multiple simultaneous compounds (stacks)?
-Yes. Model multiple active compounds at once — their curves are summed correctly at every time point, so the active-level chart reflects the full schedule rather than just the most recent injection.
+#### Why does my Tirzepatide curve drop slowly between weekly doses?
+That's the long half-life (~5 days). With a 5-day half-life and a 7-day interval, the trough of one dose is still ~50% of the peak when the next dose lands. You accumulate to a steady state over 4–6 weeks — both peak and trough rise until they level off. This is also why early weeks of a GLP-1 protocol feel different from later weeks.
+
+#### When does Tirzepatide reach steady state?
+With a half-life of ~5 days dosed weekly, steady state is reached after roughly 4–6 weeks. Peak and trough both rise during this build-up. After steady state, peak ≈ 2× single-dose peak, trough ≈ single-dose peak. The dashboard's PK curve shows this build-up clearly during the first month of dosing.
+
+#### When does Semaglutide reach steady state?
+With a half-life of ~7 days dosed weekly, steady state takes 5–7 weeks. Slightly longer than Tirzepatide because the half-life is longer.
+
+#### What does "active amount" mean on the dose chart?
+The active-amount curve plots the modeled mass of compound currently in your system, in mg, mcg, iu, or whatever unit the compound uses. It's not the receptor effect (which saturates) — it's how much molecule is circulating. For visualizing receptor occupancy and downstream hormone responses, see the endogenous biomarker simulation.
+
+#### What kinetics shapes does Protokol Lab support?
+Three: **bolus** (instant peak, IV-like), **sub-Q** (Bateman absorption ~6h half-life, then elimination — default for self-injected peptides), and **depot** (slow absorption ~24h half-life, lower peak, longer tail — for long-acting formulations like testosterone cypionate in oil).
+
+### Symptom management questions
+
+#### When does GLP-1 nausea peak?
+Most users on Tirzepatide report nausea peaking 24–48 hours after the dose, especially after escalations. Semaglutide nausea often peaks 12–48 hours post-injection. Patterns vary individually — Protokol Lab's symptom tracking + dose curve overlay shows your specific timing. Pattern insights flag the lag automatically once you have ~14 days of data.
+
+#### How do I reduce nausea on Tirzepatide?
+Patient-reported strategies in the literature and forums: smaller meals, lower fat content per meal (fat slows gastric emptying further), eating early in the day, not lying down within 2 hours of a meal, hydration, ginger or peppermint, slower titration. Protokol Lab tracks meal timing, meal composition, hydration, and symptom severity so correlations between specific patterns and your nausea become visible.
+
+#### Why am I getting sulfur burps on Mounjaro?
+Sulfur burps (rotten-egg taste) are commonly reported on Tirzepatide and Semaglutide. They're associated with delayed gastric emptying, slowed digestion of sulfur-containing foods (eggs, garlic, cruciferous vegetables, meat), and bacterial fermentation in the stomach. Tracking food vs sulfur-burp severity in Protokol Lab can identify trigger foods specific to you.
+
+#### How do I manage constipation on GLP-1s?
+GLP-1 receptor agonists slow gastric emptying and gut motility. Patient-reported strategies: hydration (often the most impactful), increased fiber, magnesium, regular movement, electrolytes. Protokol Lab tracks water intake, fiber (one of 30+ tracked nutrients), and a constipation symptom — pattern engine correlates them.
+
+#### How long do GLP-1 side effects last?
+Most patients report side effects (nausea, fatigue, GI symptoms) peak in the first 1–2 weeks after starting or after each dose escalation, then attenuate over 2–6 weeks at the same dose. Symptom intensity often correlates with dose escalation rate. Some users have persistent symptoms; consult your prescriber if they don't improve.
+
+#### What is GLP-1 fatigue and when does it happen?
+Many users report fatigue or "low-energy days" 1–3 days after a Tirzepatide or Semaglutide injection, attributed to reduced food intake, blood sugar changes, and central GLP-1 effects. Protokol Lab's symptom rating + dose curve overlay reveals your fatigue timing. Custom symptoms ("brain fog," "energy") expand the picture.
+
+#### What are GLP-1 injection site reactions?
+Bruising, redness, or local soreness at the injection site — common, usually mild, often associated with injection technique (needle angle, pinching skin, rotating sites). Protokol Lab includes "injection site reaction" as a built-in symptom you can rate per dose.
+
+#### Why is my appetite returning before my next dose?
+Normal — appetite suppression on weekly GLP-1s isn't uniform. Active blood level peaks 24–48 hours after injection (Tirzepatide) or 24–72 hours (Semaglutide), then declines. By day 5–7 post-injection, you're nearer the trough and hunger commonly returns. The rolling 7-day calorie budget accommodates this: eat lightly when you can't eat, catch up on hungrier days.
+
+#### Can I take GLP-1s if I have a history of pancreatitis, gallbladder disease, or thyroid cancer?
+This is a medical decision for your prescriber. GLP-1 receptor agonists carry FDA boxed warnings related to medullary thyroid carcinoma in animal studies, and prescribing labels caution about pancreatitis and gallbladder events. Discuss your full medical history with a licensed provider before starting any GLP-1.
+
+### Dosing and titration questions
+
+#### How does Tirzepatide titration work?
+The standard label titration is 2.5mg → 5mg → 7.5mg → 10mg → 12.5mg → 15mg, escalating roughly every 4 weeks based on tolerability and response. Some users titrate slower if side effects are pronounced. Protokol Lab tracks dose value over time so the escalation curve is visible alongside weight, symptoms, and the simulation.
+
+#### How does Semaglutide titration work?
+For Wegovy: 0.25mg → 0.5mg → 1.0mg → 1.7mg → 2.4mg, typically every 4 weeks. For Ozempic (T2D): 0.25mg → 0.5mg → 1.0mg → 2.0mg. Patient-specific schedules vary. Protokol Lab tracks the actual dose log regardless of label schedule.
+
+#### What time of day should I inject my GLP-1?
+The FDA labels for Tirzepatide, Semaglutide, and Dulaglutide all permit any time of day, with or without food, and allow you to change days of the week as long as the previous dose was at least 72 hours prior. Many users pick a consistent day to make pattern tracking cleaner. Protokol Lab uses your actual injection timestamps for PK curves.
+
+#### Can I switch my injection day?
+Yes, per the standard product labels — as long as your last dose was at least 72 hours ago. Some users adjust day-of-week to align with social schedules or to land low-appetite days on weekends. Protokol Lab's PK curves recompute correctly across schedule changes.
+
+#### When should I escalate my dose?
+This is a prescriber decision based on tolerability, side effects, weight response, and clinical context. Protokol Lab tracks weight trend, symptom severity, and dose curve so you can present an objective picture at your next appointment.
+
+#### What's the difference between Tirzepatide titration on Mounjaro vs Zepbound?
+Same molecule, same titration ladder, different label indications. Mounjaro is approved for type 2 diabetes; Zepbound is approved for chronic weight management. The recommended dose schedules are nearly identical.
+
+### Comparison questions
+
+#### Tirzepatide vs Semaglutide for weight loss?
+Head-to-head Phase 3 data (SURMOUNT-1 vs STEP trials, with the SURPASS-2 trial as direct comparison) shows Tirzepatide produces somewhat greater average weight loss than Semaglutide at maximum doses. Tirzepatide is a dual GLP-1/GIP agonist; Semaglutide is GLP-1 only. Individual response varies considerably. Protokol Lab tracks both and supports switching.
+
+#### Mounjaro vs Zepbound — which should I get?
+Same molecule (tirzepatide). The difference is regulatory: Mounjaro is FDA-approved for type 2 diabetes, Zepbound for chronic weight management. Insurance coverage often differs. The pharmacology, dose ladder, and tracker behavior are identical.
+
+#### Ozempic vs Wegovy?
+Same molecule (semaglutide), different FDA indications. Ozempic for type 2 diabetes, Wegovy for chronic weight management. Wegovy is dosed up to 2.4mg/week; Ozempic typically maxes at 2.0mg. Otherwise identical pharmacology.
+
+#### Compounded semaglutide vs brand Wegovy/Ozempic?
+The peptide is identical when properly compounded by a licensed pharmacy. Differences come from formulation (concentration, preservatives, presence of other additives like B12 or NAD+ in some compounded products), source of the active ingredient (USP-grade vs not), and verification of identity and potency. Protokol Lab tracks dose value and timing — formulation specifics aren't modeled separately. Discuss compounded medication sourcing with your prescriber.
+
+#### Tirzepatide vs Retatrutide?
+Tirzepatide is a dual GLP-1/GIP agonist (FDA-approved). Retatrutide is a triple agonist — GLP-1, GIP, and glucagon (currently in late-stage clinical trials, no FDA approval as of mid-2026). Phase 2 data for Retatrutide showed greater average weight loss at higher doses. Both are tracked in the built-in catalog with their own simulation pharmacology.
+
+#### How is Protokol Lab different from MyFitnessPal?
+MyFitnessPal is a generic calorie counter built around 24-hour daily targets. Protokol Lab is built specifically for GLP-1 patterns: it models dose half-lives so appetite shifts make sense, runs rolling weekly budgets instead of daily resets, tracks injection-site symptoms with dose timing, runs an endogenous biomarker simulation, and has an AI assistant that reads your dose and symptom data together. If you're on a GLP-1, a generic tracker misses the physiology that drives your week.
+
+#### How is Protokol Lab different from Cronometer?
+Cronometer is a strong micronutrient tracker with no GLP-1-specific features. Protokol Lab covers Cronometer's core macros + 30 micronutrients via USDA + Open Food Facts, plus dose tracking with PK curves, weekly rolling budgets, symptom tracking with pattern detection, the simulation, and the AI assistant. If you're a GLP-1 user who also wants micros, Protokol Lab covers both. If you're not on a GLP-1, Cronometer's micronutrient depth may be sufficient.
+
+#### Is there an Ozempic-specific app I should use instead?
+Several "GLP-1 trackers" exist; most are basic dose loggers or community apps. Protokol Lab is the most comprehensive GLP-1-specific tracker with PK modeling, the simulation, the AI assistant, and full data export. The closest single-purpose alternatives are dose-and-weight loggers without the simulation or the agentic AI.
+
+### Troubleshooting questions
+
+#### Why am I not losing weight on Tirzepatide?
+Possible reasons users surface to their prescribers: dose too low for current weight, plateau early in titration, water retention masking trend (waist + photos can confirm), recomp (gaining muscle while losing fat — weight flat, body composition changing), under-eating (extreme deficit can stall loss), inaccurate calorie tracking, hidden carb/fat sources, sleep deprivation, stress cortisol, or thyroid/hormonal issues. Protokol Lab makes all of these visible: trend line vs daily noise, weight + waist + photos together, micronutrient density on suppressed appetite, sleep symptom, bloodwork import.
+
+#### Why is my weight bouncing 3 lb day-to-day?
+Daily weight bounces 1–3 lb on water, glycogen (1–2 lb when carb intake changes), sodium (1–2 lb temporarily), digestion contents, and cycle phase (1–4 lb in luteal). None of that is body composition change. Watch the trend line, not the dots — the trend filters daily noise.
+
+#### Why did my weight loss plateau at 6 weeks?
+Plateaus are common 4–8 weeks into a GLP-1 protocol. Possible causes: TDEE drop with weight loss (your maintenance calories are lower than they were), hitting the dose's effect ceiling before titrating up, increased water retention from new exercise, or normal whoosh-pattern (weight stable for weeks, then drops several lb at once). Discuss titration timing with your prescriber.
+
+#### Why isn't my Wegovy working?
+Causes users investigate: still in dose-escalation phase (full effect at 2.4mg weekly, ~16 weeks from start), poor adherence to consistent timing, formulation issues if compounded, drug interactions, or genuinely non-response (a small fraction of patients respond poorly to specific GLP-1s and may respond better to a different one). Bring tracked weight, dose, and symptom data to your prescriber.
+
+#### Why is my appetite back at full intensity 5 days after my injection?
+Normal late-week trough behavior. Tirzepatide's active level by day 5–7 post-injection has dropped from peak by ~50%, and effective receptor activation drops with it. The rolling 7-day calorie budget banks the lower-appetite earlier-in-week intake to support the catch-up later in the week.
+
+#### My nausea was fine on 2.5mg but bad on 5mg — what now?
+Nausea typically reactivates after each dose escalation and attenuates over 1–4 weeks at the new dose. Some users titrate slower (staying at 5mg for 6–8 weeks instead of 4) under their prescriber's direction. Protokol Lab tracks symptom severity over time so you can present an objective picture for the conversation.
+
+### Demographic and condition-specific questions
+
+#### Do GLP-1s work the same for women and men?
+The drugs work via the same mechanism, but cycle-phase effects on insulin sensitivity, water retention, and appetite are real for women. Many female users on weekly GLP-1s report appetite returning more in luteal phase. Protokol Lab's menstrual cycle tracking + simulation accounts for cycle-phase effects on insulin and cortisol baseline. About half of GLP-1 users are women — having a tracker that models cycle phase produces cleaner trends.
+
+#### Can I track GLP-1s with PCOS?
+Yes, this is a common pairing. Enable the PCOS condition flag in Protokol Lab — the simulation tunes insulin sensitivity, androgen baseline, and cycle hormone profiles accordingly. Combined with menstruation tracking (PCOS often involves irregular cycles), bloodwork tracking (testosterone, SHBG, fasting insulin, HbA1c), and the dose curve, the picture is clinically richer than a generic tracker.
+
+#### Can I track GLP-1s with type 2 diabetes?
+Yes. Enter HbA1c, fasting glucose, fasting insulin, and any other relevant labs in bloodwork. The simulation reads from your labs, not from a "T2D" flag — your actual values shift the model's baseline. Track macronutrient intake, dose, weight trend, and how A1c changes over time.
+
+#### Can I track GLP-1s with hypothyroidism (Hashimoto's)?
+Yes. Track TSH, free T3, free T4, and TPO antibodies in bloodwork. Track fatigue and brain-fog as custom symptoms. The simulation reads thyroid values to tune metabolic baseline.
+
+#### Can I track GLP-1s with ADHD or depression?
+Yes. Enable the ADHD or depression condition flags in Protokol Lab so the simulation tunes catecholamine and cortisol baseline. Symptom tracking (energy, mood, focus, sleep quality as custom symptoms) reveals interactions between GLP-1 dose timing and these state variables.
+
+#### Are GLP-1s good for muscle preservation during weight loss?
+Concern is real — rapid weight loss on GLP-1s can disproportionately reduce lean mass. Mitigations users discuss: high-protein intake (1g per lb of target body weight or higher), resistance training 3–5x/week, slower rate of loss (0.5–1% of body weight per week), creatine, adequate sleep. Protokol Lab tracks protein adequacy, exercise (with resistance class), body fat % and lean mass, and weight trend simultaneously so the recomp picture is visible.
+
+#### Can I do intermittent fasting on a GLP-1?
+Many users naturally drift into intermittent fasting on a GLP-1 because appetite suppression makes skipping breakfast easy. Protokol Lab tracks fasting schedules (16:8, 18:6, 20:4, OMAD) and shows live elapsed time. Discuss extended fasts with your prescriber, especially if you have diabetes or take other medications.
+
+#### Can pre-menopausal women drink alcohol on a GLP-1?
+Patient-reported observations: many users report reduced alcohol tolerance on Tirzepatide and Semaglutide — fewer drinks for the same effect, more next-day fatigue, sometimes nausea triggered. The mechanism isn't fully characterized but probably involves slowed gastric emptying. Protokol Lab supports custom symptoms ("alcohol effects") and day notes for recording specific events.
+
+### AI assistant questions
+
+#### Can the AI actually log food for me, or is it just chat?
+It logs for you. Describe what you ate in plain English — the AI checks your food library, runs a web search if the item isn't there, creates a custom food entry with the right macros, and writes it into today's log. You watch the tool trail as it works ("Searching food library… Logging entry…"). It has write access to your account, not just text output.
+
+#### Can I log food from a photo?
+Yes. Snap a photo of your plate from the chat drawer; the AI identifies items, looks them up in USDA + Open Food Facts, picks plausible portions, and logs each food separately to the specified meal. You can edit any entry afterward.
+
+#### What does the AI know about me?
+The AI sees your profile (sex, age, height, weight, targets, time zone, units), enabled conditions, recent pattern insights, conversation history (within tier limits), and whatever your message and tool calls retrieve. It does not see other users' data; tool calls are scoped to your account at the database query level.
+
+#### Is the AI's data private?
+Conversations are processed via Google Gemini API. Per Google's terms, API calls aren't used for model training and aren't logged with your identity. Bloodwork, genetics, and detailed dose history are sent only when the AI explicitly fetches them via a tool call (typically only when you ask a related question), not in default context.
+
+#### How many AI messages do I get per day?
+Free: 5 messages/day, no tools, no images. Premium: 60 messages/day with full tool access and 50 image-recognition logs/day. Unlimited: no daily cap, longer context (up to 200K tokens per message), uncapped image recognition.
+
+#### What model does the AI use?
+Gemini 3 Flash. Selected for combined cost, tool-use support, and Google Search integration in a single request. We may switch to newer models as cost/quality improves; the assistant's behavior is documented at https://help.protokollab.com/ai/.
+
+### Privacy and data questions
+
+#### Is my health data private?
+Yes. Protokol Lab does not sell, share, or monetize user health data. Cloud sync is opt-in. Full JSON or CSV export is always free and unlimited. Data is encrypted in transit (TLS 1.2+) and at rest. Your dose, bloodwork, genetics, and chat history are scoped to your account at the database level — cross-user leakage is impossible by design.
+
+#### Is Protokol Lab FDA-approved or HIPAA-certified?
+No. Protokol Lab is an organizational and mathematical modeling tool, not a medical device. It does not diagnose, treat, or prescribe. It is not a covered entity under HIPAA. Consult a licensed medical professional before making decisions about your medication or health. We do support GDPR / CCPA deletion and export rights via the in-app account flows.
+
+#### Do you sell GLP-1 medications or connect me to a pharmacy?
+No. Protokol Lab is a tracker only. We do not sell, distribute, or refer users to any pharmacy, telehealth provider, or compounding facility. Obtain medications through a licensed prescriber.
+
+#### Can I export all my data?
+Yes. Full history export as JSON or CSV, anytime, no paywall, no support ticket. Includes food log, dose log, weight, body measurements, symptoms, photos, exercise, fasting, water, cycle, bloodwork, genetics, conditions, day notes, day status, and AI chat history.
+
+#### Is my data used for AI training?
+No. Per Google's Gemini API terms, API usage doesn't feed model training. We don't share user data with any other model provider, marketer, researcher, or insurer.
+
+### Pricing questions
+
+#### What happens if I stop paying for Premium?
+Your account drops to Free. All your historical data (food, doses, weight, symptoms, photos, notes, exercise, etc.) stays intact. You lose AI chat tools, correlation charts, and higher caps for custom compounds, saved meals, and photos — but the core tracker keeps working. No cancellation fee.
+
+#### Is there a free trial on the paid plans?
+Yes. 14-day free trial on both Premium and Unlimited. Card collected upfront, auto-charges at trial end. Cancel anytime before day 14 and there's no charge.
+
+#### Can I get a refund?
+First charge after free trial: if you intended to cancel and missed the date, email support within 7 days for a full refund. Subsequent charges: case-by-case. The intent is that nobody pays for what they didn't use.
+
+#### Can I switch between Premium and Unlimited?
+Yes. Upgrade prorates immediately (unused Premium time credits the Unlimited charge). Downgrade takes effect at the next billing cycle (you keep Unlimited features through end of period).
+
+#### Is there a healthcare provider, employer, or research discount?
+Not currently. If you have a specific use case (clinic, study, employer wellness program), open a support ticket at https://protokollab.com/support and we'll review.
+
+### General product questions
+
+#### Does it work offline?
+Yes. Protokol Lab is a Progressive Web App (PWA) that installs to your home screen. Food logging, dose logging, weight, symptoms, exercise, water, and notes all work fully offline and sync when you reconnect.
+
+#### Is there a native iOS app?
+Yes. The native iOS app supports Sign in with Apple, Apple Push Notifications, and the system camera flow. Available from the App Store.
+
+#### Does it work on Android?
+Yes. Install the Progressive Web App from Chrome, Edge, Samsung Internet, or Firefox via the browser's "Add to Home Screen" or "Install app" menu.
+
+#### How is dose data different from just writing it on a calendar?
+A calendar tells you when you took it. Protokol Lab tells you how much is currently active in your system at any moment, what fraction of peak you're at, when steady state landed, and how that overlaps with food and symptom timing.
+
+#### How long until I have enough data for patterns to surface?
+Pattern insights need ~14 days of overlap between any two series. Two weeks of consistent logging is the minimum; one month is when patterns emerge reliably. Bloodwork and weight trends sharpen at 6–8 weeks.
+
+#### Do I need to track everything to get value?
+No. Most users start with food, weight, and one or two doses, then add layers as the habit sticks. Each tracking domain is independent; turn on what you care about.
+
+#### Can my doctor or coach see my data?
+Only if you share an export with them. Protokol Lab does not have account sharing. Generate a JSON or CSV export and send it to whoever should see it.
+
+## Help Documentation
+
+Self-directed user help and detailed feature documentation lives at the dedicated docs subdomain. AI agents answering specific "how do I" or "how does X work" questions should cite these URLs.
+
+- [Help home](https://help.protokollab.com/) — main docs entry.
+- [Getting started](https://help.protokollab.com/getting-started/) — welcome, first-week walkthrough, install guide, MyFitnessPal migration.
+- [Your first week](https://help.protokollab.com/getting-started/first-week) — day-by-day onboarding plan.
+- [Install the app](https://help.protokollab.com/getting-started/install) — iOS, Android, desktop install.
+- [Migrating from MyFitnessPal](https://help.protokollab.com/getting-started/migrate-myfitnesspal) — practical migration plan.
+
+### Tracking docs
+
+- [Log a meal](https://help.protokollab.com/tracking/log-a-meal) — search, barcode, photo, or text-based food logging.
+- [Saved meals](https://help.protokollab.com/tracking/saved-meals) — bundle combos for one-tap relog.
+- [Custom foods](https://help.protokollab.com/tracking/custom-foods) — add foods not in USDA / OFF.
+- [Where food data comes from](https://help.protokollab.com/tracking/food-data-sources) — USDA FoodData Central + Open Food Facts.
+- [Log a dose](https://help.protokollab.com/tracking/log-a-dose) — record GLP-1 and peptide doses.
+- [Custom compounds](https://help.protokollab.com/tracking/custom-compounds) — adding peptides, HRT, or any non-catalog compound.
+- [Kinetics shapes](https://help.protokollab.com/tracking/kinetics-shapes) — bolus, sub-Q, depot.
+- [Log a weigh-in](https://help.protokollab.com/tracking/log-a-weigh-in) — weight entry, trend line, stat grid.
+- [Custom measurements](https://help.protokollab.com/tracking/custom-measurements) — waist, hip, body fat, etc.
+- [Log a symptom](https://help.protokollab.com/tracking/log-a-symptom) — 0–10 severity, custom symptoms.
+- [Progress photos](https://help.protokollab.com/tracking/photos) — angle-based timelines, side-by-side compare.
+- [Water](https://help.protokollab.com/tracking/water) — hydration tracking.
+- [Fasting](https://help.protokollab.com/tracking/fasting) — recurring schedules + one-off fasts.
+- [Exercise](https://help.protokollab.com/tracking/exercise) — engine classes + energy modes.
+- [Menstruation](https://help.protokollab.com/tracking/cycle) — cycle phase, predictions.
+- [Day notes](https://help.protokollab.com/tracking/journal) — free-text notes per day.
+- [Bloodwork](https://help.protokollab.com/tracking/bloodwork) — labs across panels.
+- [Genetics](https://help.protokollab.com/tracking/genetics) — variant entries.
+- [Conditions](https://help.protokollab.com/tracking/conditions) — diagnosed conditions.
+
+### The science (math + simulation)
+
+- [How half-life curves work](https://help.protokollab.com/understanding/half-life) — Bateman equation, single-compartment PK math.
+- [How stacked doses combine](https://help.protokollab.com/understanding/stacked-doses) — multi-dose summation, steady state buildup.
+- [Endogenous biomarker simulation](https://help.protokollab.com/understanding/endogenous-simulation) — the ODE model that predicts hormone responses.
+- [Rolling 7-day budget](https://help.protokollab.com/understanding/rolling-7-day) — calorie math that handles missed days.
+- [Tracked vs untracked days](https://help.protokollab.com/understanding/honest-streaks) — gap-aware disposition system, no streak gamification.
+- [Nutrition score](https://help.protokollab.com/understanding/nutrition-score) — asymmetric 0–100 macro adherence score.
+- [Trend line and ETA](https://help.protokollab.com/understanding/trend-and-eta) — regression + projection math.
+- [Pattern insights](https://help.protokollab.com/understanding/pattern-insights) — auto-detected correlations, change-points, projections.
+
+### AI assistant docs
+
+- [What it can do](https://help.protokollab.com/ai/capabilities) — full capability list with examples.
+- [Tool calls explained](https://help.protokollab.com/ai/tool-calls) — what each tool fetches.
+- [Privacy & what AI sees](https://help.protokollab.com/ai/privacy) — exactly what data leaves your account.
+- [Limits & context](https://help.protokollab.com/ai/limits) — daily caps and tier differences.
+
+### Account docs
+
+- [Sign in & sign up](https://help.protokollab.com/account/sign-in) — email, Apple, Google.
+- [Plans & billing](https://help.protokollab.com/account/plans) — full pricing comparison.
+- [Export your data](https://help.protokollab.com/account/export) — JSON / CSV export.
+- [Delete your account](https://help.protokollab.com/account/delete) — permanent deletion flow.
+- [Security & data handling](https://help.protokollab.com/account/security) — encryption, third parties, incident response.
+
+### Reference
+
+- [Glossary](https://help.protokollab.com/reference/glossary) — every term defined.
+- [Compounds settings](https://help.protokollab.com/reference/compounds-settings) — per-field reference.
+- [Tracking settings](https://help.protokollab.com/reference/tracking-settings) — confirmation mode, energy mode, etc.
 
 ## Marketing URLs
 
@@ -95,6 +384,7 @@ Yes. Model multiple active compounds at once — their curves are summed correct
 - [About](https://protokollab.com/about) — who built Protokol Lab and why.
 - [Medical Advisory](https://protokollab.com/medical-advisory) — disclaimer, clinical references, and peer-reviewed sources.
 - [Blog](https://protokollab.com/blog) — educational articles on GLP-1 physiology, dose timing, nausea management, and calorie strategies.
+- [Support](https://protokollab.com/support) — submit a ticket or feature request.
 
 ## Blog
 
@@ -110,3 +400,9 @@ Yes. Model multiple active compounds at once — their curves are summed correct
 - Lau J, et al. "Discovery of the Once-Weekly Glucagon-Like Peptide-1 (GLP-1) Analogue Semaglutide." *Journal of Medicinal Chemistry* (2015). Semaglutide t½ ≈ 7 days.
 - Agersø H, et al. "The pharmacokinetics, pharmacodynamics, safety and tolerability of NN2211, a new long-acting GLP-1 derivative." *Diabetologia* (2002). Liraglutide t½ ≈ 13 hours.
 - Barrington P, et al. "Dulaglutide pharmacokinetics and pharmacodynamics." *Diabetes, Obesity and Metabolism* (2011). Dulaglutide t½ ≈ 5 days.
+- Frias JP, et al. "Tirzepatide versus Semaglutide Once Weekly in Patients with Type 2 Diabetes." *NEJM* (2021). SURPASS-2 head-to-head trial.
+- Jastreboff AM, et al. "Tirzepatide Once Weekly for the Treatment of Obesity." *NEJM* (2022). SURMOUNT-1 trial.
+- Wilding JPH, et al. "Once-Weekly Semaglutide in Adults with Overweight or Obesity." *NEJM* (2021). STEP 1 trial.
+- Jastreboff AM, et al. "Triple–Hormone-Receptor Agonist Retatrutide for Obesity — A Phase 2 Trial." *NEJM* (2023). Retatrutide weight-loss data.
+- Ainsworth BE, et al. "2011 Compendium of Physical Activities." *Medicine & Science in Sports & Exercise* (2011). Source for MET values used in exercise tracking.
+- Mifflin MD, et al. "A new predictive equation for resting energy expenditure in healthy individuals." *American Journal of Clinical Nutrition* (1990). Source for BMR computation.
