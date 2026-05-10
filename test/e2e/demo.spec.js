@@ -233,8 +233,9 @@ test.describe('Regressions', () => {
     await seedTemplate(page);
     await startDemo(page);
 
-    // Log + Dashboard are present (they show sandbox data).
-    await expect(page.getByRole('link', { name: /^log$/i }).first()).toBeVisible();
+    // Log + Dashboard are present (they show sandbox data). "Log" is the
+    // QuickLogMenu popover trigger (a <button>), Dashboard is a real link.
+    await expect(page.getByRole('button', { name: /^log$/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /^dashboard$/i }).first()).toBeVisible();
     // Settings + Support are hidden — they're tied to the real account.
     await expect(page.getByRole('link', { name: /^settings$/i })).toHaveCount(0);
