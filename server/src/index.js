@@ -9,6 +9,7 @@ import { runStartupBackup } from './services/backup.js';
 import { initPush } from './services/push.js';
 import { startScheduler, stopScheduler } from './services/scheduler.js';
 import { startMarketingAdmin, stopMarketingAdmin } from './services/marketingAdmin.js';
+import { startMailery, stopMailery } from './services/mailery.js';
 import { logger, childLogger, errContext } from './lib/logger.js';
 
 const log = childLogger('boot');
@@ -70,6 +71,8 @@ const shutdown = async (signal) => {
     await stopScheduler();
     log.debug('stopping marketing admin');
     await stopMarketingAdmin();
+    log.debug('stopping mailery');
+    await stopMailery();
     log.debug('disconnecting mongo');
     await mongoose.disconnect();
     log.info('shutdown complete');
@@ -116,6 +119,10 @@ try {
   initPush();
   await startScheduler();
   await startMarketingAdmin();
+  // Mailery boots after mongo is connected. Internally disables itself if
+  // REDIS_URL is missing or MAILER_DISABLED=1, so this is safe to call
+  // unconditionally in dev / test / prod.
+  await startMailery();
 
   const app = createApp();
   server = app.listen(PORT, () => {

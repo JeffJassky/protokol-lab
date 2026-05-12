@@ -5,6 +5,7 @@ import { childLogger } from '../lib/logger.js';
 import { parseLogDate } from '../lib/date.js';
 import { PEPTIDE_CATALOG_INDEX } from '@kyneticbio/core';
 import { maybeInvalidateAsync } from '../sim/invalidationHooks.js';
+import { fire as fireMailerEvent } from '../services/mailery.js';
 
 const log = childLogger('doses');
 const router = Router();
@@ -182,11 +183,19 @@ router.post('/', async (req, res) => {
     }
   }
 
+  // Snapshot the most recent prior log for the same compound — used to
+  // detect a dose change (titration) below. Cheap indexed read.
+  const priorQuery = hasCustom
+    ? { userId: req.userId, compoundId }
+    : { userId: req.userId, coreInterventionKey };
+  const priorLog = await DoseLog.findOne(priorQuery).sort({ date: -1, _id: -1 }).lean();
+
+  const numericValue = Number(value);
   const entry = await DoseLog.create({
     userId: req.userId,
     compoundId: hasCustom ? compoundId : null,
     coreInterventionKey: hasCanonical ? coreInterventionKey : null,
-    value: Number(value),
+    value: numericValue,
     date: parseLogDate(date),
   });
   rlog.info(
@@ -199,6 +208,27 @@ router.post('/', async (req, res) => {
     'doses: logged',
   );
   maybeInvalidateAsync(req.userId, entry.date, 'dose-create');
+
+  // Email layer notifications. Both are best-effort and never block the
+  // response. "Dose Logged" is once-per-contact (drives the first-dose
+  // celebration); "Dose Changed" fires every time the user's most recent
+  // dose for this compound differed from the new one — daily dedupe in
+  // the Mailery registry prevents rapid-edit spam.
+  fireMailerEvent('Dose Logged', req.userId, {
+    compound: hasCustom ? String(compoundId) : coreInterventionKey,
+    compoundKind: hasCustom ? 'custom' : 'core',
+    value: numericValue,
+  });
+  if (priorLog && Number(priorLog.value) !== numericValue) {
+    fireMailerEvent('Dose Changed', req.userId, {
+      compound: hasCustom ? String(compoundId) : coreInterventionKey,
+      compoundKind: hasCustom ? 'custom' : 'core',
+      previousValue: Number(priorLog.value),
+      newValue: numericValue,
+      direction: numericValue > Number(priorLog.value) ? 'up' : 'down',
+    });
+  }
+
   res.status(201).json({ entry });
 });
 

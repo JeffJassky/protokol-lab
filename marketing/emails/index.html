@@ -1,0 +1,1921 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Protokol [LAB] · Email Program Workbench</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0f0c1a;
+    --bg-2: #181427;
+    --bg-3: #1f1b32;
+    --bg-4: #271f3f;
+    --line: rgba(255,255,255,0.08);
+    --line-2: rgba(255,255,255,0.14);
+    --text: rgba(255,255,255,0.95);
+    --text-2: rgba(255,255,255,0.72);
+    --text-3: rgba(255,255,255,0.5);
+    --purple: #3fb26a;
+    --purple-light: #5bf591;
+    --purple-dark: #1e8047;
+    --c-activation: #27ccf8;
+    --c-engagement: #86ee8f;
+    --c-conversion: #ff6868;
+    --c-retention: #b675ff;
+    --c-churn: #ff9a69;
+    --c-advocacy: #ffaced;
+    --c-broadcast: #f9b740;
+    --c-fallback: #b7bec7;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  body { display: flex; min-height: 100vh; }
+
+  /* ----- Sidebar ----- */
+  aside.sidebar {
+    width: 360px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--line);
+    background: var(--bg-2);
+    display: flex; flex-direction: column;
+    height: 100vh; position: sticky; top: 0;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    padding: 22px 24px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .brand:hover { background: var(--bg-3); }
+  .brand .logo {
+    width: 32px; height: 32px; border-radius: 0;
+    background: #5bf591;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 14px; font-weight: 800; letter-spacing: -0.02em;
+    color: #0b0f0c;
+  }
+  .brand h1 { margin: 0; font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand h1 .lab-badge { display: inline-block; border: 1px solid currentColor; padding: 2px 6px; font-size: 9px; letter-spacing: 0.2em; font-weight: 600; margin-left: 6px; vertical-align: 1px; }
+  .brand h1 small { display: block; font-weight: 500; font-size: 10px; color: var(--text-3); margin-top: 4px; letter-spacing: 0.08em; text-transform: uppercase; font-family: var(--sans); }
+
+  .meta-summary {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--line);
+    color: var(--text-3);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .meta-summary strong { color: var(--text-2); font-weight: 600; }
+  .meta-summary .num { color: var(--purple-light); font-weight: 700; }
+
+  nav.flows {
+    padding: 12px 8px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .flow-group {
+    margin-bottom: 4px;
+  }
+  .flow-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-2);
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--sans);
+    font-size: 12px;
+    transition: all .15s ease;
+  }
+  .flow-header:hover { background: var(--bg-3); color: var(--text); }
+  .flow-header.active {
+    background: var(--bg-3);
+    border-color: var(--line-2);
+    color: var(--text);
+  }
+  .flow-header .caret {
+    width: 16px; height: 16px;
+    color: var(--text-3);
+    transition: transform .15s ease;
+    flex-shrink: 0;
+  }
+  .flow-header.expanded .caret { transform: rotate(90deg); }
+  .flow-header .meta {
+    flex: 1;
+    min-width: 0;
+  }
+  .flow-header .title {
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.2;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .flow-header .sub {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .flow-header .stage-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--c-fallback);
+  }
+  .flow-header[data-stage="activation"] .stage-dot { background: var(--c-activation); }
+  .flow-header[data-stage="engagement"] .stage-dot { background: var(--c-engagement); }
+  .flow-header[data-stage="conversion"] .stage-dot { background: var(--c-conversion); }
+  .flow-header[data-stage="retention"] .stage-dot { background: var(--c-retention); }
+  .flow-header[data-stage="churn"] .stage-dot { background: var(--c-churn); }
+  .flow-header[data-stage="advocacy"] .stage-dot { background: var(--c-advocacy); }
+  .flow-header[data-stage="broadcast"] .stage-dot { background: var(--c-broadcast); }
+  .flow-header[data-stage="fallback"] .stage-dot { background: var(--c-fallback); }
+
+  .flow-header .count {
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-left: 4px;
+  }
+
+  .email-list {
+    margin: 4px 0 8px 32px;
+    padding-left: 12px;
+    border-left: 1px solid var(--line);
+    display: none;
+  }
+  .flow-group.expanded .email-list { display: block; }
+  .email-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    color: var(--text-3);
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.3;
+    margin: 1px 0;
+    transition: all .12s ease;
+  }
+  .email-item:hover { background: var(--bg-3); color: var(--text-2); }
+  .email-item.active { background: var(--bg-3); color: var(--text); }
+  .email-item .num { color: var(--text-3); font-family: var(--mono); margin-right: 6px; }
+  .email-item.active .num { color: var(--purple-light); }
+  .email-item .subj { font-weight: 500; }
+
+  /* ----- Main pane ----- */
+  main.detail {
+    flex: 1; min-width: 0;
+    padding: 36px 48px 80px;
+    overflow-x: hidden;
+  }
+
+  .breadcrumb {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; color: var(--text-3);
+    margin-bottom: 16px;
+  }
+  .breadcrumb a {
+    color: var(--text-2);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .breadcrumb a:hover { color: var(--purple-light); }
+  .breadcrumb .sep { color: var(--text-3); }
+
+  .topline {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 11px; color: var(--text-3);
+    margin-bottom: 14px;
+  }
+  .topline .chip { padding: 3px 10px; border-radius: 999px; background: var(--bg-3); color: var(--text-2); }
+  .topline .chip.stage { color: var(--text); font-weight: 600; }
+  .topline .chip.stage[data-stage="activation"] { background: rgba(39,204,248,0.18); color: var(--c-activation); }
+  .topline .chip.stage[data-stage="engagement"] { background: rgba(134,238,143,0.18); color: var(--c-engagement); }
+  .topline .chip.stage[data-stage="conversion"] { background: rgba(255,104,104,0.18); color: var(--c-conversion); }
+  .topline .chip.stage[data-stage="retention"] { background: rgba(180,117,255,0.22); color: var(--c-retention); }
+  .topline .chip.stage[data-stage="churn"] { background: rgba(255,154,105,0.18); color: var(--c-churn); }
+  .topline .chip.stage[data-stage="advocacy"] { background: rgba(255,172,237,0.18); color: var(--c-advocacy); }
+  .topline .chip.stage[data-stage="broadcast"] { background: rgba(249,183,64,0.18); color: var(--c-broadcast); }
+  .topline .chip.stage[data-stage="fallback"] { background: rgba(183,190,199,0.18); color: var(--c-fallback); }
+  .topline .chip.priority { background: var(--purple); color: white; font-weight: 700; }
+
+  h1.page-title {
+    font-size: 32px; line-height: 1.15; font-weight: 700; letter-spacing: -0.025em;
+    margin: 0 0 8px;
+  }
+  h2.subject {
+    font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: -0.025em;
+    margin: 0 0 8px;
+  }
+  .preheader {
+    font-size: 14px; color: var(--text-2); margin-bottom: 28px; font-style: italic;
+  }
+  .lead {
+    font-size: 15px; color: var(--text-2); line-height: 1.65; margin-bottom: 24px; max-width: 700px;
+  }
+
+  .props {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 0;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: 28px;
+  }
+  .props .prop {
+    padding: 14px 18px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .props .prop:nth-child(2n) { border-right: none; }
+  .props .prop:nth-last-child(-n+2) { border-bottom: none; }
+  .props .prop.wide { grid-column: span 2; border-right: none; }
+  .prop .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 4px; font-weight: 600; }
+  .prop .v { font-size: 13px; color: var(--text); font-family: var(--mono); line-height: 1.5; }
+  .prop .v.normal { font-family: var(--sans); }
+
+  section.block { margin-bottom: 32px; }
+  section.block h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    margin: 0 0 10px;
+    font-weight: 700;
+  }
+  .rationale {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--purple);
+    border-radius: 10px;
+    padding: 18px 22px;
+    color: var(--text-2);
+    line-height: 1.65;
+    font-size: 14px;
+  }
+  .rationale ul { margin: 6px 0 0; padding-left: 20px; }
+  .rationale li { margin: 6px 0; }
+  .rationale strong { color: var(--text); font-weight: 600; }
+  .rationale p { margin: 0 0 12px; }
+  .rationale p:last-child { margin-bottom: 0; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tab {
+    background: transparent; border: 0;
+    color: var(--text-3);
+    padding: 10px 16px;
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    letter-spacing: 0.02em;
+  }
+  .tab:hover { color: var(--text-2); }
+  .tab.active { color: var(--text); border-bottom-color: var(--purple-light); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .actions { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .btn {
+    background: var(--purple); color: white;
+    border: 0; padding: 9px 16px; font-size: 12px; font-weight: 600;
+    border-radius: 8px;
+    font-family: var(--sans); cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all .15s ease;
+    box-shadow: 0 6px 18px -8px rgba(93, 48, 255, 0.65);
+  }
+  .btn:hover { background: var(--purple-light); transform: translateY(-1px); }
+  .btn.alt { background: var(--bg-3); color: var(--text); box-shadow: none; border: 1px solid var(--line-2); }
+  .btn.alt:hover { background: var(--bg); }
+  .btn .ok { display: none; }
+  .btn.copied .ok { display: inline; }
+  .btn.copied .label { display: none; }
+  .btn.copied { background: var(--c-engagement); color: #0f0c1a; }
+
+  .iframe-wrap {
+    background: #e9edf3;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    min-height: 600px;
+  }
+  iframe.email-preview {
+    width: 100%; max-width: 660px; min-height: 800px;
+    display: block; margin: 0 auto;
+    border: 0; background: white;
+    border-radius: 8px;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.5);
+  }
+
+  pre.code {
+    background: #0a0814;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    overflow: auto;
+    max-height: 70vh;
+    font-family: var(--mono); font-size: 12px;
+    line-height: 1.6;
+    color: #d6d1f0;
+    margin: 0;
+  }
+
+  /* Per-email timeline (within a flow) */
+  .timeline {
+    display: flex; align-items: center; margin-bottom: 32px;
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; overflow-x: auto;
+  }
+  .timeline .dot {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--bg-3); border: 1px solid var(--line-2);
+    color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  .timeline .dot:hover { border-color: var(--purple-light); color: var(--text); }
+  .timeline .dot.active {
+    background: var(--purple); color: white; border-color: var(--purple-light);
+    box-shadow: 0 6px 20px -6px rgba(93,48,255,0.7);
+  }
+  .timeline .seg {
+    height: 1px; flex: 1; background: var(--line-2); min-width: 28px;
+    position: relative;
+  }
+  .timeline .seg span {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--text-3); font-family: var(--mono); white-space: nowrap;
+  }
+
+  /* Program overview map */
+  .program-map {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px; margin-bottom: 32px;
+  }
+  .program-card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all .15s ease;
+    text-align: left;
+    font-family: var(--sans);
+    color: var(--text);
+  }
+  .program-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--purple-light);
+    box-shadow: 0 14px 40px -20px rgba(93, 48, 255, 0.55);
+  }
+  .program-card.priority {
+    border-color: var(--purple-light);
+    box-shadow: 0 8px 30px -16px rgba(93, 48, 255, 0.55);
+  }
+  .program-card .card-stage {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+    color: var(--text-3);
+    margin-bottom: 10px;
+  }
+  .program-card .card-title { font-size: 16px; font-weight: 700; line-height: 1.25; margin-bottom: 8px; }
+  .program-card .card-trigger { font-size: 12px; color: var(--text-2); font-family: var(--mono); margin-bottom: 12px; }
+  .program-card .card-desc { font-size: 13px; color: var(--text-2); line-height: 1.55; }
+  .program-card .card-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+    font-size: 11px; color: var(--text-3); font-family: var(--mono);
+  }
+  .program-card .card-footer .badge {
+    padding: 2px 8px; border-radius: 999px; font-weight: 700;
+    background: var(--purple); color: white; font-size: 10px;
+  }
+
+  /* Email list inside flow detail */
+  .email-table {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .email-row {
+    display: grid;
+    grid-template-columns: 60px 100px 1fr 200px;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    align-items: center;
+    transition: background .12s ease;
+  }
+  .email-row:last-child { border-bottom: 0; }
+  .email-row:hover { background: var(--bg-3); }
+  .email-row .row-num {
+    width: 28px; height: 28px;
+    background: var(--purple); color: white;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px;
+  }
+  .email-row .row-delay {
+    font-family: var(--mono); font-size: 12px; color: var(--text-3);
+  }
+  .email-row .row-subject { font-size: 14px; font-weight: 600; color: var(--text); }
+  .email-row .row-preheader { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .email-row .row-cta { font-size: 11px; color: var(--text-2); font-family: var(--mono); text-align: right; }
+
+  ::selection { background: var(--purple); color: white; }
+
+  @media (max-width: 1100px) {
+    aside.sidebar { width: 300px; }
+    main.detail { padding: 24px; }
+  }
+  @media (max-width: 800px) {
+    body { flex-direction: column; }
+    aside.sidebar { width: 100%; height: auto; position: relative; }
+    nav.flows { max-height: 380px; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand" id="brandHome">
+    <div class="logo">PK</div>
+    <h1>Protokol<span class="lab-badge">LAB</span><small>Email Program · Workbench</small></h1>
+  </div>
+
+  <div class="meta-summary">
+    <strong>Flows:</strong> <span class="num" id="flowCount">14</span> &middot;
+    <strong>Emails:</strong> <span class="num" id="emailCount">30</span> &middot;
+    <strong>Broadcasts:</strong> <span class="num">1</span><br>
+    <strong>Engine:</strong> Mailery (event-driven flows + suppression scopes)<br>
+    <strong>Founder voice:</strong> Jeff Jassky
+  </div>
+
+  <nav class="flows" id="flowsNav"></nav>
+</aside>
+
+<main class="detail" id="detail">
+  <!-- populated by JS -->
+</main>
+
+<script>
+/* ===============================================================
+   PROTOKOL [LAB] EMAIL PROGRAM — 14 flows + 1 broadcast, 30 emails.
+
+   Behavioral lifecycle anchored on GLP-1 / peptide / compound tracking:
+   onboarding → first-dose → titration → plateau → maintenance →
+   cycle-off → re-engagement. Fired through Mailery (event-driven flows,
+   wait / condition / branch / send / tag steps, scope-aware suppression).
+
+   Architecture: each flow is an object with metadata + array of
+   emails. Emails inline as JS so this works from file:// without
+   a server.
+   =============================================================== */
+
+const FROM_NAME = 'Jeff Jassky';
+const FROM_EMAIL = 'jeff@jeffjassky.com';
+const AVATAR = 'https://storage.mlcdn.com/account_image/449716/Fn3InjJtPzA9W1mxNoG9NIyjHeZaNjEgqXsXy6Fc.jpg';
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+// Shared shell for every email. Body content slotted via {{BODY}}.
+function shell({ preheader, body }) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="x-apple-disable-message-reformatting" />
+<title>${escapeAttr(preheader)}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+
+<!-- Preheader (hidden, inbox preview only) -->
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+  ${escapeHtml(preheader)}&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f7;">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
+      <tr><td align="left" style="padding:0 8px 20px;">
+        <a href="https://protokollab.com" style="text-decoration:none;color:#0f1a12;font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;font-weight:700;letter-spacing:-0.01em;">
+          <span style="display:inline-block;width:22px;height:22px;background:#5bf591;color:#0b0f0c;text-align:center;line-height:22px;font-size:11px;font-weight:800;letter-spacing:-0.04em;vertical-align:middle;margin-right:10px;">PK</span>Protokol&nbsp;<span style="display:inline-block;border:1px solid #0f1a12;padding:1px 6px;font-size:9px;letter-spacing:0.2em;font-weight:600;vertical-align:2px;">LAB</span>
+        </a>
+      </td></tr>
+    </table>
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e0ebdd;box-shadow:0 4px 24px -8px rgba(15,26,18,0.08);">
+      <tr><td style="padding:40px 44px;color:#1d1f23;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;">
+${body}
+      </td></tr>
+    </table>
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
+      <tr><td align="center" style="padding:28px 24px 8px;color:#848a91;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;">
+        You're getting this because you signed up at <a href="https://protokollab.com" style="color:#1e8047;text-decoration:none;">protokollab.com</a>.<br />
+        <a href="{$unsubscribe}" style="color:#848a91;">Unsubscribe</a> &nbsp;·&nbsp; <a href="{$update_profile}" style="color:#848a91;">Update preferences</a>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+
+</body>
+</html>`;
+}
+
+function button(label, url) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+  <tr><td bgcolor="#3fb26a" style="border-radius:0;">
+    <a href="${url}" style="display:inline-block;padding:14px 26px;font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;letter-spacing:0.02em;">${label}</a>
+  </td></tr>
+</table>`;
+}
+
+function senderBlock() {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:36px;border-top:1px solid #ebf1fa;padding-top:24px;">
+  <tr>
+    <td valign="top" style="padding-right:14px;">
+      <img src="${AVATAR}" alt="Jeff Jassky" width="48" height="48" style="display:block;border-radius:50%;width:48px;height:48px;" />
+    </td>
+    <td valign="middle" style="color:#1d1f23;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;">
+      <strong style="font-weight:700;">Jeff Jassky</strong><br />
+      <span style="color:#4f7266;">Founder, Protokol [LAB] &nbsp;·&nbsp; Indie developer, solo team</span>
+    </td>
+  </tr>
+</table>`;
+}
+
+function softFooter(text, url, urlLabel) {
+  return `<p style="margin:32px 0 8px;color:#4f7266;font-size:13px;border-top:1px solid #e0ebdd;padding-top:20px;">${text} ${url ? `<a href="${url}" style="color:#1e8047;text-decoration:underline;">${urlLabel}</a>` : ''}</p>`;
+}
+
+function disclaimer() {
+  return `<p style="margin:24px 0 0;color:#7a9a8a;font-size:11px;line-height:1.5;border-top:1px solid #e0ebdd;padding-top:14px;font-style:italic;">Protokol Lab is an organizational and mathematical modeling tool. We do not provide medical advice, prescribe medication, or replace your clinician. Any compound or dose decisions belong between you and your prescriber.</p>`;
+}
+
+/* ===============================================================
+   THE PROGRAM
+   =============================================================== */
+
+const program = [
+
+/* ============================================================
+   FLOW 1: WELCOME DRIP (fallback)
+   ============================================================ */
+{
+  slug: 'welcome-drip',
+  name: 'Welcome Drip (fallback)',
+  stage: 'fallback',
+  stageLabel: 'Fallback',
+  trigger: 'mailery event: "Onboarded" (no other behavioral flow active)',
+  audience: 'Newly onboarded users whose journey hasn\'t fired a more specific behavioral trigger',
+  goal: 'Seed the daily logging habit, surface first-week insight unlock, and warm-up free→trial conversion across 7 emails / 21 days',
+  enabled: true,
+  description: 'The fallback drip that runs when no behavioral trigger has activated. Daily-logging product means cadence is gentler than a SaaS welcome — habit-building, not feature-listing. First-week insight unlock at day 7 is the retention pivot.',
+  rationale: `<p><strong>Why a fallback drip exists.</strong> Protokol Lab is a daily-action product. Most users won't fire a specific behavioral trigger in their first week — they'll just log or not log. This drip exists for them, anchored on habit-formation, not feature-shilling.</p>
+<ul>
+  <li><strong>Activation before conversion.</strong> Email 1 pushes "log today" not "upgrade." A user who hasn't logged twice has no reason to upgrade.</li>
+  <li><strong>Day-7 insight unlock</strong> is the hinge. Until ~7 logged days, the dashboard is empty. After it, the data starts telling them things. This drip surfaces that moment explicitly.</li>
+  <li><strong>Soft Premium nudge at day 14</strong> only — the dedicated free→trial-nudge flow handles harder conversion later, gated on engagement signal.</li>
+  <li><strong>Suppression scope: marketing.</strong> Unsubscribing from marketing kills this whole flow.</li>
+</ul>`,
+  emails: [
+    {
+      id: 1, label: 'Day 0', delayText: 'T + 30 min after onboarding',
+      stage: 'activation', stageLabel: 'Activation',
+      subject: "Welcome to Protokol Lab — let's get you logging today",
+      preheader: "90 seconds to log your first dose. Here's the fastest path.",
+      primaryCTA: { label: 'Open the app →', url: 'https://protokollab.com/log' },
+      rationale: `<p><strong>Activation, not feature tour.</strong> The fastest path to value is a logged entry today. Three concrete steps, the rolling-7 math sells itself once data exists.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Welcome to Protokol Lab</h1>
+<p style="margin:0 0 16px;">Hey, Jeff here — I'm the developer behind Protokol Lab, and I run it solo. Thanks for signing up.</p>
+<p style="margin:0 0 16px;">Most of what makes Protokol useful only kicks in once you have a few days of logged data. So: easiest thing you can do today is log something. Three minutes, three taps:</p>
+<ol style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>Open the app</strong> &mdash; <a href="https://protokollab.com/log" style="color:#1e8047;text-decoration:underline;">protokollab.com/log</a> (add to home screen if you haven't)</li>
+  <li style="margin:0 0 10px;"><strong>Log today's dose</strong> &mdash; tap "Add dose," pick your compound, enter your mg. 15 seconds.</li>
+  <li style="margin:0 0 10px;"><strong>Log what you ate</strong> &mdash; rough is fine. The rolling-7 math handles missing data; it does not handle silent zeros.</li>
+</ol>
+<p style="margin:0 0 16px;">After about 7 days of data, your dashboard charts start telling you things. Today is day zero. The faster you log, the faster that happens.</p>
+${button('Open the app →', 'https://protokollab.com/log')}
+<p style="margin:24px 0 16px;">One small thing: the app is a <strong>PWA</strong>, which means no app store. On iPhone, tap the share icon and "Add to Home Screen." On Android, your browser will prompt automatically. Logging from the home-screen icon is the difference between this becoming a daily habit and not.</p>
+<p style="margin:0 0 8px;">Reply to this email if anything's broken or unclear. Lands in my inbox; I write back same day.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 2, label: 'Day 2', delayText: '+ 2 days',
+      stage: 'engagement', stageLabel: 'Education',
+      subject: 'How to read your first Protokol chart',
+      preheader: 'One pattern, one trap, one habit. 90-second read.',
+      primaryCTA: { label: 'View your charts →', url: 'https://protokollab.com/insights' },
+      rationale: `<p><strong>Founder-as-teacher.</strong> Two days in is the right window to deliver one useful piece of mental scaffolding. The "untracked vs. zero" distinction is genuinely useful and only mildly product-marketing-y.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">How to read your first chart</h1>
+<p style="margin:0 0 16px;">Jeff again. Two things I wish more first-week users knew:</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">1. Untracked is not the same as zero.</p>
+<p style="margin:0 0 16px;">If you forget to log a day, mark it "untracked" (the toggle on the day header). The rolling-7 math will skip it instead of treating it as 0 cal / 0 doses, which would tank your trend line. <a href="https://help.protokollab.com/tracked-untracked-days" style="color:#1e8047;text-decoration:underline;">Full explainer here</a> if you're curious why this matters.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">2. Dose timing vs. food timing is the most interesting pattern.</p>
+<p style="margin:0 0 16px;">Once you have ~7 days of both logged, the Insights view will start showing you which meals land in your dose's peak window. For most GLP-1 users that's where the surprising stuff shows up &mdash; satiety crashes, energy slumps, hunger rebounds.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">3. Log immediately, not retrospectively.</p>
+<p style="margin:0 0 16px;">By the end of week two, memory of "how hungry was I yesterday at lunch" is unreliable. The hunger toggle on the food log takes one tap; the difference in signal quality is huge.</p>
+${button('View your charts →', 'https://protokollab.com/insights')}
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 3, label: 'Day 5', delayText: '+ 5 days',
+      stage: 'engagement', stageLabel: 'Differentiation',
+      subject: 'Make Protokol yours — custom compounds',
+      preheader: 'Tirzepatide-to-sema bridges, reta titration, BPC-157 cycles. All addable in 90 seconds.',
+      primaryCTA: { label: 'Add a custom compound →', url: 'https://protokollab.com/compounds' },
+      rationale: `<p><strong>The differentiation sell.</strong> Generic GLP-1 trackers don't model your actual protocol — they assume default doses on default schedules. The custom compound feature is what makes Protokol stick once a user's protocol diverges from the default. Audience is power-protocol literate.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Make Protokol yours</h1>
+<p style="margin:0 0 16px;">The default compound list covers the obvious ones &mdash; Wegovy, Zepbound, compounded sema, compounded tirz, a handful of peptides. If your protocol fits cleanly into one of those, you can skip this email.</p>
+<p style="margin:0 0 16px;">Most real protocols don't fit cleanly. People I hear from are running:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>Tirzepatide → semaglutide bridges</strong> on a self-designed taper schedule</li>
+  <li style="margin:0 0 10px;"><strong>Retatrutide self-titration</strong> with custom mg-per-week ramps</li>
+  <li style="margin:0 0 10px;"><strong>BPC-157 / TB-500 cycles</strong> alongside their primary compound</li>
+  <li style="margin:0 0 10px;"><strong>Dual-compound stacks</strong> &mdash; e.g. sema for appetite, low-dose tirz for additional GIP</li>
+</ul>
+<p style="margin:0 0 16px;">Adding a custom compound means: define the name, half-life, default dose, and your schedule. That unlocks Insights for it &mdash; the half-life curve, peak windows, and rolling-7 budgets all learn from what you put in.</p>
+${button('Add a custom compound →', 'https://protokollab.com/compounds')}
+<p style="margin:24px 0 16px;">If you're not sure about half-life or default dose, the <a href="https://help.protokollab.com/compounds/half-lives" style="color:#1e8047;text-decoration:underline;">compound reference page</a> has citations for the common ones. Or just reply with your protocol and I'll help you set it up.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 4, label: 'Day 7', delayText: '+ 7 days',
+      stage: 'engagement', stageLabel: 'Insight unlock',
+      subject: 'Your charts just got useful',
+      preheader: '7 days of data is the threshold. Your Insights view is live.',
+      primaryCTA: { label: 'Open Insights →', url: 'https://protokollab.com/insights' },
+      rationale: `<p><strong>The retention pivot.</strong> Day 7 is the magic-moment threshold for daily-logging products. This email exists to make sure the user actually opens Insights at the moment the data crosses the usefulness boundary. Missed here = high churn risk.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Your charts just got useful</h1>
+<p style="margin:0 0 16px;">Quick note: you crossed 7 logged days, which is the threshold where the Insights view starts being worth opening.</p>
+<p style="margin:0 0 16px;">Until today, your dashboard had too few datapoints to show patterns. Right now, it should be showing:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>Rolling-7 averages</strong> on calories, protein, and dose timing</li>
+  <li style="margin:0 0 10px;"><strong>Weight trend</strong> with dose markers overlaid &mdash; the lag between dose changes and weight movements is usually visible by day 7</li>
+  <li style="margin:0 0 10px;"><strong>Food-timing histogram</strong> against your compound's peak window</li>
+</ul>
+<p style="margin:0 0 16px;">First pattern most users notice: weight movements lag dose changes by about 3 days, not the same day. Useful to know before you blame the dose for a bad scale reading.</p>
+${button('Open Insights →', 'https://protokollab.com/insights')}
+<p style="margin:24px 0 16px;">If you're on a GLP-1 and you also exercise, take a minute to set your <strong>exercise energy mode</strong> in Settings. It changes how logged workouts interact with the deficit math &mdash; baseline / earn / hidden are the three options, and they give meaningfully different rolling-7 numbers. <a href="https://help.protokollab.com/exercise-energy-modes" style="color:#1e8047;text-decoration:underline;">Explainer here.</a></p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 5, label: 'Day 11', delayText: '+ 11 days',
+      stage: 'engagement', stageLabel: 'Check-in',
+      subject: "Quick check-in — what's working?",
+      preheader: '30 seconds, one-line reply. I read every one.',
+      primaryCTA: null,
+      rationale: `<p><strong>Reply-only check-in.</strong> No CTA. Goal: feedback collection + relationship-building. Highest-information email in the drip because replies cluster into the next features I build.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Quick check-in</h1>
+<p style="margin:0 0 16px;">Hey &mdash; Jeff. You're about 11 days in.</p>
+<p style="margin:0 0 16px;">If you've got 30 seconds, the most useful thing you could do is reply to this email with one line on any of:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">What's been useful so far?</li>
+  <li style="margin:0 0 10px;">What's been confusing or annoying?</li>
+  <li style="margin:0 0 10px;">What's missing that you wish was there?</li>
+</ul>
+<p style="margin:0 0 16px;">Comes straight to my inbox. I'm not running a customer success org &mdash; I am the customer success org. Recent features (the symptom overlay, the maintenance mode, the half-life custom field) all came out of these replies.</p>
+<p style="margin:0 0 16px;">If the answer is "nothing," that's also useful information &mdash; happy you're cruising.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+    {
+      id: 6, label: 'Day 14', delayText: '+ 14 days',
+      stage: 'conversion', stageLabel: 'Conversion (soft)',
+      subject: "What Premium adds (no pressure — Free works fine)",
+      preheader: '14-day trial, no card. Free tier keeps working if you skip.',
+      primaryCTA: { label: 'See what Premium does →', url: 'https://protokollab.com/pricing' },
+      rationale: `<p><strong>The soft Premium nudge.</strong> Two weeks is enough engagement to credibly pitch upgrade, but the hard conversion sell lives in the dedicated free→trial-nudge flow (gated on real engagement signal). This email exists so the drip mentions Premium at least once and so users in the un-segmented fallback have the option surfaced.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">What Premium adds</h1>
+<p style="margin:0 0 16px;">Two-week mark &mdash; quick honest framing on Premium, since you'll see it mentioned in the app.</p>
+<p style="margin:0 0 16px;"><strong>Free works for daily logging.</strong> Your data stays unlimited, your charts stay live, your history is yours forever. If that's all you need, stay on Free &mdash; I'd rather you do that than churn off a feature you don't use.</p>
+<p style="margin:0 0 16px;">Premium is for going deeper. The three things paying users actually mention:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>AI insights.</strong> Ask "what changed my weight-loss rate this month?" and get an answer pinned to your specific data, with the chart references.</li>
+  <li style="margin:0 0 10px;"><strong>Stack predictions.</strong> Before adding or removing a compound, model the expected interaction with your current protocol &mdash; half-life overlap, deficit shift, likely side-effect window.</li>
+  <li style="margin:0 0 10px;"><strong>Exports.</strong> CSV, PDF, Apple Health, Google Fit. Useful for sharing with a prescriber or moving data to a research spreadsheet.</li>
+</ul>
+<p style="margin:0 0 16px;">14-day trial, no card required. If it's not for you, do nothing &mdash; the trial just expires.</p>
+${button('See what Premium does →', 'https://protokollab.com/pricing')}
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 7, label: 'Day 21', delayText: '+ 21 days',
+      stage: 'engagement', stageLabel: 'Ask',
+      subject: 'One favor — what are you using Protokol for?',
+      preheader: 'One-line reply. Genuinely shapes the roadmap.',
+      primaryCTA: null,
+      rationale: `<p><strong>Closing the drip with an ask.</strong> Three weeks in, the user has either become a regular logger or hasn't. Either way, the most valuable thing they can give me is one line on what they're actually using the app for. That information drives feature prioritization more directly than any analytics dashboard.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">One favor</h1>
+<p style="margin:0 0 16px;">Three weeks. Last email in the welcome series.</p>
+<p style="margin:0 0 16px;">The single thing that helps me build the right next features is knowing what you're actually using Protokol Lab for. Not in the abstract &mdash; specifically. Some of the patterns I've heard:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">"GLP-1 maintenance after losing weight, want to keep the data going"</li>
+  <li style="margin:0 0 10px;">"Cycling peptides alongside TRT, no other tracker handles the schedules"</li>
+  <li style="margin:0 0 10px;">"Tracking my partner's protocol because she finds the UI overwhelming"</li>
+  <li style="margin:0 0 10px;">"Pre-bariatric prep, want to baseline before surgery"</li>
+  <li style="margin:0 0 10px;">"Research &mdash; running self-experiments on dose timing"</li>
+</ul>
+<p style="margin:0 0 16px;">If any of those land for you, or if your reason is something else entirely, one line in reply makes a real difference. I keep a notebook.</p>
+<p style="margin:0 0 16px;">Either way: glad you're here.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 2: WIZARD ABANDON (activation, priority)
+   ============================================================ */
+{
+  slug: 'wizard-abandon',
+  name: 'Wizard Abandon',
+  stage: 'activation',
+  stageLabel: 'Activation',
+  trigger: 'mailery event: "Registered" → wait 24h → condition !hasFiredEvent("Onboarded" within 1d)',
+  audience: 'Users who registered but never completed the 8-field onboarding wizard',
+  goal: 'Recover the registered-but-not-onboarded population — they explicitly chose to sign up, so they had intent',
+  enabled: true,
+  priority: true,
+  description: 'Two emails (day 1, day 4). The protokol analog to the highest-ROI flow in any SaaS lifecycle program — users who signed up but bailed at setup. They had buying intent; recovering them is cheaper than acquiring new ones.',
+  rationale: `<p><strong>Highest-ROI flow in the program.</strong> A registered user who never completes onboarding has:</p>
+<ul>
+  <li>Already done the hard part (email + password + verified intent)</li>
+  <li>Provided an email we can reach them at</li>
+  <li>Stopped at a known, fixable friction point (the 8-field wizard)</li>
+</ul>
+<p>Two-email cadence: a friendly nudge at day 1, a diagnostic at day 4 covering the three reasons people stall. Subject lines stay specific so they don't feel like marketing.</p>
+<p><strong>Suppression scope: transactional.</strong> Marketing unsubscribes do NOT kill this flow &mdash; finishing setup is closer to "account creation completion" than a marketing send.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Day 1', delayText: '+ 24h since Registered, no Onboarded',
+      stage: 'activation', stageLabel: 'Recovery',
+      subject: 'Finish setting up Protokol — 60 seconds',
+      preheader: 'You signed up yesterday but didn\'t finish the wizard. Quick.',
+      primaryCTA: { label: 'Finish setup →', url: 'https://protokollab.com/welcome' },
+      rationale: `<p><strong>The friendly nudge.</strong> Specific about what's missing, low-pressure on why. Most wizard-abandoners come back if you remind them once within 48h.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">One step left</h1>
+<p style="margin:0 0 16px;">Hey &mdash; Jeff here. You signed up for Protokol Lab yesterday but stopped partway through setup. The rest is short:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">Pick your compound</li>
+  <li style="margin:0 0 10px;">Enter your starting dose and date</li>
+  <li style="margin:0 0 10px;">Set a weight goal (or skip &mdash; the app works without one)</li>
+</ul>
+<p style="margin:0 0 16px;">All of it is editable forever; nothing locks you in. About 60 seconds.</p>
+${button('Finish setup →', 'https://protokollab.com/welcome')}
+<p style="margin:24px 0 16px;">If something specifically tripped you up &mdash; your compound isn't on the list, you don't know your dose, the UI was confusing &mdash; reply and tell me. Lands in my inbox.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+    {
+      id: 2, label: 'Day 4', delayText: '+ 4d since Registered, no Onboarded',
+      stage: 'activation', stageLabel: 'Diagnostic',
+      subject: 'Stopped at setup? Three things I see',
+      preheader: 'One of these is almost always the snag.',
+      primaryCTA: { label: 'Finish setup →', url: 'https://protokollab.com/welcome' },
+      rationale: `<p><strong>The diagnostic.</strong> Names the three most common stall points from support replies. Each one has a one-line answer that resolves the friction without making the user feel called out.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Three things that usually stall setup</h1>
+<p style="margin:0 0 16px;">Most people who hit the wizard and bail are stuck on one of three things. In case it's useful:</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">"My compound isn't on the list."</p>
+<p style="margin:0 0 16px;">It's almost certainly addable as a custom compound &mdash; 5 fields, 90 seconds. Reta, BPC-157, TB-500, custom blends, peptide stacks &mdash; all in scope. <a href="https://help.protokollab.com/compounds/custom" style="color:#1e8047;text-decoration:underline;">How custom compounds work</a>.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">"I don't know my exact starting dose."</p>
+<p style="margin:0 0 16px;">Best guess is fine. Editable forever. The math doesn't care about precision in week 1 &mdash; only consistency.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">"I don't have a weight goal."</p>
+<p style="margin:0 0 16px;">Skip it. Set it later, or leave it off entirely. The dashboard works either way; the goal just controls one specific overlay on the weight chart.</p>
+${button('Finish setup →', 'https://protokollab.com/welcome')}
+<p style="margin:24px 0 16px;">If it's none of those, hit reply and tell me what stopped you. I read everything.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 3: FIRST DOSE CELEBRATION (engagement, single)
+   ============================================================ */
+{
+  slug: 'first-dose-celebration',
+  name: 'First Dose Celebration',
+  stage: 'engagement',
+  stageLabel: 'Engagement',
+  trigger: 'mailery event: "Dose Logged" (once:true per contact)',
+  audience: 'Users who just logged their first dose ever',
+  goal: 'Capture the magic-moment energy and direct it toward the second high-leverage action (logging food)',
+  enabled: true,
+  description: 'Single email immediately after the first logged dose. The user just had their first commit-to-the-system moment; this email rides that energy into the second-most-important habit (food logging).',
+  rationale: `<p><strong>Magic-moment capture.</strong> Behavioral research is clear on this: the moment after a user completes a high-friction action is when they're most receptive to the next one. First dose logged → push toward first food entry. The two together create the rolling-7 math; either alone is incomplete.</p>
+<p><strong>Once-per-contact dedupe.</strong> Re-firing on every dose would be noise. <code>once: true</code> on the flow trigger ensures only the genuinely-first dose triggers it.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Immediate', delayText: 'T + 10 min after first dose logged',
+      stage: 'engagement', stageLabel: 'Magic moment',
+      subject: 'You just logged your first dose',
+      preheader: "Here's what starts working now — and the one thing to do next.",
+      primaryCTA: { label: 'Log today\'s food →', url: 'https://protokollab.com/log' },
+      rationale: `<p>The "first dose logged" moment is the cheapest activation moment to reinforce. The email is short on purpose &mdash; one observation, one ask. Anything longer dilutes the prompt.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">First dose in</h1>
+<p style="margin:0 0 16px;">Nice. That single dose entry kicked off a fair amount of math in the background:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">A half-life curve on your dashboard, scaled to your compound</li>
+  <li style="margin:0 0 10px;">Peak / trough estimation across this dosing window</li>
+  <li style="margin:0 0 10px;">The foundation for your rolling-7 dose budget</li>
+  <li style="margin:0 0 10px;">The dose-vs-outcome chart waiting for ~7 more days of data</li>
+</ul>
+<p style="margin:0 0 16px;">The single highest-value next move: log today's food. Even rough &mdash; "ate roughly 2000 cal, mostly chicken and rice" is fine. The interaction between dose timing and food timing is where most of the interesting patterns live, and that chart only works once both are logged.</p>
+${button('Log today\'s food →', 'https://protokollab.com/log')}
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 4: TITRATION MILESTONE (engagement, fires repeatedly)
+   ============================================================ */
+{
+  slug: 'titration-milestone',
+  name: 'Titration Milestone',
+  stage: 'engagement',
+  stageLabel: 'Engagement',
+  trigger: 'mailery event: "Dose Changed" (dedupe: once-per-day)',
+  audience: 'Users who titrated up or down on their current compound',
+  goal: 'Anchor clinical credibility to product moments — surface what to track in the 7 days following a dose change',
+  enabled: true,
+  description: 'Single email, fires whenever the user changes their dose. Daily dedupe prevents rapid edits from spamming. Body branches on `properties.compound` so semaglutide users get semaglutide-specific guidance, tirz users get tirz-specific, etc.',
+  rationale: `<p><strong>Where clinical credibility lives.</strong> Titration changes are the most loaded moments in a GLP-1 / peptide protocol &mdash; that's when side effects spike, hunger patterns shift, and the rolling-7 math is least useful (too few data points at the new dose). An email here that demonstrates we understand the moment buys a lot of trust.</p>
+<p><strong>Branch step on properties.compound.</strong> Mailery's branch step lets one flow serve every compound. The body below is the generic shell; in the live flow there are branch paths for semaglutide / tirzepatide / retatrutide / "other" with compound-specific bullets.</p>
+<p><strong>Suppression scope: marketing.</strong> Users who unsubscribe from marketing don't get this. Debatable &mdash; could argue it's borderline transactional.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Immediate', delayText: 'T + 1h after dose change',
+      stage: 'engagement', stageLabel: 'Titration',
+      subject: 'First week on a new dose — what to watch',
+      preheader: 'Three things people log in the 7 days after a titration.',
+      primaryCTA: { label: 'Open dashboard →', url: 'https://protokollab.com/log' },
+      rationale: `<p>The generic shell. In production this is wrapped in a branch step that selects a compound-specific paragraph for the "common first-week effects" section. Semaglutide vs tirzepatide vs retatrutide vs research peptides all have distinct first-week patterns.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">First week on a new dose</h1>
+<p style="margin:0 0 16px;">You changed your dose. The first 7 days at a new dose is where pattern-tracking pays off &mdash; the rolling-7 numbers are noisy by definition, but the side-effect and hunger signals are clearer than they'll be at any other point in the protocol.</p>
+<p style="margin:0 0 16px;">Three things worth logging this week, even if you skip everything else:</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">1. Side effects, even mild ones.</p>
+<p style="margin:0 0 16px;">Especially in the first 72 hours. Tap "Add symptom" on the dashboard. After ~10 logged symptoms across 2&ndash;3 weeks, the Symptoms chart overlays them against your dose timing and meal timing &mdash; that's where the dose-related pattern (if any) becomes visible.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">2. Hunger.</p>
+<p style="margin:0 0 16px;">The "was hungry?" toggle on the food log is the single fastest way to track satiety. One tap per meal. Most dose changes show up here before they show up on the scale.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">3. Energy / exercise.</p>
+<p style="margin:0 0 16px;">If you train, log it. Dose changes interact with your deficit math through the exercise-energy mode setting &mdash; without the workout data, the rolling-7 calorie budget will be off by hundreds.</p>
+${button('Open dashboard →', 'https://protokollab.com/log')}
+<p style="margin:24px 0 16px;">By day 7 the dashboard should be giving you a clearer read on whether this dose is a net improvement or not.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 5: SIDE-EFFECT LOGGED (engagement, single, daily dedupe)
+   ============================================================ */
+{
+  slug: 'side-effect-logged',
+  name: 'Side Effect Logged',
+  stage: 'engagement',
+  stageLabel: 'Engagement',
+  trigger: 'mailery event: "Symptom Logged" (dedupe: once-per-day)',
+  audience: 'Users who logged a symptom or side effect on the dashboard',
+  goal: 'Demonstrate the differentiator — symptom overlay charts — at the exact moment the user is paying attention to that data',
+  enabled: true,
+  description: 'Single email triggered when a symptom is logged. Daily dedupe means logging 5 symptoms in a session = 1 email. Body anchored on "single symptoms aren\'t patterns — here\'s how to make them one."',
+  rationale: `<p><strong>Anchored on differentiation.</strong> Generic GLP-1 trackers don't overlay symptoms against dose timing, food, sleep, exercise. We do. The right moment to show that off is when the user has just bothered to log a symptom &mdash; their attention is on that part of the product.</p>
+<p><strong>Daily dedupe is critical.</strong> A user mid-bad-dose can easily log 5 symptoms in an hour. One email summary per day, not five.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Same-day', delayText: 'T + 6h after symptom logged (batched daily)',
+      stage: 'engagement', stageLabel: 'Engagement',
+      subject: 'You logged a side effect — read it in context',
+      preheader: 'One symptom isn\'t a pattern. Here\'s how to make it one.',
+      primaryCTA: { label: 'View Symptoms chart →', url: 'https://protokollab.com/insights#symptoms' },
+      rationale: `<p>Frames the symptom log as a data input, not a complaint. Audience treats themselves as researchers &mdash; this language fits.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Reading a symptom in context</h1>
+<p style="margin:0 0 16px;">Quick one. You logged a symptom today &mdash; useful data, but a single logged symptom isn't a pattern. Patterns are.</p>
+<p style="margin:0 0 16px;">The Symptoms chart overlays everything you've logged against:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>Dose timing</strong> &mdash; peak and trough windows for your specific compound</li>
+  <li style="margin:0 0 10px;"><strong>Food</strong> &mdash; especially high-fat meals, which interact with GLP-1 absorption</li>
+  <li style="margin:0 0 10px;"><strong>Sleep</strong> &mdash; if you've connected a wearable</li>
+  <li style="margin:0 0 10px;"><strong>Exercise</strong> &mdash; both intensity and timing</li>
+</ul>
+<p style="margin:0 0 16px;">After about 10 logged symptoms over 2&ndash;3 weeks, the chart starts showing whether your symptoms cluster around dose peaks, post-meal windows, post-workout, or are background noise. That's the part worth knowing &mdash; not the symptom itself, but its <em>shape</em>.</p>
+${button('View Symptoms chart →', 'https://protokollab.com/insights#symptoms')}
+<p style="margin:24px 0 16px;">If a symptom is severe, urgent, or unfamiliar, please talk to your prescriber &mdash; Protokol is a tracking tool, not a clinical one.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 6: PLATEAU DETECTED (retention drip, 2 emails)
+   ============================================================ */
+{
+  slug: 'plateau-detected',
+  name: 'Plateau Detected',
+  stage: 'retention',
+  stageLabel: 'Retention',
+  trigger: 'mailery event: "Plateau Detected" (fired by insight worker on flat-weight signal)',
+  audience: 'Active users whose insight engine flagged a weight plateau (~14d flat)',
+  goal: 'Re-engage users at the moment they\'re most likely to disengage — the plateau is the #1 reason people stop tracking',
+  enabled: true,
+  description: 'Two emails. The first, on plateau detection, surfaces the three most common moves. The second, a week later (only if still flat AND user has not opened the plateau chart), surfaces two more advanced angles. Insight worker is responsible for firing this event.',
+  rationale: `<p><strong>Plateaus are when users stop tracking.</strong> Common around week 6&ndash;10 of any GLP-1 protocol. Without intervention, this is also when retention craters &mdash; "if my weight isn't moving, why am I logging?"</p>
+<p>This flow is the antidote: re-anchor the user on what the data <em>can</em> show even when the scale won't move (protein, training, sleep, dose response).</p>
+<p><strong>Condition step in email 2.</strong> The wait → condition pattern checks whether the user has opened the plateau chart in the 7 days between sends. If yes, exit &mdash; they're engaged. If no, send the escalation.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Trigger', delayText: 'T + 1h after Plateau Detected',
+      stage: 'retention', stageLabel: 'Re-engagement',
+      subject: 'Your weight stalled — three things people try',
+      preheader: 'Plateaus around week 6–10 on GLP-1s are common. Common moves below.',
+      primaryCTA: { label: 'View plateau chart →', url: 'https://protokollab.com/insights' },
+      rationale: `<p>Empathy + practical moves. The three suggestions are deliberately ranked easiest-to-hardest &mdash; protein floor, training, rolling-7 audit. Each is something the user can act on within the app.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">The scale stalled</h1>
+<p style="margin:0 0 16px;">Quick heads-up &mdash; the insight engine flagged your weight as flat for about two weeks.</p>
+<p style="margin:0 0 16px;">Plateaus around week 6&ndash;10 on a GLP-1 are extremely common. Three moves I see most often, easiest first:</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">1. Audit your protein floor.</p>
+<p style="margin:0 0 16px;">Track protein specifically for a week &mdash; not just calories. A large fraction of "plateaus" are actually under-fed protein masquerading as a stall (muscle loss + water shifts + slowing metabolism). The macros view on the food log will show you immediately.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">2. Add resistance training.</p>
+<p style="margin:0 0 16px;">On a GLP-1, weight loss without resistance training is disproportionately muscle. Two 30-minute sessions per week, even bodyweight, re-balance the body comp side &mdash; and often re-start the scale movement too.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">3. Re-check your rolling-7.</p>
+<p style="margin:0 0 16px;">Open the deficit chart and look at actual daily values, not the average. Weekend creep is the #1 hidden cause of stalls &mdash; weekday deficit + weekend maintenance averages to maintenance.</p>
+${button('View plateau chart →', 'https://protokollab.com/insights')}
+<p style="margin:24px 0 16px;">If you've titrated recently, confirm dose changes with your prescriber before assuming the dose is the problem.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 2, label: 'Day 7 escalation', delayText: '+ 7d if still flat AND no plateau-chart opens',
+      stage: 'retention', stageLabel: 'Escalation',
+      subject: 'Still flat — two more angles',
+      preheader: 'If the basics didn\'t move it, here\'s what\'s next.',
+      primaryCTA: null,
+      rationale: `<p>Second touch. Reserved for users who didn't engage with the first email's CTA &mdash; condition step gates this. Tone shifts to "more advanced" because the obvious moves have either been tried or aren't going to be.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Still flat — two more angles</h1>
+<p style="margin:0 0 16px;">Following up. The scale is still flat a week later, and you haven't opened the plateau chart, so I'm guessing the obvious moves either didn't apply or haven't shifted things.</p>
+<p style="margin:0 0 16px;">Two more angles worth checking:</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">1. Sleep.</p>
+<p style="margin:0 0 16px;">Under 7 hours tanks GLP-1 efficacy. If you've connected a wearable, the sleep overlay on the weight chart usually shows the correlation clearly &mdash; bad-sleep weeks plateau, good-sleep weeks resume.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">2. Dose response decay.</p>
+<p style="margin:0 0 16px;">Sema, tirz, and reta all show diminishing response after 4&ndash;6 months at the same dose for many users. Titration is often the right answer, but it's a conversation with your prescriber &mdash; not something the app can decide for you.</p>
+<p style="margin:0 0 16px;">The data side is what I can help with. The decision side is between you and your doctor. If you want to talk through what your data is showing before that appointment, reply &mdash; happy to look at it with you.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 7: FREE → TRIAL NUDGE (conversion drip, 3 emails)
+   ============================================================ */
+{
+  slug: 'free-trial-nudge',
+  name: 'Free → Trial Nudge',
+  stage: 'conversion',
+  stageLabel: 'Conversion',
+  trigger: 'mailery event: "Engagement Threshold Hit" (synthetic — fired when 14+ logged days AND insight views >= N)',
+  audience: 'Free-tier users with demonstrated engagement signal — past the casual-user threshold',
+  goal: 'Convert free users to a 14-day trial at peak engagement, not at peak desperation',
+  enabled: true,
+  description: '3-email arc. Value-recap → flagship-feature spotlight → soft urgency. Triggered only on engaged users, so the pitch lands on people the data says are getting value.',
+  rationale: `<p><strong>Engagement-gated, not time-gated.</strong> The classic mistake is "day 14, send upgrade email" regardless of usage. This flow only fires on users who actually showed engagement &mdash; the conversion rate is wildly different.</p>
+<p>3-email arc:</p>
+<ul>
+  <li>Email 1: anchor on what they\'ve already proven (free is working) and present Premium as the next layer.</li>
+  <li>Email 2: focus on the single feature (AI insights) paying users cite most.</li>
+  <li>Email 3: final soft nudge, "I'll stop after this."</li>
+</ul>
+<p><strong>Suppression scope: marketing.</strong> Marketing unsubscribes kill it.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Day 0', delayText: 'T + 1h after Engagement Threshold',
+      stage: 'conversion', stageLabel: 'Value recap',
+      subject: "You've gotten real value from Free — here's what Premium adds",
+      preheader: '14-day trial, no card. Free tier keeps working if you skip.',
+      primaryCTA: { label: 'Start 14-day trial →', url: 'https://protokollab.com/pricing?plan=premium' },
+      rationale: `<p>Anchored on what the user has already done, not what they're missing. Premium is positioned as deepening existing engagement, not unlocking a withheld feature.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">You're past the casual line</h1>
+<p style="margin:0 0 16px;">Noticed you've logged consistently for a few weeks now. That's past the point where most users churn off a daily-tracking app &mdash; Protokol's clearly doing something useful for you.</p>
+<p style="margin:0 0 16px;">Free tier covers your daily logging forever, no expiry on your data. If that's all you need, stick with it.</p>
+<p style="margin:0 0 16px;">Premium is for going deeper:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>AI insights.</strong> Ask "what changed my weight loss rate this month?" Get an answer pinned to your specific data, with chart references.</li>
+  <li style="margin:0 0 10px;"><strong>Stack predictions.</strong> Model adding or removing a compound before you do it &mdash; half-life overlap, expected weight trajectory shift, likely side-effect window.</li>
+  <li style="margin:0 0 10px;"><strong>Exports.</strong> CSV, PDF, Apple Health, Google Fit. Useful for sharing with a prescriber.</li>
+  <li style="margin:0 0 10px;"><strong>Multiple profiles.</strong> Track a partner, a cycle off-meds, a research protocol &mdash; without polluting your main data.</li>
+</ul>
+<p style="margin:0 0 16px;">14 days, no card required. If it's not for you, do nothing and it expires on its own.</p>
+${button('Start 14-day trial →', 'https://protokollab.com/pricing?plan=premium')}
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 2, label: 'Day 5', delayText: '+ 5d',
+      stage: 'conversion', stageLabel: 'Feature spotlight',
+      subject: "The Premium feature paying users say they couldn't go back from",
+      preheader: 'AI insights — the part that gets the testimonials.',
+      primaryCTA: { label: 'Try AI insights free for 14 days →', url: 'https://protokollab.com/pricing?plan=premium' },
+      rationale: `<p>Lead with the feature that has the highest "couldn't go back" sentiment among existing paid users. AI insights is unambiguously that feature based on cancel-survey data.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">The one Premium feature that sticks</h1>
+<p style="margin:0 0 16px;">If I had to pick a single Premium feature that paying users mention most when I ask them why they kept their subscription: <strong>AI insights</strong>.</p>
+<p style="margin:0 0 16px;">It's a chat interface that has your full logged dataset as context. Examples of what people ask:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">"What was my best week so far and what made it different?"</li>
+  <li style="margin:0 0 10px;">"Show me which meals correlate with worst hunger scores."</li>
+  <li style="margin:0 0 10px;">"Did my weekend creep get better or worse after I switched dose timing?"</li>
+  <li style="margin:0 0 10px;">"What pattern do you see in my symptom log?"</li>
+</ul>
+<p style="margin:0 0 16px;">The model has your data. Answers come back with specific dates and chart references &mdash; not generic advice. It's the closest thing the app has to a coach, and it's why most paying users stay paying.</p>
+${button('Try AI insights free for 14 days →', 'https://protokollab.com/pricing?plan=premium')}
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 3, label: 'Day 10', delayText: '+ 10d',
+      stage: 'conversion', stageLabel: 'Last nudge',
+      subject: 'Last nudge — 14-day Premium trial, no card',
+      preheader: "I'll shut up about Premium after this one.",
+      primaryCTA: { label: 'Start trial →', url: 'https://protokollab.com/pricing?plan=premium' },
+      rationale: `<p>Final soft close. Explicitly says "I'll stop after this" which is unusual and disarming. Users who don't convert after this get dropped back into the welcome-drip cadence; we don't pester.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Last nudge</h1>
+<p style="margin:0 0 16px;">Final ping on Premium. After this I'll stop until you bring it up &mdash; I don't want this to feel like nagging.</p>
+<p style="margin:0 0 16px;">14-day trial, no card. If it's not for you, ignore it &mdash; Free keeps working exactly as it does now.</p>
+${button('Start trial →', 'https://protokollab.com/pricing?plan=premium')}
+<p style="margin:24px 0 16px;">If Premium isn't appealing for a specific reason &mdash; price, feature set, privacy, something else &mdash; I'd genuinely like to know. Reply and tell me. The roadmap pays attention to those replies.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 8: TRIAL ENDING (conversion drip, 3 emails)
+   ============================================================ */
+{
+  slug: 'trial-ending',
+  name: 'Trial Ending',
+  stage: 'conversion',
+  stageLabel: 'Conversion',
+  trigger: 'mailery event: "Trial Started" (Stripe webhook → fire from session)',
+  audience: 'Users in an active 14-day Premium trial',
+  goal: 'Convert trial → paid by showing real value accumulated during the trial, while making cancellation effortless to preserve trust',
+  enabled: true,
+  description: 'Three emails across the trial window. Day 10 = data-pinned value recap. Day 13 = one-day-out reminder. Day 14 = post-expiry "your data is still here" if no conversion. Webhook step at start pulls per-user trial stats for body interpolation.',
+  rationale: `<p><strong>Trial-end is the highest-stakes window in the program.</strong> The user has signaled buying intent (entered Premium) and either becomes paid or churns within 14 days. The drip is anchored on transparency:</p>
+<ul>
+  <li><strong>Email 1 (D10):</strong> here's exactly what you used during the trial. No hard sell.</li>
+  <li><strong>Email 2 (D13):</strong> tomorrow's the day. Cancel easily if you want.</li>
+  <li><strong>Email 3 (D14, no-convert path):</strong> trial ended, your data is intact, no friction to come back.</li>
+</ul>
+<p><strong>Suppression scope: transactional.</strong> These are billing-adjacent communications &mdash; marketing unsubscribes do NOT kill them.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Day 10 of 14', delayText: '+ 10d after Trial Started',
+      stage: 'conversion', stageLabel: 'Value recap',
+      subject: 'Your trial wraps up in 4 days — here\'s what you logged',
+      preheader: 'Pinned to your real data. No sales pitch.',
+      primaryCTA: { label: 'View your data →', url: 'https://protokollab.com/log' },
+      rationale: `<p>Webhook step pulls real trial-period stats and interpolates them into the body. Specificity is doing the persuasion work &mdash; the user sees their own behavior reflected back, which is more credible than feature copy.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Your trial recap</h1>
+<p style="margin:0 0 16px;">You're 10 days into your Premium trial. Quick recap of what you actually used:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>{{doses_logged}} doses logged</strong> in the trial window</li>
+  <li style="margin:0 0 10px;"><strong>{{foods_logged}} food entries</strong></li>
+  <li style="margin:0 0 10px;"><strong>{{ai_queries}} AI insight queries</strong> &mdash; the feature that costs me real money per query and where most users find the value</li>
+  <li style="margin:0 0 10px;"><strong>{{stack_predictions}} stack predictions</strong> run</li>
+  <li style="margin:0 0 10px;"><strong>{{exports}} exports</strong> (CSV / Apple Health / etc.)</li>
+</ul>
+<p style="margin:0 0 16px;">Premium continues at ${'$'}{{plan_price}}/{{interval}} on day 14 unless you cancel. Cancellation is one tap in Settings &mdash; no retention call, no friction.</p>
+<p style="margin:0 0 16px;">If you'd like the trial extended for any reason &mdash; you got busy, a feature didn't work, you want more time &mdash; just hit reply and tell me. I'll extend it.</p>
+${button('View your data →', 'https://protokollab.com/log')}
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+    {
+      id: 2, label: 'Day 13 of 14', delayText: '+ 13d after Trial Started',
+      stage: 'conversion', stageLabel: 'Reminder',
+      subject: 'Premium trial ends tomorrow',
+      preheader: 'Heads up — and how to keep things flowing either direction.',
+      primaryCTA: { label: 'Manage subscription →', url: 'https://protokollab.com/settings' },
+      rationale: `<p>One-day reminder. Pure logistics. Equal weight on "keep paying" and "cancel" options &mdash; not a save attempt.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Trial ends tomorrow</h1>
+<p style="margin:0 0 16px;">Quick logistical heads-up:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>If you want Premium:</strong> nothing to do. It auto-continues tomorrow at ${'$'}{{plan_price}}/{{interval}}.</li>
+  <li style="margin:0 0 10px;"><strong>If you don't:</strong> cancel in Settings now &mdash; one tap, no retention call. Your data and history stay either way.</li>
+</ul>
+${button('Manage subscription →', 'https://protokollab.com/settings')}
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+    {
+      id: 3, label: 'Day 14 (no-convert)', delayText: '+ 14d, conditional on no Subscribed event',
+      stage: 'conversion', stageLabel: 'Soft landing',
+      subject: 'Trial ended. Your data didn\'t go anywhere.',
+      preheader: 'Free tier is on. Premium is one tap away if you change your mind.',
+      primaryCTA: null,
+      rationale: `<p>The graceful exit. Critical for trust &mdash; trial-ended emails that pressure the user into reconsidering are widely hated and disproportionately drive unsubscribes / spam complaints.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Trial closed — you're back on Free</h1>
+<p style="margin:0 0 16px;">Premium trial ended. You're back on the Free tier. Everything you logged is still yours, your charts are still live, your history is untouched.</p>
+<p style="margin:0 0 16px;">What stops working: AI insights, stack predictions, exports, multi-profile. What keeps working: literally everything else.</p>
+<p style="margin:0 0 16px;">If Premium specifically didn't deliver for you, I'd love to hear the why &mdash; one line in reply is the most honest feedback I get. The trial-end emails are the most useful signal in the whole product about what to fix.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 9: PAID WELCOME (retention drip, 3 emails)
+   ============================================================ */
+{
+  slug: 'paid-welcome',
+  name: 'Paid Welcome',
+  stage: 'retention',
+  stageLabel: 'Retention',
+  trigger: 'mailery event: "Subscribed" (Stripe webhook → fire from session, once:true)',
+  audience: 'New paying customers (first successful Stripe checkout)',
+  goal: 'Activate paying users on Premium-specific features fast — first 14 days predict month-3 retention',
+  enabled: true,
+  description: 'Three-email arc across the first 14 days of paid subscription. Day 0 thanks + first features. Day 3 single highest-leverage feature deep-dive. Day 14 check-in. Triggered off Stripe customer.subscription.created.',
+  rationale: `<p><strong>Paid-user activation predicts retention.</strong> A paying customer who hasn't used the Premium-specific features by day 14 has a much higher cancel risk in month 2 and 3. This flow exists to make sure each Premium feature gets surfaced at least once at peak attention.</p>
+<p><strong>Last step fires "Paid Tenured" event</strong> via fire_event step, which other downstream flows (advocacy, broadcast targeting) can subscribe to.</p>
+<p><strong>Suppression scope: transactional.</strong> Billing-adjacent.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Day 0', delayText: 'T + 30 min after Subscribed',
+      stage: 'retention', stageLabel: 'Activation',
+      subject: 'Thanks — Premium is live on your account',
+      preheader: 'Three things to do first. None of them are "watch a tour video."',
+      primaryCTA: { label: 'Open Insights →', url: 'https://protokollab.com/insights' },
+      rationale: `<p>Founder thanks + immediate action. Every paying customer keeps the project alive &mdash; that's worth saying directly, not in a corporate "welcome to the family" way.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Thanks — and what to do first</h1>
+<p style="margin:0 0 16px;">Jeff here. Genuinely thank you. Every paying customer keeps Protokol Lab going as an indie project &mdash; not figuratively, literally.</p>
+<p style="margin:0 0 16px;">Premium is live on your account. Three things worth doing today:</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">1. Ask AI insights one question.</p>
+<p style="margin:0 0 16px;">Open Insights, scroll to the AI panel, and ask: "What was my best week so far and what made it different?" The answer should reference specific dates and link to the relevant chart.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">2. Run one stack prediction.</p>
+<p style="margin:0 0 16px;">In Compounds, hit "Preview a change" and add or remove a compound (or change a dose). The predictor models the half-life overlap, deficit shift, and side-effect window before you actually commit it.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">3. Connect Apple Health or Google Fit.</p>
+<p style="margin:0 0 16px;">Under Settings → Integrations. Pulls in your weight, workouts, sleep automatically &mdash; means less to log manually and richer charts.</p>
+${button('Open Insights →', 'https://protokollab.com/insights')}
+<p style="margin:24px 0 16px;">If anything breaks or doesn't make sense, reply. Lands in my inbox.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+    {
+      id: 2, label: 'Day 3', delayText: '+ 3d after Subscribed',
+      stage: 'retention', stageLabel: 'Power features',
+      subject: 'The Premium feature I\'d use first',
+      preheader: 'Stack predictions — the part that took longest to build.',
+      primaryCTA: { label: 'Try a stack prediction →', url: 'https://protokollab.com/compounds' },
+      rationale: `<p>Stack predictions is the differentiating Premium feature &mdash; nothing else in the GLP-1 / peptide tracker space does pharmacokinetic modeling. Founder-voice deep-dive on it builds product credibility.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">The feature I'd use first</h1>
+<p style="margin:0 0 16px;">If I were a new Premium user opening the app for the first time, the feature I'd reach for is <strong>stack predictions</strong>.</p>
+<p style="margin:0 0 16px;">The pitch: pick a compound you're considering changing &mdash; adding BPC-157 to a sema protocol, dropping tirz dose by half, swapping retatrutide back to sema, whatever. The predictor models:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">Half-life overlap between the new and existing compounds</li>
+  <li style="margin:0 0 10px;">Expected weight trajectory shift over the next 4&ndash;8 weeks (based on your individual response curve, not a population average)</li>
+  <li style="margin:0 0 10px;">Likely side-effect window &mdash; when the new compound will be at peak in your bloodstream relative to your dosing schedule</li>
+  <li style="margin:0 0 10px;">Deficit math implications &mdash; appetite suppression shift, predicted hunger pattern</li>
+</ul>
+<p style="margin:0 0 16px;">It's the feature that took longest to build, and the one I'm proudest of. It's also the one that most clearly justifies the Premium price &mdash; the analysis it does isn't available anywhere else for compound stacks.</p>
+${button('Try a stack prediction →', 'https://protokollab.com/compounds')}
+<p style="margin:24px 0 16px;">As always: this is decision-support, not medical advice. Your prescriber owns the actual change.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+    {
+      id: 3, label: 'Day 14', delayText: '+ 14d after Subscribed',
+      stage: 'retention', stageLabel: 'Check-in',
+      subject: 'Two-week Premium check-in',
+      preheader: '30 seconds. Real feedback shapes the roadmap.',
+      primaryCTA: null,
+      rationale: `<p>Reply-only check-in. Two weeks is when Premium has either stuck or it hasn't &mdash; getting the "hasn't" feedback now is much more valuable than at month 3 cancel.</p>
+<p><strong>Fires "Paid Tenured" event</strong> at the end so downstream flows can target users who've made it past the 14-day mark.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Two weeks in — what's working?</h1>
+<p style="margin:0 0 16px;">Hey &mdash; Jeff. Two weeks on Premium. The single most useful thing you could do right now is reply with one line on any of:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">Which Premium feature has been most useful?</li>
+  <li style="margin:0 0 10px;">Which one have you not used, and why?</li>
+  <li style="margin:0 0 10px;">What's missing that would make this clearly worth keeping?</li>
+</ul>
+<p style="margin:0 0 16px;">I read every one. The Premium roadmap is genuinely shaped by these replies &mdash; recent additions (Apple Health export, the stack-prediction interaction warnings, the symptom overlay against sleep) all came out of two-week check-in replies.</p>
+<p style="margin:0 0 16px;">If everything's fine, that's also useful info. Glad you're here.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 10: INACTIVITY RESCUE (retention drip, 2 emails)
+   ============================================================ */
+{
+  slug: 'inactivity-rescue',
+  name: 'Inactivity Rescue',
+  stage: 'retention',
+  stageLabel: 'Retention',
+  trigger: 'mailery event: "Logging Lapsed" (synthetic — nightly cron flags 7d no log entries)',
+  audience: 'Active users whose logging has gone silent for 7+ days',
+  goal: 'Re-engage before silence becomes churn — daily product means silence converts to cancel faster than weekly SaaS',
+  enabled: true,
+  description: 'Two emails. Day-7 lapse fires a personalized snapshot of recent activity. Day-21 lapse escalates to a no-pressure pause-subscription offer (assumes paying user; condition step branches if not).',
+  rationale: `<p><strong>Daily product, faster cadence.</strong> StoryFolder's analog used 30 days. Protokol can't &mdash; daily-logging products convert silence to cancel within 2&ndash;3 weeks. Catch them faster.</p>
+<p><strong>Webhook step builds the snapshot.</strong> Email 1's body interpolates per-user data: last dose, weight delta, symptoms logged in the prior month. Mailery's webhook step calls <code>GET /api/mailer/snapshot/:userId</code> at send time and the template references the response.</p>
+<p><strong>Email 2 offers pause, not cancel.</strong> Critical for the GLP-1 use case &mdash; users cycle on and off compounds, so "pause" is a real product affordance, not retention copy.</p>
+<p><strong>Suppression scope: marketing.</strong></p>`,
+  emails: [
+    {
+      id: 1, label: 'D7 lapse', delayText: '+ 7d of no log entries',
+      stage: 'retention', stageLabel: 'Snapshot',
+      subject: 'Quiet week — here\'s where you left off',
+      preheader: 'Quick recap so you can pick up easily.',
+      primaryCTA: { label: 'Log today →', url: 'https://protokollab.com/log' },
+      rationale: `<p>Snapshot as re-onboarding shortcut. The user doesn't have to think about what they were tracking &mdash; the email reminds them, lowering the activation energy of resuming.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Where you left off</h1>
+<p style="margin:0 0 16px;">Hey &mdash; noticed it's been about a week since you logged. No judgement; just easier to come back if you've got the context. Quick snapshot of where you were:</p>
+<ul style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>Last dose:</strong> {{last_compound}} {{last_dose}}mg on {{last_dose_date}}</li>
+  <li style="margin:0 0 10px;"><strong>Weight last entry:</strong> {{last_weight}} ({{weight_delta_30d}} vs. 30 days prior)</li>
+  <li style="margin:0 0 10px;"><strong>Rolling-7 deficit before the lapse:</strong> {{last_deficit}}</li>
+  <li style="margin:0 0 10px;"><strong>Symptoms logged in the prior month:</strong> {{recent_symptom_count}}</li>
+</ul>
+<p style="margin:0 0 16px;">Easiest way back in: log today, even rough. Untracked-day handling means the missed week won't break your rolling-7 averages &mdash; the math knows the difference between "I didn't eat" and "I didn't log."</p>
+${button('Log today →', 'https://protokollab.com/log')}
+<p style="margin:24px 0 16px;">If you've come off your compound and don't need the app right now, hit reply and let me know &mdash; I'll send a different email next time instead of nagging you.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+    {
+      id: 2, label: 'D21 lapse', delayText: '+ 21d of no log entries (paying users only)',
+      stage: 'retention', stageLabel: 'Pause offer',
+      subject: 'Want to pause your subscription?',
+      preheader: 'No-judgement option if you\'ve cycled off your compound.',
+      primaryCTA: { label: 'Pause subscription →', url: 'https://protokollab.com/settings#pause' },
+      rationale: `<p>Pre-cancel save. Pause-not-cancel is the GLP-1-specific framing &mdash; many users genuinely intend to come back when they restart their compound, and pausing instead of cancelling keeps the data + account warm.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Pause, don't cancel</h1>
+<p style="margin:0 0 16px;">Three weeks without a log. Two situations I see most often:</p>
+<ol style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;"><strong>You've cycled off</strong> your compound or finished a protocol &mdash; the app isn't useful right now, but might be again later.</li>
+  <li style="margin:0 0 10px;"><strong>You've gotten busy</strong> and want to come back &mdash; the data is still here whenever you log again.</li>
+</ol>
+<p style="margin:0 0 16px;">If you're in scenario 1, the cleanest move is to <strong>pause your subscription</strong> rather than cancel. Pausing keeps all your data, halts billing entirely, and resumes on one click when you're ready to log again. No data loss, no friction.</p>
+${button('Pause subscription →', 'https://protokollab.com/settings#pause')}
+<p style="margin:24px 0 16px;">If you'd rather cancel, that's one click in Settings too &mdash; no retention call, no friction. Either way, your data stays.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 11: CANCEL SAVE (churn drip, 2 emails)
+   ============================================================ */
+{
+  slug: 'cancel-save',
+  name: 'Cancel Save',
+  stage: 'churn',
+  stageLabel: 'Churn',
+  trigger: 'mailery event: "Cancelled" (Stripe webhook customer.subscription.deleted)',
+  audience: 'Users who just cancelled their Premium subscription',
+  goal: "Goal #1: collect honest feedback. Goal #2: reduce re-acquisition friction. Don't try to re-sell on the same day.",
+  enabled: true,
+  description: 'Two emails. Day 1: "your cancellation went through, your data is still yours" — clear, no re-pitch. Day 7: "one-line feedback on what didn\'t work" — highest-quality feedback we ever get.',
+  rationale: `<p><strong>Cancel-save emails that try to re-sell are widely hated.</strong> They drive spam complaints and unsubscribes. Better play: lean into clean exits, ask for feedback once with no friction, and trust that some percentage of churned users come back without being pestered.</p>
+<p><strong>Email 2 is the highest-information email in the whole program.</strong> A user a week post-cancel will tell you the actual reason. That data is more useful than any in-product survey.</p>
+<p><strong>Suppression scope: transactional.</strong> Cancellation confirmation is closer to a receipt than a marketing send.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Day 1', delayText: '+ 24h after Cancelled',
+      stage: 'churn', stageLabel: 'Clean exit',
+      subject: 'Your cancellation went through — and your data is still yours',
+      preheader: 'No re-pitch. Just a clear picture of what stays.',
+      primaryCTA: { label: 'View your data →', url: 'https://protokollab.com/log' },
+      rationale: `<p>Trust-building exit. Specifically calls out "no re-pitch coming" in the preheader so the user doesn't preemptively delete.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Cancellation confirmed</h1>
+<p style="margin:0 0 16px;">Premium subscription cancelled. No re-pitch coming &mdash; just want you to have a clear picture of what stays and what stops.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">Stays:</p>
+<ul style="margin:0 0 16px;padding-left:22px;">
+  <li style="margin:0 0 8px;">Every dose, food entry, weight, and symptom you logged</li>
+  <li style="margin:0 0 8px;">All your charts and historical trends</li>
+  <li style="margin:0 0 8px;">Full read-only access to everything you've built</li>
+  <li style="margin:0 0 8px;">Your custom compounds</li>
+</ul>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">Stops:</p>
+<ul style="margin:0 0 16px;padding-left:22px;">
+  <li style="margin:0 0 8px;">AI insights</li>
+  <li style="margin:0 0 8px;">Stack predictions</li>
+  <li style="margin:0 0 8px;">Exports (CSV / Apple Health / Google Fit)</li>
+  <li style="margin:0 0 8px;">Multi-profile</li>
+</ul>
+<p style="margin:0 0 16px;">Re-subscribing is one tap whenever you want. Your data is right where you left it &mdash; nothing to import, nothing to set up again.</p>
+${button('View your data →', 'https://protokollab.com/log')}
+<p style="margin:24px 0 16px;">If you want a refund on the most recent billing cycle, reply and tell me. I do them no-questions-asked, prorated or whole &mdash; whatever feels fair.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+    {
+      id: 2, label: 'Day 7', delayText: '+ 7d after Cancelled',
+      stage: 'churn', stageLabel: 'Feedback ask',
+      subject: '30 seconds — what didn\'t work?',
+      preheader: 'I\'m the developer; I read every one.',
+      primaryCTA: null,
+      rationale: `<p>Highest-signal feedback in the program. A week after cancelling, users are honest in a way they're not in-product. The list of common reasons is structured so the user can just say "the third one" if they don't want to write a paragraph.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">30 seconds — why?</h1>
+<p style="margin:0 0 16px;">A week since your cancellation. The single most useful thing you could do for me, if you've got 30 seconds: one line on why.</p>
+<p style="margin:0 0 16px;">Common reasons people cite (so you can just reply with a number if writing is friction):</p>
+<ol style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 8px;">Too expensive for the value I was getting</li>
+  <li style="margin:0 0 8px;">Came off my compound / cycled off the protocol</li>
+  <li style="margin:0 0 8px;">Missing a specific feature I needed</li>
+  <li style="margin:0 0 8px;">Confusing to use / didn't fit my workflow</li>
+  <li style="margin:0 0 8px;">Privacy / data concerns</li>
+  <li style="margin:0 0 8px;">Switched to another tracker</li>
+  <li style="margin:0 0 8px;">Something else entirely</li>
+</ol>
+<p style="margin:0 0 16px;">No reply is also fine. But if you do, it's the most honest feedback I get all month, and the product is better because of it.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 12: OFF-MEDS PIVOT (churn-adjacent, single)
+   ============================================================ */
+{
+  slug: 'off-meds-pivot',
+  name: 'Off-Meds Pivot',
+  stage: 'churn',
+  stageLabel: 'Churn-prevention',
+  trigger: 'mailery event: "Doses Lapsed" (synthetic — nightly cron flags 14d no doses while subscribed)',
+  audience: 'Subscribed users who have logged food / weight but no doses in 14+ days',
+  goal: 'Catch the "cycled off compound, about to cancel" user before they cancel — pivot them to maintenance-mode tracking',
+  enabled: true,
+  description: 'Single email when dose logs have lapsed but the user is still otherwise active (food, weight). Surfaces maintenance mode as a real product feature that fits the GLP-1 lifecycle, not a retention gimmick.',
+  rationale: `<p><strong>The GLP-1 lifecycle is not linear.</strong> Users cycle on and off compounds for medical, financial, supply, or personal reasons. The "off-meds" phase is when most cancellations happen &mdash; "I'm not on the drug anymore, why am I paying?"</p>
+<p>Maintenance mode is the answer. Food + weight + symptom tracking are the harder phase &mdash; keeping the weight off without the dose is where Protokol's non-compound features earn their keep. This email surfaces that affordance at the exact moment it becomes relevant.</p>
+<p><strong>Suppression scope: marketing.</strong></p>`,
+  emails: [
+    {
+      id: 1, label: 'Trigger', delayText: 'T + 1h after Doses Lapsed',
+      stage: 'churn', stageLabel: 'Pivot',
+      subject: "Cycled off your compound? You don't have to cancel.",
+      preheader: 'Maintenance mode tracks what still matters — weight, food, symptoms.',
+      primaryCTA: { label: 'Switch to Maintenance Mode →', url: 'https://protokollab.com/settings#mode' },
+      rationale: `<p>Specific to a real user state, not generic retention. The audience reads itself in the subject line &mdash; high open rate, low spam-flag rate.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">If you've cycled off</h1>
+<p style="margin:0 0 16px;">Two weeks without a dose entry, but you've kept logging food and weight. That usually means one of two things:</p>
+<ol style="margin:0 0 20px;padding-left:22px;">
+  <li style="margin:0 0 10px;">You're off your compound entirely &mdash; finished a protocol, hit a supply gap, on a cycle break.</li>
+  <li style="margin:0 0 10px;">You're just behind on logging doses but still on them.</li>
+</ol>
+<p style="margin:0 0 16px;">If it's #1: a lot of people cancel here. I think that's usually a mistake. The maintenance phase &mdash; keeping the weight off without the dose &mdash; is the harder phase, and it's where Protokol's food + weight + symptom tracking does most of its work.</p>
+<p style="margin:0 0 16px;"><strong>Maintenance Mode</strong> is a settings toggle: the dose-side of the UI quiets down (no dose nags, no compound charts), and the food / weight / symptom side stays exactly as it is. Your data is preserved if you ever restart, and the rolling-7 math keeps doing its thing without the compound layer.</p>
+${button('Switch to Maintenance Mode →', 'https://protokollab.com/settings#mode')}
+<p style="margin:24px 0 16px;">If you're in situation #2, ignore this and resume your dose logs whenever &mdash; the half-life math will pick right back up.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 13: POWER-USER ADVOCACY (advocacy, single)
+   ============================================================ */
+{
+  slug: 'power-user-advocacy',
+  name: 'Power-User Advocacy',
+  stage: 'advocacy',
+  stageLabel: 'Advocacy',
+  trigger: 'mailery event: "Milestone Reached" (fired by insight worker — e.g. -25 lbs, 180-day logging streak, 6 months subscribed)',
+  audience: 'High-engagement users who have hit a meaningful milestone',
+  goal: 'Convert demonstrated value into a referral, testimonial, or social proof — at the moment it\'s clearly deserved',
+  enabled: true,
+  description: 'Single email triggered when the insight worker flags a user-milestone. Branches on `properties.kind` — weight-loss milestone, streak milestone, tenure milestone. Each gets a slightly different opener, same ask.',
+  rationale: `<p><strong>Asks land when they\'re earned.</strong> A referral ask sent on day 30 is noise. A referral ask sent the day a user hits -25 lbs lands as recognition. The insight worker is responsible for firing the milestone event with semantics-rich properties.</p>
+<p><strong>The ask is two-tier on purpose:</strong> testimonial (low friction, asynchronous) or intro (higher friction, higher leverage). Either is fine. Both is great. Neither is also fine.</p>
+<p><strong>Suppression scope: marketing.</strong></p>`,
+  emails: [
+    {
+      id: 1, label: 'Milestone', delayText: 'T + 24h after Milestone Reached',
+      stage: 'advocacy', stageLabel: 'Ask',
+      subject: "You're in the top 5% — would you do me a favor?",
+      preheader: '30 seconds. Genuinely helps the project.',
+      primaryCTA: null,
+      rationale: `<p>The earned ask. Specific milestone in the body so the email doesn't feel templated. Two-tier ask (testimonial OR intro) keeps the activation energy low.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">You just hit a real milestone</h1>
+<p style="margin:0 0 16px;">{{milestone_callout}} &mdash; e.g. <em>"You've logged 180 consecutive days,"</em> or <em>"Your weight is down 25 lbs from your starting baseline,"</em> or <em>"You've been a Premium user for 6 months."</em></p>
+<p style="margin:0 0 16px;">That puts you in roughly the top 5% of Protokol Lab users by sustained engagement, which means the tool is clearly working for you. That's not a small thing &mdash; appreciate it genuinely.</p>
+<p style="margin:0 0 16px;">If you've got 60 seconds, two favors &mdash; whichever is easier, neither obligatory:</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">1. One-line testimonial.</p>
+<p style="margin:0 0 16px;">A sentence or two I can quote on the landing page. First name + last initial, anonymous, or full name &mdash; your call.</p>
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">2. One intro.</p>
+<p style="margin:0 0 16px;">One person you know who's on a compound, considering one, or in the cycling-off / maintenance phase. Worth more than any ad I could buy.</p>
+<p style="margin:0 0 16px;">Either, both, or neither &mdash; all fine. The data you've contributed to the system is itself a favor I appreciate.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}`.trim()
+    },
+  ],
+},
+
+/* ============================================================
+   FLOW 14: MONTHLY BROADCAST (broadcast, manual)
+   ============================================================ */
+{
+  slug: 'monthly-broadcast',
+  name: 'Monthly Broadcast',
+  stage: 'broadcast',
+  stageLabel: 'Broadcast',
+  trigger: 'manual via mailer.scheduleBroadcast() — segment: subscribed OR engaged-recent, NOT tag:paused',
+  audience: 'All active contacts excluding paused subscribers and recent-broadcast unsubscribers',
+  goal: 'Maintain warm sender reputation, surface product updates, build community signal, and re-engage cold subscribers without behavioral nag',
+  enabled: true,
+  description: 'Monthly newsletter, manually sent on the 1st. Four-section structure: Shipped, Community (aggregate stats from the user base), Worth Reading (educational external link), Ask (single rotating request). Content rotates monthly; structure stays the same.',
+  rationale: `<p>Two functions:</p>
+<ul>
+  <li><strong>Deliverability hygiene.</strong> Consistent send cadence signals to ISPs that this is a real, engaged list. Without a monthly send, behavioral-only emails can land in promotions or spam.</li>
+  <li><strong>Cold-subscriber warming.</strong> Users who haven't fired any behavioral trigger in months still see Protokol existing. Some return.</li>
+</ul>
+<p><strong>Community section is the differentiator.</strong> Aggregated, anonymized stats from the user base &mdash; "users logged 1.2M doses last month, tirzepatide overtook semaglutide for the first time at 41%." Reflects the audience's quantified-self mindset back to them. Compounds the social proof that the platform is real.</p>
+<p><strong>Suppression scope: marketing.</strong> Broadcasts are pure marketing.</p>`,
+  emails: [
+    {
+      id: 1, label: 'Monthly', delayText: '1st of each month',
+      stage: 'broadcast', stageLabel: 'Newsletter',
+      subject: "Protokol [LAB] — {{month}} update",
+      preheader: 'One shipped feature, one community stat, one read, one ask.',
+      primaryCTA: { label: 'Open the app →', url: 'https://protokollab.com/log' },
+      rationale: `<p>The template. Specific content fills in monthly; structure remains constant so subscribers learn its shape and skim accordingly. Each section caps at ~3 lines.</p>`,
+      body: `
+<h1 style="font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;margin:0 0 20px;color:#0f1a12;">Protokol Lab — {{month}} update</h1>
+<p style="margin:0 0 16px;">Jeff here. Monthly round-up &mdash; reads in under 90 seconds.</p>
+
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">▸ Shipped</p>
+<ul style="margin:0 0 16px;padding-left:22px;">
+  <li style="margin:0 0 8px;">[Feature or improvement, one sentence]</li>
+  <li style="margin:0 0 8px;">[Bug fix or polish item]</li>
+  <li style="margin:0 0 8px;">[One more if there\'s anything else worth noting]</li>
+</ul>
+
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">▸ Community</p>
+<p style="margin:0 0 16px;">[Anonymized aggregate stat from the user base. E.g.: <em>"Users logged 1.24M doses across 47 compounds last month. Tirzepatide overtook semaglutide for the first time at 41% share. Retatrutide tripled month-over-month."</em>]</p>
+
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">▸ Worth reading</p>
+<p style="margin:0 0 16px;">[One-sentence intro to a relevant external piece &mdash; substack post, podcast episode, paper. The audience reads independent voices, not pharma marketing.] <a href="{{external_url}}" style="color:#1e8047;text-decoration:underline;">[Source name] →</a></p>
+
+<p style="margin:24px 0 8px;font-size:15px;font-weight:700;color:#0f1a12;">▸ Ask</p>
+<p style="margin:0 0 16px;">[One specific ask &mdash; beta test something, share feedback on a feature, refer one person, fill out a 3-question survey. Rotates monthly.]</p>
+
+${button('Open the app →', 'https://protokollab.com/log')}
+
+<p style="margin:24px 0 0;">That's the month. Reply to this email if any of it sparks something &mdash; I read every one.</p>
+<p style="margin:16px 0 0;">&mdash; Jeff</p>
+${senderBlock()}
+${disclaimer()}`.trim()
+    },
+  ],
+},
+
+];
+
+/* ===============================================================
+   Stitch each email's full HTML through the shared shell
+   =============================================================== */
+
+program.forEach(flow => {
+  flow.emails.forEach(e => {
+    e.html = shell({ preheader: e.preheader, body: e.body });
+    e.plainText = htmlToPlainText(e.html);
+  });
+});
+
+function htmlToPlainText(html) {
+  let s = html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<\!doctype[\s\S]*?>/gi, '')
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|li|tr|h[1-6]|td)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, text) =>
+      text.replace(/<[^>]+>/g, '').trim() + ' (' + href + ')')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&mdash;/g, '—')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&zwnj;/g, '');
+  return s.split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter((l, i, a) => l || (i > 0 && a[i-1])).join('\n').trim();
+}
+
+const totalEmails = program.reduce((sum, f) => sum + f.emails.length, 0);
+document.getElementById('flowCount').textContent = program.length;
+document.getElementById('emailCount').textContent = totalEmails;
+
+/* ===============================================================
+   UI
+   =============================================================== */
+
+const state = {
+  view: 'home',                              // 'home' | 'flow' | 'email'
+  activeFlowSlug: null,
+  activeEmailId: null,
+  activeTab: 'preview',
+  expanded: new Set(),
+};
+
+function renderSidebar() {
+  const nav = document.getElementById('flowsNav');
+  nav.innerHTML = program.map(flow => {
+    const expanded = state.expanded.has(flow.slug);
+    const isActive = state.activeFlowSlug === flow.slug;
+    return `
+      <div class="flow-group ${expanded ? 'expanded' : ''}">
+        <button class="flow-header ${expanded ? 'expanded' : ''} ${isActive && state.view === 'flow' ? 'active' : ''}" data-flow="${flow.slug}" data-stage="${flow.stage}">
+          <svg class="caret" viewBox="0 0 16 16" fill="currentColor"><path d="M6 4l4 4-4 4V4z"/></svg>
+          <div class="meta">
+            <div class="title">${escapeHtml(flow.name)}</div>
+            <div class="sub">
+              <span class="stage-dot"></span>
+              ${escapeHtml(flow.stageLabel)}
+              <span class="count">· ${flow.emails.length} ${flow.emails.length === 1 ? 'email' : 'emails'}</span>
+            </div>
+          </div>
+        </button>
+        <div class="email-list">
+          ${flow.emails.map(e => `
+            <button class="email-item ${state.activeFlowSlug === flow.slug && state.activeEmailId === e.id && state.view === 'email' ? 'active' : ''}" data-flow="${flow.slug}" data-email="${e.id}">
+              <span class="num">${e.id}.</span>
+              <span class="subj">${escapeHtml(e.subject)}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  nav.querySelectorAll('.flow-header').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const slug = btn.dataset.flow;
+      // Toggle expansion + show flow detail
+      if (state.expanded.has(slug)) state.expanded.delete(slug);
+      else state.expanded.add(slug);
+      state.view = 'flow';
+      state.activeFlowSlug = slug;
+      state.activeEmailId = null;
+      render();
+    });
+  });
+
+  nav.querySelectorAll('.email-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.view = 'email';
+      state.activeFlowSlug = btn.dataset.flow;
+      state.activeEmailId = Number(btn.dataset.email);
+      state.expanded.add(state.activeFlowSlug);
+      render();
+    });
+  });
+
+  document.getElementById('brandHome').onclick = () => {
+    state.view = 'home';
+    state.activeFlowSlug = null;
+    state.activeEmailId = null;
+    render();
+  };
+}
+
+function renderHome() {
+  const main = document.getElementById('detail');
+  main.innerHTML = `
+    <div class="breadcrumb"><a id="bcHome">Program Overview</a></div>
+    <h1 class="page-title">Protokol [LAB] · Email Program</h1>
+    <p class="lead">${program.length} flows, ${totalEmails} emails. Event-triggered via Mailery, anchored on the GLP-1 / peptide / compound lifecycle (onboarding → titration → plateau → maintenance → cycle-off), with founder voice across every touchpoint and behavioral triggers driving 12 of 14 flows.</p>
+
+    <div class="props">
+      <div class="prop"><div class="k">Lifecycle stages</div><div class="v normal">Activation · Engagement · Conversion · Retention · Churn · Advocacy · Broadcast · Fallback</div></div>
+      <div class="prop"><div class="k">Trigger types</div><div class="v normal">10 event-driven · 3 Stripe-webhook-driven · 2 cron-synthetic · 1 manual broadcast</div></div>
+      <div class="prop"><div class="k">Email engine</div><div class="v">Mailery (event-fired flows · wait/condition/branch/send/tag · scope-aware suppression)</div></div>
+      <div class="prop"><div class="k">From identity</div><div class="v">${escapeHtml(FROM_NAME)} &lt;${escapeHtml(FROM_EMAIL)}&gt;</div></div>
+      <div class="prop"><div class="k">Total touchpoints</div><div class="v">${totalEmails} emails across ${program.length} flows</div></div>
+      <div class="prop"><div class="k">Audience</div><div class="v normal">GLP-1, peptide, and compound trackers — quantified-self mindset</div></div>
+    </div>
+
+    <section class="block">
+      <h3>The ${program.length} flows</h3>
+      <div class="program-map">
+        ${program.map(flow => `
+          <button class="program-card ${flow.priority ? 'priority' : ''}" data-flow="${flow.slug}">
+            <div class="card-stage" style="color: var(--c-${flow.stage});">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c-${flow.stage});"></span>
+              ${escapeHtml(flow.stageLabel)}
+              ${flow.priority ? '<span class="badge" style="margin-left:8px;background:var(--purple);">★ priority</span>' : ''}
+            </div>
+            <div class="card-title">${escapeHtml(flow.name)}</div>
+            <div class="card-trigger">${escapeHtml(flow.trigger)}</div>
+            <div class="card-desc">${escapeHtml(flow.description)}</div>
+            <div class="card-footer">
+              <span>${flow.emails.length} ${flow.emails.length === 1 ? 'email' : 'emails'}</span>
+              <span>${flow.enabled ? 'enabled' : 'disabled'}</span>
+            </div>
+          </button>
+        `).join('')}
+      </div>
+    </section>
+
+    <section class="block">
+      <h3>Why this shape</h3>
+      <div class="rationale">
+        <p>Protokol Lab is a <strong>daily-action product</strong> serving an audience that already treats themselves as researchers (GLP-1 cyclers, peptide stackers, quantified-self crowd). The email program reflects both facts:</p>
+        <ul>
+          <li><strong>Behavioral triggers over time-based drips.</strong> 12 of 14 flows fire on event &mdash; dose logged, plateau detected, trial started, doses lapsed. Only the welcome drip and monthly broadcast are time-based.</li>
+          <li><strong>Wizard Abandon is the priority flow.</strong> Registered-but-not-onboarded users have already cleared the hardest friction (commit + email). Recovering them is the cheapest conversion in the program.</li>
+          <li><strong>Plateau Detected + Off-Meds Pivot are unique to this audience.</strong> Generic SaaS lifecycle programs don't have "your weight stalled" or "you cycled off your compound" as native triggers. They're where Protokol's domain understanding earns trust.</li>
+          <li><strong>Pause-not-cancel</strong> framing across Inactivity Rescue and Off-Meds Pivot. GLP-1 users cycle on and off; "pause" is a real product affordance, not retention copy.</li>
+          <li><strong>Mailery as the engine.</strong> Each flow maps cleanly to event + steps. Synthetic events (Plateau Detected, Logging Lapsed, Doses Lapsed, Milestone Reached) come from a nightly insight worker, not raw FunnelEvents &mdash; keeping email logic decoupled from data plumbing.</li>
+        </ul>
+        <p><strong>Suppression scopes</strong> are per-flow: billing-adjacent flows (Wizard Abandon, Trial Ending, Paid Welcome, Cancel Save) are <code>transactional</code>; marketing flows (Welcome Drip, Free→Trial Nudge, Plateau Detected, Inactivity Rescue, Off-Meds Pivot, Power-User Advocacy, Monthly Broadcast) are <code>marketing</code>. A single marketing unsubscribe doesn't kill the transactional half.</p>
+      </div>
+    </section>
+  `;
+
+  main.querySelectorAll('.program-card').forEach(card => {
+    card.addEventListener('click', () => {
+      state.view = 'flow';
+      state.activeFlowSlug = card.dataset.flow;
+      state.activeEmailId = null;
+      state.expanded.add(card.dataset.flow);
+      render();
+    });
+  });
+  document.getElementById('bcHome').onclick = () => { state.view = 'home'; render(); };
+}
+
+function renderFlow() {
+  const flow = program.find(f => f.slug === state.activeFlowSlug);
+  if (!flow) { state.view = 'home'; return render(); }
+
+  const main = document.getElementById('detail');
+  main.innerHTML = `
+    <div class="breadcrumb">
+      <a id="bcHome">Program Overview</a>
+      <span class="sep">›</span>
+      <span>${escapeHtml(flow.name)}</span>
+    </div>
+
+    <div class="topline">
+      <span class="chip stage" data-stage="${flow.stage}">${escapeHtml(flow.stageLabel)}</span>
+      ${flow.priority ? '<span class="chip priority">★ highest-ROI flow</span>' : ''}
+      <span class="chip">${flow.emails.length} ${flow.emails.length === 1 ? 'email' : 'emails'}</span>
+      <span class="chip">${flow.enabled ? 'enabled' : 'disabled'}</span>
+    </div>
+
+    <h1 class="page-title">${escapeHtml(flow.name)}</h1>
+    <p class="lead">${escapeHtml(flow.description)}</p>
+
+    <div class="props">
+      <div class="prop wide"><div class="k">Trigger</div><div class="v">${escapeHtml(flow.trigger)}</div></div>
+      <div class="prop wide"><div class="k">Audience</div><div class="v normal">${escapeHtml(flow.audience)}</div></div>
+      <div class="prop wide"><div class="k">Goal</div><div class="v normal">${escapeHtml(flow.goal)}</div></div>
+    </div>
+
+    <section class="block">
+      <h3>Why this flow exists</h3>
+      <div class="rationale">${flow.rationale}</div>
+    </section>
+
+    <section class="block">
+      <h3>Emails in this flow</h3>
+      <div class="email-table">
+        ${flow.emails.map(e => `
+          <div class="email-row" data-email="${e.id}">
+            <div class="row-num">${e.id}</div>
+            <div class="row-delay">${escapeHtml(e.delayText)}</div>
+            <div>
+              <div class="row-subject">${escapeHtml(e.subject)}</div>
+              <div class="row-preheader">${escapeHtml(e.preheader)}</div>
+            </div>
+            <div class="row-cta">${e.primaryCTA ? escapeHtml(e.primaryCTA.label) : '(reply-only)'}</div>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
+
+  main.querySelectorAll('.email-row').forEach(row => {
+    row.addEventListener('click', () => {
+      state.view = 'email';
+      state.activeEmailId = Number(row.dataset.email);
+      render();
+    });
+  });
+  document.getElementById('bcHome').onclick = () => { state.view = 'home'; render(); };
+}
+
+function renderEmail() {
+  const flow = program.find(f => f.slug === state.activeFlowSlug);
+  if (!flow) { state.view = 'home'; return render(); }
+  const e = flow.emails.find(em => em.id === state.activeEmailId);
+  if (!e) { state.view = 'flow'; return render(); }
+
+  const main = document.getElementById('detail');
+  main.innerHTML = `
+    <div class="breadcrumb">
+      <a id="bcHome">Program Overview</a>
+      <span class="sep">›</span>
+      <a id="bcFlow">${escapeHtml(flow.name)}</a>
+      <span class="sep">›</span>
+      <span>Email ${e.id}</span>
+    </div>
+
+    ${flow.emails.length > 1 ? `
+      <div class="timeline">
+        ${flow.emails.map((em, i) => `
+          ${i > 0 ? `<div class="seg"><span>${escapeHtml(em.delayText.replace('+ ', '+').split(' ').slice(0, 3).join(' '))}</span></div>` : ''}
+          <div class="dot ${em.id === state.activeEmailId ? 'active' : ''}" data-email="${em.id}" title="${escapeHtml(em.subject)}">${em.id}</div>
+        `).join('')}
+      </div>
+    ` : ''}
+
+    <div class="topline">
+      <span class="chip">${escapeHtml(flow.name)}</span>
+      <span class="chip">Email ${e.id}${flow.emails.length > 1 ? ` of ${flow.emails.length}` : ''}</span>
+      <span class="chip">${escapeHtml(e.label)}</span>
+      <span class="chip">${escapeHtml(e.delayText)}</span>
+      <span class="chip stage" data-stage="${e.stage}">${escapeHtml(e.stageLabel)}</span>
+    </div>
+
+    <h2 class="subject">${escapeHtml(e.subject)}</h2>
+    <div class="preheader">Preheader: "${escapeHtml(e.preheader)}"</div>
+
+    <div class="props">
+      <div class="prop"><div class="k">From</div><div class="v">${escapeHtml(FROM_NAME)} &lt;${escapeHtml(FROM_EMAIL)}&gt;</div></div>
+      <div class="prop"><div class="k">Send timing</div><div class="v">${escapeHtml(e.delayText)}</div></div>
+      <div class="prop"><div class="k">Stage role</div><div class="v">${escapeHtml(e.stageLabel)}</div></div>
+      <div class="prop"><div class="k">Primary CTA</div><div class="v">${e.primaryCTA ? `${escapeHtml(e.primaryCTA.label)} → ${escapeHtml(e.primaryCTA.url)}` : '(reply to email)'}</div></div>
+    </div>
+
+    <section class="block">
+      <h3>Why this email exists</h3>
+      <div class="rationale">${e.rationale}</div>
+    </section>
+
+    <section class="block">
+      <h3>Content</h3>
+      <div class="tabs">
+        <button class="tab ${state.activeTab === 'preview' ? 'active' : ''}" data-tab="preview">Preview</button>
+        <button class="tab ${state.activeTab === 'html' ? 'active' : ''}" data-tab="html">HTML source</button>
+        <button class="tab ${state.activeTab === 'plain' ? 'active' : ''}" data-tab="plain">Plain text</button>
+      </div>
+      <div class="actions">
+        <button class="btn" data-copy="html"><span class="label">Copy HTML</span><span class="ok">✓ Copied</span></button>
+        <button class="btn alt" data-copy="subject"><span class="label">Copy subject</span><span class="ok">✓ Copied</span></button>
+        <button class="btn alt" data-copy="preheader"><span class="label">Copy preheader</span><span class="ok">✓ Copied</span></button>
+        <button class="btn alt" data-copy="plain"><span class="label">Copy plain text</span><span class="ok">✓ Copied</span></button>
+      </div>
+      <div class="panel ${state.activeTab === 'preview' ? 'active' : ''}">
+        <div class="iframe-wrap">
+          <iframe class="email-preview" id="emailFrame" srcdoc="${escapeAttr(e.html)}"></iframe>
+        </div>
+      </div>
+      <div class="panel ${state.activeTab === 'html' ? 'active' : ''}"><pre class="code">${escapeHtml(e.html)}</pre></div>
+      <div class="panel ${state.activeTab === 'plain' ? 'active' : ''}"><pre class="code" style="white-space:pre-wrap;">${escapeHtml(e.plainText)}</pre></div>
+    </section>
+  `;
+
+  document.getElementById('bcHome').onclick = () => { state.view = 'home'; render(); };
+  document.getElementById('bcFlow').onclick = () => { state.view = 'flow'; state.activeEmailId = null; render(); };
+  main.querySelectorAll('.timeline .dot').forEach(d => {
+    d.addEventListener('click', () => { state.activeEmailId = Number(d.dataset.email); render(); });
+  });
+  main.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => { state.activeTab = t.dataset.tab; render(); });
+  });
+  main.querySelectorAll('[data-copy]').forEach(b => {
+    b.addEventListener('click', () => {
+      const which = b.dataset.copy;
+      const value = which === 'html' ? e.html
+                  : which === 'subject' ? e.subject
+                  : which === 'preheader' ? e.preheader
+                  : e.plainText;
+      navigator.clipboard.writeText(value).then(() => {
+        b.classList.add('copied');
+        setTimeout(() => b.classList.remove('copied'), 1400);
+      });
+    });
+  });
+  const frame = main.querySelector('#emailFrame');
+  if (frame) {
+    frame.addEventListener('load', () => {
+      try {
+        const h = frame.contentDocument.documentElement.scrollHeight;
+        frame.style.height = (h + 24) + 'px';
+      } catch (_) {}
+    });
+  }
+}
+
+function render() {
+  renderSidebar();
+  if (state.view === 'home') renderHome();
+  else if (state.view === 'flow') renderFlow();
+  else if (state.view === 'email') renderEmail();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+render();
+</script>
+
+</body>
+</html>

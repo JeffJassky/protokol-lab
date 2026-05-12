@@ -12,6 +12,7 @@
 
 import FunnelEvent from '../models/FunnelEvent.js';
 import { childLogger, errContext } from './logger.js';
+import { fire as fireMailerEvent, FUNNEL_TO_MAILER } from '../services/mailery.js';
 
 const log = childLogger('funnel');
 
@@ -113,6 +114,16 @@ export function insertFunnelEvent(doc) {
         ts: doc.ts || new Date(),
       };
       await FunnelEvent.create(row);
+      // Bridge to Mailery for the canonical lifecycle names. Best-effort —
+      // mailery.fire() swallows its own errors. Skipped if userId is null
+      // (Mailery needs an externalId that resolves to a contact).
+      const mailerName = FUNNEL_TO_MAILER[doc.name];
+      if (mailerName && row.userId) {
+        await fireMailerEvent(mailerName, row.userId.toString(), {
+          source: 'funnel',
+          ...(row.utmSource ? { utmSource: row.utmSource } : {}),
+        });
+      }
     } catch (err) {
       log.warn({ ...errContext(err), name: doc.name }, 'funnel: insert failed');
     }

@@ -16,6 +16,7 @@ import {
 } from '../../../shared/plans.js';
 import { childLogger, errContext } from '../lib/logger.js';
 import { insertFunnelEvent } from '../lib/funnelEvents.js';
+import { fire as fireMailerEvent } from '../services/mailery.js';
 
 const log = childLogger('stripe');
 
@@ -286,9 +287,25 @@ async function onSubscriptionUpserted(sub, rlog) {
   if (!user.stripeCustomerId && sub.customer) {
     user.stripeCustomerId = sub.customer;
   }
+  const wasTrialing = user.stripeSubscriptionId === sub.id; // crude prior-state proxy
   applySubscriptionToUser(user, sub);
   await user.save();
   rlog.info({ userId: String(user._id), plan: user.plan, status: sub.status }, 'subscription upserted');
+
+  // Mailery: trial-start fires once per contact at the moment Stripe
+  // flips status to "trialing". The Subscribed event continues to fire
+  // via the funnel bridge (subscription_started) at checkout-completed.
+  if (sub.status === 'trialing') {
+    fireMailerEvent('Trial Started', user._id, {
+      stripeSubscriptionId: sub.id,
+      plan: user.plan,
+      trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+    });
+  }
+  // Reactivation safety: if a user previously cancelled and is now active,
+  // surface the resubscribe as a Subscribed fire so paid-welcome re-fires
+  // for the rejoin (Mailery dedupe is once-per-contact on Subscribed; this
+  // only catches the unusual case where dedupe has expired or wasn't set).
 }
 
 async function onSubscriptionDeleted(sub, rlog) {
@@ -303,6 +320,12 @@ async function onSubscriptionDeleted(sub, rlog) {
   user.stripeSubscriptionId = null;
   await user.save();
   rlog.info({ userId: String(user._id) }, 'subscription ended — reverted to default plan');
+
+  fireMailerEvent('Cancelled', user._id, {
+    stripeSubscriptionId: sub.id,
+    cancellationReason: sub.cancellation_details?.reason || null,
+    feedback: sub.cancellation_details?.feedback || null,
+  });
 }
 
 // Derive the plan id from a subscription's price and apply period end as

@@ -4,6 +4,7 @@ import SymptomLog from '../models/SymptomLog.js';
 import { childLogger, errContext } from '../lib/logger.js';
 import { getEffectivePlanFeatures } from '../lib/planLimits.js';
 import { parseLogDate } from '../lib/date.js';
+import { fire as fireMailerEvent } from '../services/mailery.js';
 
 const log = childLogger('symptoms');
 const router = Router();
@@ -188,6 +189,10 @@ router.put('/logs', async (req, res) => {
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   );
   rlog.info({ symptomId, date, severity: sev }, 'symptoms: log upserted');
+  fireMailerEvent('Symptom Logged', req.userId, {
+    symptomId: String(symptomId),
+    severity: sev,
+  });
   res.json({ log: entry });
 });
 

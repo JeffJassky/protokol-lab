@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { DEFAULT_PLAN_ID } from '../../../shared/plans.js';
 import { stripe, isStripeConfigured } from '../services/stripe.js';
 import { S3_CONFIGURED, deleteObject } from '../services/s3.js';
+import { upsertSubscription as upsertMaileryContact } from '../services/mailery.js';
 import { childLogger, errContext } from '../lib/logger.js';
 
 const cascadeLog = childLogger('user.cascade');
@@ -58,6 +59,12 @@ const userSchema = new mongoose.Schema({
   imageRecognitionCount: { type: Number, default: 0 },
 
   isAdmin: { type: Boolean, default: false },
+
+  // Mailery contact tags. Written by Mailery's `tag` flow steps via the
+  // MongoContactAdapter (services/mailery.js). Used both for in-flow
+  // gating and for broadcast segmentation. Don't read this in business
+  // logic — it's the email layer's bookkeeping.
+  tags: { type: [String], default: [], index: true },
 
   // Optional public display name shown on feature-request comments.
   // Falls back to email local-part when absent.
@@ -154,6 +161,33 @@ async function preventTemplateUpdate() {
 userSchema.pre('updateOne', preventTemplateUpdate);
 userSchema.pre('updateMany', preventTemplateUpdate);
 userSchema.pre('findOneAndUpdate', preventTemplateUpdate);
+
+// Auto-create a Mailery subscription for every real user the moment they're
+// inserted. Catches every registration path (email/password, Google, Apple,
+// demo-convert) without each route having to remember. Sandbox + template
+// users are skipped — they're not real contacts.
+//
+// Best-effort: mailery.upsertSubscription swallows its own errors so a
+// mailery outage can't break user creation.
+userSchema.post('save', async function autoSubscribeNewUser(doc) {
+  // In post('save'), `this.isNew` is already flipped to false. The `doc.$isNew`
+  // (Mongoose internal) or `doc.wasNew` shim is unreliable across versions —
+  // safer: rely on `this.$isNew` which mongoose preserves during post-hook
+  // chain, or fall back to checking if there's a createdAt vs updatedAt gap.
+  // Cleanest: gate via the explicit-pre-save flag pattern below.
+  if (this._maileryNewUserFlag) {
+    if (!this.isDemoSandbox && !this.isDemoTemplate) {
+      await upsertMaileryContact(this._id, 'register');
+    }
+    this._maileryNewUserFlag = false;
+  }
+});
+
+// Capture isNew BEFORE Mongoose flips it during save. The post('save') hook
+// above reads this flag.
+userSchema.pre('save', function captureIsNewForMailery() {
+  this._maileryNewUserFlag = this.isNew;
+});
 
 // Cascade delete. Fires only on document-level `doc.deleteOne()` and
 // `findOneAndDelete` (see hook below); query-level `User.deleteMany({})` is

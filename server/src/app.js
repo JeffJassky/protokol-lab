@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.js';
+import mailerSnapshotRoutes from './routes/mailerSnapshot.js';
 import settingsRoutes from './routes/settings.js';
 import weightRoutes from './routes/weight.js';
 import foodRoutes from './routes/food.js';
@@ -121,6 +122,19 @@ export function createApp({ serveClient = true } = {}) {
   // Mounted at an exact path BEFORE express.json() so the global JSON parser
   // doesn't consume the buffer. Other /api/stripe routes parse JSON normally.
   app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), publicStripeRouter);
+
+  // Mailery snapshot endpoint — internal-only, called by Mailery webhook
+  // flow steps to interpolate per-user data into email templates at send
+  // time. Gated by MAILER_INTERNAL_SECRET header inside the router.
+  app.use('/api/mailer/snapshot', express.json(), mailerSnapshotRoutes);
+
+  // Mailery provider webhooks — same raw-body requirement. SendGrid's Event
+  // Webhook signs payloads with ECDSA over the raw bytes; the SendGridProvider
+  // inside mailery's public router calls verifyWebhook on req.body. Order
+  // matters: this must run before express.json() consumes the buffer. The
+  // request still falls through to /mailer below; express.json sees req._body
+  // already set by express.raw and skips re-parsing.
+  app.use('/mailer/webhooks', express.raw({ type: 'application/json' }));
 
   app.use(express.json());
   app.use(cookieParser());
@@ -243,6 +257,39 @@ export function createApp({ serveClient = true } = {}) {
   if (marketing) {
     app.use('/admin/marketing', marketing.router);
   }
+
+  // Mailery admin + public routers. Admin is gated by the same auth chain
+  // as the rest of /admin/*; public hosts the unsubscribe + tracking-pixel
+  // endpoints (no auth — must work from email clients). Mailery boots after
+  // createApp() runs, so we lazy-resolve the routers per-request.
+  let maileryAdminRouter = null;
+  app.use(
+    '/admin/mailer',
+    requireAuth,
+    requireAuthUser,
+    requireAdmin,
+    async (req, res, next) => {
+      if (!maileryAdminRouter) {
+        const { getMailer } = await import('./services/mailery.js');
+        const m = getMailer();
+        if (!m) return res.status(503).send('Mailery not running');
+        const { createAdminRouter } = await import('mailery');
+        maileryAdminRouter = createAdminRouter({ mailer: m });
+      }
+      return maileryAdminRouter(req, res, next);
+    },
+  );
+  let maileryPublicRouter = null;
+  app.use('/mailer', async (req, res, next) => {
+    if (!maileryPublicRouter) {
+      const { getMailer } = await import('./services/mailery.js');
+      const m = getMailer();
+      if (!m) return res.status(503).send('Mailery not running');
+      const { createPublicRouter } = await import('mailery');
+      maileryPublicRouter = createPublicRouter({ mailer: m });
+    }
+    return maileryPublicRouter(req, res, next);
+  });
 
   // Agendash dashboard for the Agenda scheduler — admin-gated, iframed by
   // the Vue admin shell. Agenda boots after createApp() runs, so we lazy-
