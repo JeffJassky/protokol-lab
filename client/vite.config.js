@@ -47,6 +47,15 @@ export default defineConfig({
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:3001',
         ws: true,
       },
+      // Mailery embedded admin SPA + REST. Mounted on Express at
+      // /admin/mailer; ws:true for the Maily editor's yjs collab channel.
+      '/admin/mailer': {
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:3001',
+        ws: true,
+      },
+      // Mailery public router — unsubscribe links + tracking pixels +
+      // inbound provider event webhooks. Server-side rendered, no SPA.
+      '/mailer': process.env.VITE_PROXY_TARGET || 'http://localhost:3001',
     },
   },
 })
