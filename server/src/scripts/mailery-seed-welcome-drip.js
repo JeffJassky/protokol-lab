@@ -28,7 +28,7 @@ import { childLogger, errContext } from '../lib/logger.js';
 const log = childLogger('mailery-seed');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WORKBENCH_PATH = path.resolve(__dirname, '../../../marketing/emails/index.html');
+const WORKBENCH_PATH = path.resolve(__dirname, '../../../emails/index.html');
 
 const FROM_NAME = 'Jeff Jassky';
 const MARKETING_FROM = 'jeff@news.protokollab.com';
@@ -73,6 +73,33 @@ function rationaleSummary(rationaleHtml) {
   return rationaleHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
 }
 
+// The workbench authors templates as raw HTML (inline styles + tables for
+// email-client compatibility), not MJML. To make these viewable + editable
+// in the Mailery admin's Code tab, wrap the rendered <body> content in a
+// minimal MJML scaffold using <mj-raw>, which passes its contents through
+// unchanged at compile time.
+//
+// Caveat: if someone clicks "Publish" in the admin, mjml-core re-wraps the
+// content in its own doctype/html/body. Inline styles survive; the outer
+// document structure may change slightly. The workbench remains the
+// source of truth — re-running this seed overwrites admin edits.
+function htmlToMjmlForAdmin(html) {
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  const inner = bodyMatch ? bodyMatch[1] : html;
+  return `<!--
+  Imported from workbench: emails/index.html
+  Re-run server/src/scripts/mailery-seed-welcome-drip.js after edits there.
+  Editing this MJML directly will be overwritten on the next seed.
+-->
+<mjml>
+  <mj-body>
+    <mj-raw>
+${inner}
+    </mj-raw>
+  </mj-body>
+</mjml>`;
+}
+
 async function main() {
   if (!process.env.MONGODB_URI) {
     log.error('MONGODB_URI not set');
@@ -114,7 +141,7 @@ async function main() {
         subject: email.subject,
         preheader: email.preheader,
         body: {
-          mjml: '',
+          mjml: htmlToMjmlForAdmin(email.html),
           editorJson: null,
           html: email.html,
           plainText: email.plainText,

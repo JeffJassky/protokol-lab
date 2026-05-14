@@ -274,7 +274,7 @@ export function createApp({ serveClient = true } = {}) {
         const m = getMailer();
         if (!m) return res.status(503).send('Mailery not running');
         const { createAdminRouter } = await import('mailery');
-        maileryAdminRouter = createAdminRouter({ mailer: m });
+        maileryAdminRouter = createAdminRouter(m);
       }
       return maileryAdminRouter(req, res, next);
     },
@@ -286,7 +286,7 @@ export function createApp({ serveClient = true } = {}) {
       const m = getMailer();
       if (!m) return res.status(503).send('Mailery not running');
       const { createPublicRouter } = await import('mailery');
-      maileryPublicRouter = createPublicRouter({ mailer: m });
+      maileryPublicRouter = createPublicRouter(m);
     }
     return maileryPublicRouter(req, res, next);
   });

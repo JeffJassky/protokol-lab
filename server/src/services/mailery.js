@@ -125,7 +125,13 @@ export async function startMailery() {
     }
 
     const fromName = process.env.SENDGRID_FROM_NAME || 'Jeff Jassky';
-    const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'jeff@protokollab.com';
+    // Split fromDefaults by template kind to satisfy senderDomains: a
+    // template that falls back to fromDefaults inherits the marketing
+    // address (most flows are marketing); transactional templates fall
+    // back to transactionalFromDefaults. SENDGRID_FROM_EMAIL is the
+    // transactional fallback (matches the env var's historical intent).
+    const transactionalFromEmail = process.env.SENDGRID_FROM_EMAIL || 'jeff@mail.protokollab.com';
+    const marketingFromEmail = process.env.SENDGRID_MARKETING_FROM_EMAIL || 'jeff@news.protokollab.com';
     const senderAddress = process.env.MAILER_SENDER_ADDRESS
       || 'Protokol Lab, PO Box TBD, USA';
     const publicUrl = process.env.MAILER_PUBLIC_URL
@@ -165,7 +171,8 @@ export async function startMailery() {
       publicUrl,
       unsubscribeSecret,
       senderAddress,
-      fromDefaults: { name: fromName, email: fromEmail },
+      fromDefaults: { name: fromName, email: marketingFromEmail },
+      transactionalFromDefaults: { name: fromName, email: transactionalFromEmail },
     });
 
     for (const ev of MAILER_EVENTS) {
